@@ -10,9 +10,6 @@ assignees: trancethehuman
 ## Problem
 
 
-## Appetite
-
-
 ## Solution
 
 
