@@ -29,7 +29,7 @@ The codebase currently includes:
   - Filters and deduplicates valid HTTP/HTTPS URLs
 
 ### Data Files
-- `sample.csv` - Example CSV file containing name, website, and description columns
+-  `sample.csv` - Example CSV file containing name, website, and description columns
 - Supports any CSV format with URL data in any column
 
 ### Examples
