@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import * as csv from 'csv-parser';
+import csv from 'csv-parser';
 
 export class URLLoader {
   private urls: string[] = [];
@@ -29,7 +29,7 @@ export class URLLoader {
           this.urls = urls;
           resolve(urls);
         })
-        .on('error', (error) => {
+        .on('error', (error: any) => {
           reject(new Error(`Error reading CSV file: ${error.message}`));
         });
     });
