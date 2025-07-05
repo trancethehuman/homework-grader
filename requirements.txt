@@ -1,0 +1,5 @@
+# No external dependencies required for this Python implementation
+# All functionality uses Python standard library modules:
+# - csv (for CSV file parsing)
+# - os (for file system operations)
+# - urllib.parse (for URL validation)
