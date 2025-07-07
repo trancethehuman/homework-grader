@@ -11,7 +11,13 @@
     "clean": "rm -rf dist",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": ["csv", "url-loader", "homework", "grading", "typescript"],
+  "keywords": [
+    "csv",
+    "url-loader",
+    "homework",
+    "grading",
+    "typescript"
+  ],
   "author": "",
   "license": "MIT",
   "devDependencies": {
@@ -20,6 +26,7 @@
     "typescript": "^5.8.3"
   },
   "dependencies": {
+    "@octokit/rest": "^22.0.0",
     "csv-parser": "^3.2.0"
   }
 }
