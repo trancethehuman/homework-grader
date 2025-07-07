@@ -1,0 +1,9 @@
+name,website,description
+John Smith,https://example.com,Personal website
+Jane Doe,http://github.com/janedoe,Developer portfolio
+Bob Wilson,https://linkedin.com/in/bobwilson,Professional profile
+Alice Johnson,https://alicecodes.dev,Coding blog
+Mike Brown,not-a-url,Invalid entry
+Sarah Davis,https://sarahdesigns.com,Design portfolio
+Tom Lee,http://tomlee.tech,Tech blog
+Lisa Wang,https://example.com,Duplicate URL test
