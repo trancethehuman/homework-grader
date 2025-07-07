@@ -8,16 +8,22 @@ This is a homework grading system repository with TypeScript URL loading functio
 
 ## Development Setup
 
+### Package Manager
+This project uses **pnpm** as the package manager. Install dependencies with:
+```bash
+pnpm install
+```
+
 ### TypeScript
-- Build: `npm run build` (compiles TypeScript to JavaScript)
-- Run CLI: `npm run dev <path-to-csv-file>` (development with ts-node)
-- Run built CLI: `npm start <path-to-csv-file>` (production build)
-- Clean: `npm run clean` (removes dist directory)
+- Build: `pnpm run build` (compiles TypeScript to JavaScript)
+- Run CLI: `pnpm run dev <path-to-csv-file>` (development with ts-node)
+- Run built CLI: `pnpm start <path-to-csv-file>` (production build)
+- Clean: `pnpm run clean` (removes dist directory)
 - Dependencies: `csv-parser` for CSV parsing, TypeScript dev dependencies
 
 ### Usage
 ```bash
-npm run dev sample.csv
+pnpm run dev sample.csv
 ```
 
 ## Architecture

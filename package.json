@@ -3,21 +3,23 @@
   "version": "1.0.0",
   "description": "A homework grading system with CSV URL loading functionality",
   "main": "dist/index.js",
+  "packageManager": "pnpm@9.15.0",
   "scripts": {
     "build": "tsc",
     "start": "node dist/cli.js",
     "dev": "ts-node src/cli.ts",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": ["csv", "url-loader", "homework", "grading", "typescript"],
   "author": "",
   "license": "MIT",
   "devDependencies": {
-    "@types/node": "^20.0.0",
-    "ts-node": "^10.9.0",
-    "typescript": "^5.0.0"
+    "@types/node": "^24.0.10",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.3"
   },
   "dependencies": {
-    "csv-parser": "^3.0.0"
+    "csv-parser": "^3.2.0"
   }
 }
