@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a homework grading system repository with TypeScript URL loading functionality for processing homework submissions from CSV files. The project is licensed under MIT License.
+This is a homework grading system repository with TypeScript URL loading functionality for processing homework submissions from CSV files and GitHub repositories. The project is licensed under MIT License.
 
 ## Development Setup
 
@@ -14,20 +14,38 @@ This project uses **pnpm** as the package manager. Install dependencies with:
 pnpm install
 ```
 
-### TypeScript
-- Build: `pnpm run build` (compiles TypeScript to JavaScript)
-- Run CLI: `pnpm run dev <path-to-csv-file>` (development with ts-node)
-- Run built CLI: `pnpm start <path-to-csv-file>` (production build)
-- Clean: `pnpm run clean` (removes dist directory)
-- Dependencies: `csv-parser` for CSV parsing, TypeScript dev dependencies
-
-### Usage
+### Build Process
+**IMPORTANT**: Always build the project first before running any scripts:
 ```bash
-# Interactive mode (default) - includes GitHub token setup
-pnpm run dev
+# Build first (REQUIRED)
+pnpm run build
 
-# Legacy mode with CSV file
-pnpm run dev sample.csv
+# Then run in production mode
+pnpm start
+```
+
+### TypeScript Scripts
+- **Build**: `pnpm run build` (compiles TypeScript to JavaScript) - **REQUIRED FIRST STEP**
+- **Start**: `pnpm start` (runs compiled version from `dist/cli.js`)
+- **Dev**: `pnpm run dev` (development with ts-node, bypasses build)
+- **Clean**: `pnpm run clean` (removes dist directory)
+- **Test**: `pnpm test` (placeholder - no tests configured)
+
+### Dependencies
+- **Core**: `csv-parser` for CSV parsing, `@octokit/rest` for GitHub API
+- **UI**: `ink` and `react` for interactive CLI, `open` for browser integration
+- **Dev**: TypeScript, ts-node, @types/node, @types/react
+
+### Usage Workflow
+```bash
+# Production workflow (recommended)
+pnpm run build          # Build first
+pnpm start              # Interactive mode
+pnpm start sample.csv   # Legacy mode with CSV file
+
+# Development workflow
+pnpm run dev            # Interactive mode (no build required)
+pnpm run dev sample.csv # Legacy mode with CSV file (no build required)
 ```
 
 ### GitHub Authentication
@@ -35,13 +53,19 @@ The application supports GitHub Personal Access Tokens for increased API rate li
 - **With token**: 5,000 requests/hour
 - **Without token**: 60 requests/hour (unauthenticated)
 
+Authentication features:
+- **Token Storage**: Securely stores tokens in platform-appropriate config directories
+- **Token Validation**: Real-time token validation with GitHub API
+- **Browser Integration**: Press 'o' to open GitHub token generation page
+- **Token Management**: Clear stored tokens with 'c' command, skip with 's' command
+- **Environment Support**: Reads from `GITHUB_TOKEN` environment variable
+
 Set token via environment variable:
 ```bash
 export GITHUB_TOKEN=your_token_here
-pnpm run dev
+pnpm run build
+pnpm start
 ```
-
-Or provide interactively when prompted in the CLI.
 
 ## Architecture
 
@@ -54,26 +78,72 @@ The codebase includes:
   - Filters and deduplicates valid HTTP/HTTPS URLs
   - Async/await pattern for CSV processing
 
+- **GitHubService Class** (`src/github/github-service.ts`)
+  - Processes GitHub repositories and extracts file contents
+  - Token validation with `validateToken()` method
+  - Rate limit handling with automatic retry logic
+  - Configurable file extension filtering
+  - Batch processing to respect GitHub API limits
+  - Error handling for authentication and permission issues
+
+- **Interactive CSV Component** (`src/interactive-csv.tsx`)
+  - React/Ink based interactive CLI interface
+  - Multi-step workflow: token setup → CSV input → column selection → processing
+  - GitHub token input and management with secure storage
+  - Token validation step with loading indicator
+  - Browser integration for token generation
+  - CSV file analysis and column detection
+  - Automatic GitHub URL column suggestion
+  - Arrow key navigation for column selection
+  - Error handling with user-friendly messages
+
+- **Token Storage Service** (`src/lib/token-storage.ts`)
+  - Secure GitHub token storage with platform-appropriate locations
+  - Base64 obfuscation for token protection
+  - Cross-platform config directory management (Windows/macOS/Linux)
+  - File permission management (0o600 for token files)
+  - Token validation and cleanup methods
+
 ### CLI Interface
-- **Command Line Interface** (`src/cli.ts`)
-  - Accepts CSV file path as command line argument
-  - Displays loaded URLs and count
-  - Error handling for invalid files
+- **Command Line Interface** (`src/cli.tsx`)
+  - Supports both interactive mode and legacy CSV file argument
+  - Processes GitHub URLs from CSV files
+  - Displays authentication status and rate limit information
+  - Generates repository content files in `test-results/` directory
+  - Comprehensive error handling for files and GitHub API
+  - Authentication status display
+
+### Constants
+- **Ignored Extensions** (`src/consts/ignored-extensions.ts`)
+  - Comprehensive list of file extensions to ignore when processing repositories
+  - Includes images, videos, audio, archives, documents, executables, fonts, binaries, compiled files, and vector databases
+  - Organized by category for easy maintenance
+  - Configurable through GitHubService constructor
 
 ### Data Files
 - `sample.csv` - Example CSV file with name, website, and description columns
 - Supports any CSV format with URL data in any column
+- `test-results/` - Directory for generated repository content files
+- `dist/` - Compiled JavaScript output directory
 
 ### Examples
 - `src/example.ts` - Demonstrates TypeScript URLLoader usage
 
 ### Key Features
-- TypeScript type safety and compilation
-- CSV file validation (file existence, .csv extension)
-- URL validation (HTTP/HTTPS protocols only)
-- Automatic deduplication of URLs
-- Error handling for file operations
-- CLI interface for easy usage
+- **TypeScript**: Full type safety and compilation
+- **Interactive CLI**: React/Ink components with step-by-step workflow
+- **GitHub Authentication Management**:
+  - Secure token storage with platform-appropriate directories
+  - Real-time token validation with GitHub API
+  - Interactive token input with masked display
+  - Browser integration for token generation
+  - Environment variable support
+  - Rate limit awareness (60 vs 5,000 requests/hour)
+- **CSV Processing**: File validation, analysis, and URL extraction
+- **GitHub Repository Processing**: Content extraction with file filtering
+- **Error Handling**: Comprehensive error handling throughout the application
+- **Rate Limiting**: Automatic retry logic for GitHub API rate limits
+- **File Management**: Automatic deduplication and validation
 
 ## Important Instructions
 
@@ -82,3 +152,12 @@ The codebase includes:
 - Architecture changes and new components
 - Development workflow updates
 - Any new conventions or patterns established
+
+## Build-First Workflow
+
+Remember that users should always build the project first:
+1. `pnpm install` (install dependencies)
+2. `pnpm run build` (build TypeScript)
+3. `pnpm start` (run the built application)
+
+The `pnpm run dev` command is for development only and bypasses the build step.
