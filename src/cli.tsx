@@ -7,8 +7,16 @@ import { GitHubService } from "./github/github-service.js";
 import { writeFileSync, mkdirSync } from "fs";
 import { join } from "path";
 
-async function processGitHubUrls(urls: string[], columnName: string) {
-  const githubService = new GitHubService();
+async function processGitHubUrls(urls: string[], columnName: string, githubToken?: string) {
+  const githubService = new GitHubService(githubToken);
+  
+  // Display authentication status
+  if (githubToken) {
+    console.log(`✓ Using GitHub token for authentication (5,000 requests/hour)`);
+  } else {
+    console.log(`⚠ No GitHub token provided. Using unauthenticated requests (60 requests/hour)`);
+    console.log(`  To avoid rate limiting, set GITHUB_TOKEN environment variable or provide token interactively`);
+  }
 
   console.log(`\nLoaded ${urls.length} GitHub URLs from column: ${columnName}`);
   urls.forEach((url, index) => {
@@ -33,7 +41,7 @@ async function processGitHubUrls(urls: string[], columnName: string) {
         const repoInfo = githubService.parseGitHubUrl(url);
         if (repoInfo) {
           console.log(
-            `Fetching files from ${repoInfo.owner}/${repoInfo.repo}...`
+            `Fetching repository structure from ${repoInfo.owner}/${repoInfo.repo}...`
           );
           const concatenatedContent = await githubService.processGitHubUrl(url);
 
@@ -67,7 +75,7 @@ async function main() {
       const githubUrls = urls.filter((url: string) =>
         url.includes("github.com")
       );
-      await processGitHubUrls(githubUrls, "auto-detected");
+      await processGitHubUrls(githubUrls, "auto-detected", process.env.GITHUB_TOKEN);
     } catch (error) {
       console.error(
         "Error:",
@@ -79,9 +87,9 @@ async function main() {
     // Interactive mode
     const app = render(
       <InteractiveCSV
-        onComplete={async (filePath, columnName, urls) => {
+        onComplete={async (filePath, columnName, urls, githubToken) => {
           app.unmount();
-          await processGitHubUrls(urls, columnName);
+          await processGitHubUrls(urls, columnName, githubToken);
         }}
         onError={(error) => {
           app.unmount();

@@ -1,46 +1,77 @@
 export const IMAGE_EXTENSIONS = [
-  '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.svg', '.webp', '.ico', '.tiff', '.tif'
+  ".jpg",
+  ".jpeg",
+  ".png",
+  ".gif",
+  ".bmp",
+  ".svg",
+  ".webp",
+  ".ico",
+  ".tiff",
+  ".tif",
 ];
 
 export const VIDEO_EXTENSIONS = [
-  '.mp4', '.avi', '.mov', '.wmv', '.flv', '.webm', '.mkv', '.m4v'
+  ".mp4",
+  ".avi",
+  ".mov",
+  ".wmv",
+  ".flv",
+  ".webm",
+  ".mkv",
+  ".m4v",
 ];
 
 export const AUDIO_EXTENSIONS = [
-  '.mp3', '.wav', '.flac', '.aac', '.ogg', '.wma', '.m4a'
+  ".mp3",
+  ".wav",
+  ".flac",
+  ".aac",
+  ".ogg",
+  ".wma",
+  ".m4a",
 ];
 
 export const ARCHIVE_EXTENSIONS = [
-  '.zip', '.rar', '.7z', '.tar', '.gz', '.bz2', '.xz'
+  ".zip",
+  ".rar",
+  ".7z",
+  ".tar",
+  ".gz",
+  ".bz2",
+  ".xz",
 ];
 
 export const DOCUMENT_EXTENSIONS = [
-  '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx'
+  ".pdf",
+  ".doc",
+  ".docx",
+  ".xls",
+  ".xlsx",
+  ".ppt",
+  ".pptx",
 ];
 
-export const EXECUTABLE_EXTENSIONS = [
-  '.exe', '.dll', '.so', '.dylib', '.app'
-];
+export const EXECUTABLE_EXTENSIONS = [".exe", ".dll", ".so", ".dylib", ".app"];
 
-export const FONT_EXTENSIONS = [
-  '.ttf', '.otf', '.woff', '.woff2', '.eot'
-];
+export const FONT_EXTENSIONS = [".ttf", ".otf", ".woff", ".woff2", ".eot"];
 
-export const BINARY_EXTENSIONS = [
-  '.bin', '.dat', '.db', '.sqlite', '.sqlite3'
-];
+export const BINARY_EXTENSIONS = [".bin", ".dat", ".db", ".sqlite", ".sqlite3"];
 
 export const COMPILED_EXTENSIONS = [
-  '.class', '.jar', '.war', '.ear', '.pyc', '.pyo'
+  ".class",
+  ".jar",
+  ".war",
+  ".ear",
+  ".pyc",
+  ".pyo",
 ];
 
-export const PACKAGE_EXTENSIONS = [
-  '.deb', '.rpm', '.msi', '.dmg', '.pkg'
-];
+export const PACKAGE_EXTENSIONS = [".deb", ".rpm", ".msi", ".dmg", ".pkg"];
 
-export const LOCK_EXTENSIONS = [
-  '.lock'
-];
+export const LOCK_EXTENSIONS = [".lock"];
+
+export const VECTOR_DATABASE = [".faiss"];
 
 export const DEFAULT_IGNORED_EXTENSIONS = [
   ...IMAGE_EXTENSIONS,
@@ -53,5 +84,6 @@ export const DEFAULT_IGNORED_EXTENSIONS = [
   ...BINARY_EXTENSIONS,
   ...COMPILED_EXTENSIONS,
   ...PACKAGE_EXTENSIONS,
-  ...LOCK_EXTENSIONS
+  ...LOCK_EXTENSIONS,
+  ...VECTOR_DATABASE,
 ];

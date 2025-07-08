@@ -3,6 +3,8 @@ import { Text, Box, useInput, useApp } from 'ink';
 import * as fs from 'fs';
 import * as path from 'path';
 import csv from 'csv-parser';
+import open from 'open';
+import { TokenStorage } from './lib/token-storage.js';
 
 export interface CSVColumn {
   name: string;
@@ -18,20 +20,29 @@ export interface CSVAnalysis {
 }
 
 interface InteractiveCSVProps {
-  onComplete: (filePath: string, columnName: string, urls: string[]) => void;
+  onComplete: (filePath: string, columnName: string, urls: string[], githubToken?: string) => void;
   onError: (error: string) => void;
 }
 
-type Step = 'input' | 'analyzing' | 'select' | 'loading' | 'complete';
+type Step = 'github-token' | 'input' | 'analyzing' | 'select' | 'loading' | 'complete';
 
 export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({ onComplete, onError }) => {
-  const [step, setStep] = useState<Step>('input');
+  const [step, setStep] = useState<Step>('github-token');
   const [csvPath, setCsvPath] = useState('');
   const [input, setInput] = useState('');
+  const [githubToken, setGithubToken] = useState<string | undefined>();
   const [analysis, setAnalysis] = useState<CSVAnalysis | null>(null);
   const [selectedColumn, setSelectedColumn] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
+  const [tokenStorage] = useState(new TokenStorage());
   const { exit } = useApp();
+
+  // Initialize token from storage or environment
+  useEffect(() => {
+    const savedToken = tokenStorage.getToken();
+    const envToken = process.env.GITHUB_TOKEN;
+    setGithubToken(savedToken || envToken);
+  }, [tokenStorage]);
 
   const validateAndAnalyzeCSV = async (filePath: string): Promise<CSVAnalysis> => {
     if (!fs.existsSync(filePath)) {
@@ -134,7 +145,35 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({ onComplete, onEr
   };
 
   useInput(async (inputChar, key) => {
-    if (step === 'input') {
+    if (step === 'github-token') {
+      if (key.return) {
+        const newToken = input.trim() || githubToken;
+        if (newToken && newToken !== githubToken) {
+          try {
+            tokenStorage.saveToken(newToken);
+            console.log('✓ Token saved securely to:', tokenStorage.getConfigDir());
+          } catch (err) {
+            console.error('Error saving token:', err);
+          }
+        }
+        setGithubToken(newToken);
+        setInput('');
+        setStep('input');
+      } else if (key.backspace) {
+        setInput(prev => prev.slice(0, -1));
+      } else if (inputChar === 'o' && !input) {
+        // Open browser to GitHub token page
+        open('https://github.com/settings/tokens/new?description=homework-grader&scopes=repo');
+        setInput('');
+      } else if (inputChar === 'c' && !input) {
+        // Clear stored token
+        tokenStorage.clearToken();
+        setGithubToken(undefined);
+        setInput('');
+      } else if (inputChar && !key.ctrl && !key.meta && !key.escape) {
+        setInput(prev => prev + inputChar);
+      }
+    } else if (step === 'input') {
       if (key.return) {
         if (input.trim()) {
           setCsvPath(input.trim());
@@ -165,7 +204,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({ onComplete, onEr
         setStep('loading');
         try {
           const urls = await loadGitHubUrlsFromColumn(csvPath, analysis.columns[selectedColumn].name);
-          onComplete(csvPath, analysis.columns[selectedColumn].name, urls);
+          onComplete(csvPath, analysis.columns[selectedColumn].name, urls, githubToken);
           setStep('complete');
         } catch (err) {
           setError(err instanceof Error ? err.message : String(err));
@@ -180,10 +219,37 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({ onComplete, onEr
     }
   });
 
+  if (step === 'github-token') {
+    return (
+      <Box flexDirection="column">
+        <Text color="blue" bold>GitHub Authentication Setup</Text>
+        <Text></Text>
+        <Text>To avoid rate limiting (60 requests/hour), please enter your GitHub Personal Access Token:</Text>
+        <Text dimColor>• Press 'o' to open GitHub token generation page in browser</Text>
+        <Text dimColor>• Generate a token with 'repo' scope</Text>
+        <Text dimColor>• Press 'c' to clear stored token</Text>
+        <Text dimColor>• Or press Enter to continue without authentication</Text>
+        <Text></Text>
+        <Text>Current token: {githubToken ? `${githubToken.substring(0, 8)}... (saved)` : 'None'}</Text>
+        <Text dimColor>Stored in: {tokenStorage.getConfigDir()}</Text>
+        <Text></Text>
+        <Text>Enter GitHub token (or press Enter to skip):</Text>
+        <Box>
+          <Text color="green">{'> '}</Text>
+          <Text>{input.replace(/./g, '*')}</Text>
+          <Text color="gray">█</Text>
+        </Box>
+        <Text dimColor>Press 'o' to open GitHub, 'c' to clear token, Enter to continue, Ctrl+C to exit</Text>
+      </Box>
+    );
+  }
+
   if (step === 'input') {
     return (
       <Box flexDirection="column">
         <Text color="blue" bold>CSV GitHub URL Extractor</Text>
+        <Text>Authentication: {githubToken ? '✓ Token configured' : '⚠ No token (60 requests/hour limit)'}</Text>
+        <Text></Text>
         <Text>Enter the path to your CSV file:</Text>
         <Box>
           <Text color="green">{'> '}</Text>
