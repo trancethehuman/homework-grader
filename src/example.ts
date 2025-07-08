@@ -1,19 +1,16 @@
-import { URLLoader } from './url-loader';
+import { URLLoader } from "./url-loader.js";
 
-async function example() {
+const main = async () => {
   const loader = new URLLoader();
-  
-  try {
-    const urls = await loader.loadFromCSV('./sample.csv');
-    console.log('Example usage of URLLoader:');
-    console.log(`Loaded ${urls.length} URLs from sample.csv`);
-    
-    urls.forEach((url, index) => {
-      console.log(`${index + 1}. ${url}`);
-    });
-  } catch (error) {
-    console.error('Error:', error);
-  }
-}
 
-example();
+  // Load from a local CSV file
+  const csvPath = "sample.csv";
+  const urls = await loader.loadFromCSV(csvPath);
+
+  console.log(`Loaded ${urls.length} URLs from ${csvPath}:`);
+  urls.forEach((url: string, index: number) => {
+    console.log(`${index + 1}. ${url}`);
+  });
+};
+
+main().catch(console.error);
