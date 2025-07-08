@@ -229,7 +229,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({ onComplete, onEr
         setInput(prev => prev.slice(0, -1));
       } else if (inputChar === 'o' && !input) {
         // Open browser to GitHub token page
-        open('https://github.com/settings/tokens/new?description=homework-grader&scopes=repo');
+        open('https://github.com/settings/tokens/new?description=homework-grader&scopes=public_repo');
         setInput('');
       } else if (inputChar === 'c' && !input) {
         // Clear stored token
@@ -237,6 +237,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({ onComplete, onEr
         setGithubToken(undefined);
         setTokenValid(null);
         setInput('');
+        console.log('✓ Token cleared from storage');
       } else if (inputChar === 's' && !input) {
         // Skip GitHub authentication
         setSkipGitHub(true);
@@ -262,6 +263,15 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({ onComplete, onEr
             setInput(''); // Clear the input field
           }
         }
+      } else if (key.ctrl && inputChar === 'r') {
+        // Clear stored token and return to github-token step
+        tokenStorage.clearToken();
+        setGithubToken(undefined);
+        setTokenValid(null);
+        setSkipGitHub(false);
+        setInput('');
+        setStep('github-token');
+        console.log('✓ Token cleared from storage - returning to token setup');
       } else if (key.backspace || key.delete) {
         setInput(prev => prev.slice(0, -1));
       } else if (inputChar && !key.ctrl && !key.meta && !key.escape && !key.return) {
@@ -298,8 +308,8 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({ onComplete, onEr
         <Text></Text>
         <Text>To avoid rate limiting (60 requests/hour), please enter your GitHub Personal Access Token:</Text>
         <Text dimColor>• Press 'o' to open GitHub token generation page in browser</Text>
-        <Text dimColor>• Generate a token with 'repo' scope</Text>
-        <Text dimColor>• Press 'c' to clear stored token</Text>
+        <Text dimColor>• Generate a token with 'public_repo' scope</Text>
+        <Text dimColor>• Press 'c' to clear stored token and start fresh</Text>
         <Text dimColor>• Press 's' to skip GitHub authentication</Text>
         <Text dimColor>• Or press Enter to continue without authentication</Text>
         <Text></Text>
@@ -312,7 +322,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({ onComplete, onEr
           <Text>{input.replace(/./g, '*')}</Text>
           <Text color="gray">█</Text>
         </Box>
-        <Text dimColor>Press 'o' to open GitHub, 'c' to clear token, 's' to skip, Enter to continue, Ctrl+C to exit</Text>
+        <Text dimColor>Commands: 'o' = open GitHub | 'c' = clear token | 's' = skip | Enter = continue | Ctrl+C = exit</Text>
       </Box>
     );
   }
@@ -345,7 +355,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({ onComplete, onEr
           <Text>{input}</Text>
           <Text color="gray">█</Text>
         </Box>
-        <Text dimColor>Press Enter to continue, Ctrl+C to exit</Text>
+        <Text dimColor>Press Enter to continue, Ctrl+R to clear token, Ctrl+C to exit</Text>
       </Box>
     );
   }
