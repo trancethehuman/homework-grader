@@ -254,11 +254,12 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({ onComplete, onEr
             setAnalysis(analysisResult);
             setSelectedColumn(analysisResult.suggestedGitHubColumn ? 
               analysisResult.columns.findIndex(c => c.name === analysisResult.suggestedGitHubColumn!.name) : 0);
+            setError(null); // Clear any previous errors
             setStep('select');
           } catch (err) {
             setError(err instanceof Error ? err.message : String(err));
-            onError(err instanceof Error ? err.message : String(err));
-            exit();
+            setStep('input'); // Return to input step to let user try again
+            setInput(''); // Clear the input field
           }
         }
       } else if (key.backspace || key.delete) {
@@ -332,6 +333,12 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({ onComplete, onEr
         <Text color="blue" bold>CSV GitHub URL Extractor</Text>
         <Text>Authentication: {authStatus}</Text>
         <Text></Text>
+        {error && (
+          <>
+            <Text color="red">Error: {error}</Text>
+            <Text></Text>
+          </>
+        )}
         <Text>Enter the path to your CSV file:</Text>
         <Box>
           <Text color="green">{'> '}</Text>
