@@ -225,7 +225,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({ onComplete, onEr
           setStep('input');
         }
         setInput('');
-      } else if (key.backspace) {
+      } else if (key.backspace || key.delete) {
         setInput(prev => prev.slice(0, -1));
       } else if (inputChar === 'o' && !input) {
         // Open browser to GitHub token page
@@ -241,7 +241,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({ onComplete, onEr
         // Skip GitHub authentication
         setSkipGitHub(true);
         setStep('input');
-      } else if (inputChar && !key.ctrl && !key.meta && !key.escape) {
+      } else if (inputChar && !key.ctrl && !key.meta && !key.escape && !key.return) {
         setInput(prev => prev + inputChar);
       }
     } else if (step === 'input') {
@@ -261,9 +261,9 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({ onComplete, onEr
             exit();
           }
         }
-      } else if (key.backspace) {
+      } else if (key.backspace || key.delete) {
         setInput(prev => prev.slice(0, -1));
-      } else if (inputChar && !key.ctrl && !key.meta && !key.escape) {
+      } else if (inputChar && !key.ctrl && !key.meta && !key.escape && !key.return) {
         setInput(prev => prev + inputChar);
       }
     } else if (step === 'select' && analysis) {
