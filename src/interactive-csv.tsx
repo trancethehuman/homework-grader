@@ -5,6 +5,7 @@ import * as path from 'path';
 import csv from 'csv-parser';
 import open from 'open';
 import { TokenStorage } from './lib/token-storage.js';
+import { GitHubService } from './github/github-service.js';
 
 export interface CSVColumn {
   name: string;
@@ -24,7 +25,7 @@ interface InteractiveCSVProps {
   onError: (error: string) => void;
 }
 
-type Step = 'github-token' | 'input' | 'analyzing' | 'select' | 'loading' | 'complete';
+type Step = 'github-token' | 'validating-token' | 'input' | 'analyzing' | 'select' | 'loading' | 'complete';
 
 export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({ onComplete, onError }) => {
   const [step, setStep] = useState<Step>('github-token');
@@ -35,13 +36,48 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({ onComplete, onEr
   const [selectedColumn, setSelectedColumn] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
   const [tokenStorage] = useState(new TokenStorage());
+  const [validatingToken, setValidatingToken] = useState(false);
+  const [tokenValid, setTokenValid] = useState<boolean | null>(null);
+  const [skipGitHub, setSkipGitHub] = useState(false);
   const { exit } = useApp();
 
-  // Initialize token from storage or environment
+  // Initialize and validate token from storage or environment
   useEffect(() => {
-    const savedToken = tokenStorage.getToken();
-    const envToken = process.env.GITHUB_TOKEN;
-    setGithubToken(savedToken || envToken);
+    const initializeToken = async () => {
+      const savedToken = tokenStorage.getToken();
+      const envToken = process.env.GITHUB_TOKEN;
+      const token = savedToken || envToken;
+      
+      if (token) {
+        setGithubToken(token);
+        setValidatingToken(true);
+        setStep('validating-token');
+        
+        try {
+          const githubService = new GitHubService(token);
+          const validation = await githubService.validateToken();
+          
+          if (validation.valid) {
+            setTokenValid(true);
+            setStep('input');
+          } else {
+            setTokenValid(false);
+            setStep('github-token');
+            console.error('Token validation failed:', validation.error);
+          }
+        } catch (error) {
+          setTokenValid(false);
+          setStep('github-token');
+          console.error('Token validation error:', error);
+        } finally {
+          setValidatingToken(false);
+        }
+      } else {
+        setStep('github-token');
+      }
+    };
+    
+    initializeToken();
   }, [tokenStorage]);
 
   const validateAndAnalyzeCSV = async (filePath: string): Promise<CSVAnalysis> => {
@@ -148,17 +184,47 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({ onComplete, onEr
     if (step === 'github-token') {
       if (key.return) {
         const newToken = input.trim() || githubToken;
-        if (newToken && newToken !== githubToken) {
-          try {
-            tokenStorage.saveToken(newToken);
-            console.log('✓ Token saved securely to:', tokenStorage.getConfigDir());
-          } catch (err) {
-            console.error('Error saving token:', err);
-          }
+        if (newToken) {
+          setValidatingToken(true);
+          setStep('validating-token');
+          
+          // Validate the token
+          (async () => {
+            try {
+              const githubService = new GitHubService(newToken);
+              const validation = await githubService.validateToken();
+              
+              if (validation.valid) {
+                if (newToken !== githubToken) {
+                  try {
+                    tokenStorage.saveToken(newToken);
+                    console.log('✓ Token saved securely to:', tokenStorage.getConfigDir());
+                  } catch (err) {
+                    console.error('Error saving token:', err);
+                  }
+                }
+                setGithubToken(newToken);
+                setTokenValid(true);
+                setStep('input');
+              } else {
+                setTokenValid(false);
+                setStep('github-token');
+                console.error('Token validation failed:', validation.error);
+              }
+            } catch (error) {
+              setTokenValid(false);
+              setStep('github-token');
+              console.error('Token validation error:', error);
+            } finally {
+              setValidatingToken(false);
+            }
+          })();
+        } else {
+          // Skip GitHub authentication
+          setSkipGitHub(true);
+          setStep('input');
         }
-        setGithubToken(newToken);
         setInput('');
-        setStep('input');
       } else if (key.backspace) {
         setInput(prev => prev.slice(0, -1));
       } else if (inputChar === 'o' && !input) {
@@ -169,7 +235,12 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({ onComplete, onEr
         // Clear stored token
         tokenStorage.clearToken();
         setGithubToken(undefined);
+        setTokenValid(null);
         setInput('');
+      } else if (inputChar === 's' && !input) {
+        // Skip GitHub authentication
+        setSkipGitHub(true);
+        setStep('input');
       } else if (inputChar && !key.ctrl && !key.meta && !key.escape) {
         setInput(prev => prev + inputChar);
       }
@@ -204,7 +275,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({ onComplete, onEr
         setStep('loading');
         try {
           const urls = await loadGitHubUrlsFromColumn(csvPath, analysis.columns[selectedColumn].name);
-          onComplete(csvPath, analysis.columns[selectedColumn].name, urls, githubToken);
+          onComplete(csvPath, analysis.columns[selectedColumn].name, urls, skipGitHub ? undefined : githubToken);
           setStep('complete');
         } catch (err) {
           setError(err instanceof Error ? err.message : String(err));
@@ -228,9 +299,10 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({ onComplete, onEr
         <Text dimColor>• Press 'o' to open GitHub token generation page in browser</Text>
         <Text dimColor>• Generate a token with 'repo' scope</Text>
         <Text dimColor>• Press 'c' to clear stored token</Text>
+        <Text dimColor>• Press 's' to skip GitHub authentication</Text>
         <Text dimColor>• Or press Enter to continue without authentication</Text>
         <Text></Text>
-        <Text>Current token: {githubToken ? `${githubToken.substring(0, 8)}... (saved)` : 'None'}</Text>
+        <Text>Current token: {githubToken ? `${githubToken.substring(0, 8)}... ${tokenValid === true ? '(valid)' : tokenValid === false ? '(invalid)' : '(saved)'}` : 'None'}</Text>
         <Text dimColor>Stored in: {tokenStorage.getConfigDir()}</Text>
         <Text></Text>
         <Text>Enter GitHub token (or press Enter to skip):</Text>
@@ -239,16 +311,26 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({ onComplete, onEr
           <Text>{input.replace(/./g, '*')}</Text>
           <Text color="gray">█</Text>
         </Box>
-        <Text dimColor>Press 'o' to open GitHub, 'c' to clear token, Enter to continue, Ctrl+C to exit</Text>
+        <Text dimColor>Press 'o' to open GitHub, 'c' to clear token, 's' to skip, Enter to continue, Ctrl+C to exit</Text>
+      </Box>
+    );
+  }
+
+  if (step === 'validating-token') {
+    return (
+      <Box flexDirection="column">
+        <Text color="yellow">Validating GitHub token...</Text>
+        <Text>Please wait while we verify your token...</Text>
       </Box>
     );
   }
 
   if (step === 'input') {
+    const authStatus = skipGitHub ? 'Skipped (60 requests/hour limit)' : githubToken ? '✓ Token configured' : '⚠ No token (60 requests/hour limit)';
     return (
       <Box flexDirection="column">
         <Text color="blue" bold>CSV GitHub URL Extractor</Text>
-        <Text>Authentication: {githubToken ? '✓ Token configured' : '⚠ No token (60 requests/hour limit)'}</Text>
+        <Text>Authentication: {authStatus}</Text>
         <Text></Text>
         <Text>Enter the path to your CSV file:</Text>
         <Box>

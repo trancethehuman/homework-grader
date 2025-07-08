@@ -23,8 +23,25 @@ pnpm install
 
 ### Usage
 ```bash
+# Interactive mode (default) - includes GitHub token setup
+pnpm run dev
+
+# Legacy mode with CSV file
 pnpm run dev sample.csv
 ```
+
+### GitHub Authentication
+The application supports GitHub Personal Access Tokens for increased API rate limits:
+- **With token**: 5,000 requests/hour
+- **Without token**: 60 requests/hour (unauthenticated)
+
+Set token via environment variable:
+```bash
+export GITHUB_TOKEN=your_token_here
+pnpm run dev
+```
+
+Or provide interactively when prompted in the CLI.
 
 ## Architecture
 
