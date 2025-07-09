@@ -70,29 +70,29 @@ export class GitHubService {
     try {
       const response = await this.octokit.rest.users.getAuthenticated();
       const rateLimitResponse = await this.octokit.rest.rateLimit.get();
-      
+
       return {
         valid: true,
         rateLimit: {
           remaining: rateLimitResponse.data.rate.remaining,
-          reset: rateLimitResponse.data.rate.reset
-        }
+          reset: rateLimitResponse.data.rate.reset,
+        },
       };
     } catch (error: any) {
       if (error.status === 401) {
         return {
           valid: false,
-          error: 'Token is invalid or expired'
+          error: "Token is invalid or expired",
         };
       } else if (error.status === 403) {
         return {
           valid: false,
-          error: 'Token lacks required permissions (needs repo scope)'
+          error: "Token lacks required permissions (needs repo scope)",
         };
       } else {
         return {
           valid: false,
-          error: `Token validation failed: ${error.message}`
+          error: `Token validation failed: ${error.message}`,
         };
       }
     }
@@ -108,7 +108,7 @@ export class GitHubService {
         remaining: response.data.rate.remaining,
         reset: response.data.rate.reset,
         used: response.data.rate.used,
-        limit: response.data.rate.limit
+        limit: response.data.rate.limit,
       };
     } catch (error: any) {
       throw new Error(`Failed to get rate limit: ${error.message}`);
@@ -121,10 +121,12 @@ export class GitHubService {
   private async waitForRateLimit(resetTime: number): Promise<void> {
     const now = Math.floor(Date.now() / 1000);
     const waitTime = (resetTime - now + 1) * 1000; // Add 1 second buffer
-    
+
     if (waitTime > 0) {
-      console.log(`Rate limit hit. Waiting ${Math.ceil(waitTime / 1000)} seconds...`);
-      await new Promise(resolve => setTimeout(resolve, waitTime));
+      console.log(
+        `Rate limit hit. Waiting ${Math.ceil(waitTime / 1000)} seconds...`
+      );
+      await new Promise((resolve) => setTimeout(resolve, waitTime));
     }
   }
 
@@ -134,13 +136,13 @@ export class GitHubService {
   private async executeWithRateLimit<T>(apiCall: () => Promise<T>): Promise<T> {
     const maxRetries = 3;
     let attempt = 0;
-    
+
     while (attempt < maxRetries) {
       try {
         return await apiCall();
       } catch (error: any) {
-        if (error.status === 403 && error.message.includes('rate limit')) {
-          const resetTime = error.response?.headers?.['x-ratelimit-reset'];
+        if (error.status === 403 && error.message.includes("rate limit")) {
+          const resetTime = error.response?.headers?.["x-ratelimit-reset"];
           if (resetTime) {
             await this.waitForRateLimit(parseInt(resetTime));
             attempt++;
@@ -150,8 +152,8 @@ export class GitHubService {
         throw error;
       }
     }
-    
-    throw new Error('Max retries exceeded for rate limit');
+
+    throw new Error("Max retries exceeded for rate limit");
   }
 
   private shouldIgnoreFile(filePath: string): boolean {
@@ -181,13 +183,13 @@ export class GitHubService {
 
     try {
       // Get the repository's default branch with rate limit handling
-      const repoResponse = await this.executeWithRateLimit(() => 
+      const repoResponse = await this.executeWithRateLimit(() =>
         this.octokit.rest.repos.get({ owner, repo })
       );
       const defaultBranch = repoResponse.data.default_branch;
 
       // Get the tree for the entire repository in one API call
-      const treeResponse = await this.executeWithRateLimit(() => 
+      const treeResponse = await this.executeWithRateLimit(() =>
         this.octokit.rest.git.getTree({
           owner,
           repo,
@@ -242,11 +244,17 @@ export class GitHubService {
       }
     } catch (error: any) {
       if (error.status === 401) {
-        throw new Error('GitHub token is invalid or expired. Please provide a valid token.');
+        throw new Error(
+          "GitHub token is invalid or expired. Please provide a valid token."
+        );
       } else if (error.status === 403) {
-        throw new Error('GitHub token lacks required permissions or rate limit exceeded.');
+        throw new Error(
+          "GitHub token lacks required permissions or rate limit exceeded."
+        );
       } else if (error.status === 404) {
-        throw new Error(`Repository ${owner}/${repo} not found or not accessible.`);
+        throw new Error(
+          `Repository ${owner}/${repo} not found or not accessible.`
+        );
       } else {
         console.error(`Error fetching files from ${owner}/${repo}:`, error);
         throw error;
@@ -262,7 +270,7 @@ export class GitHubService {
     sha: string
   ): Promise<string | null> {
     try {
-      const response = await this.executeWithRateLimit(() => 
+      const response = await this.executeWithRateLimit(() =>
         this.octokit.rest.git.getBlob({
           owner,
           repo,
@@ -292,9 +300,6 @@ export class GitHubService {
     let concatenatedContent = `# Repository: ${repoInfo.owner}/${repoInfo.repo}\n\n`;
     concatenatedContent += `Source URL: ${url}\n\n`;
     concatenatedContent += `Total files processed: ${files.length}\n\n`;
-    concatenatedContent += `Ignored extensions: ${this.getIgnoredExtensions().join(
-      ", "
-    )}\n\n`;
     concatenatedContent += "---\n\n";
 
     for (const file of files) {

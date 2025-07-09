@@ -7,8 +7,7 @@
   "packageManager": "pnpm@9.15.0",
   "scripts": {
     "build": "tsc",
-    "start": "node dist/cli.js",
-    "dev": "ts-node --esm src/cli.tsx",
+    "start": "pnpm run build && node dist/cli.js",
     "clean": "rm -rf dist",
     "test": "echo \"Error: no test specified\" && exit 1"
   },

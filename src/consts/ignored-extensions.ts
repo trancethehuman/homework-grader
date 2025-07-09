@@ -73,6 +73,8 @@ export const LOCK_EXTENSIONS = [".lock"];
 
 export const VECTOR_DATABASE = [".faiss"];
 
+export const GIT = [".gitignore"];
+
 export const DEFAULT_IGNORED_EXTENSIONS = [
   ...IMAGE_EXTENSIONS,
   ...VIDEO_EXTENSIONS,
@@ -86,4 +88,5 @@ export const DEFAULT_IGNORED_EXTENSIONS = [
   ...PACKAGE_EXTENSIONS,
   ...LOCK_EXTENSIONS,
   ...VECTOR_DATABASE,
+  ...GIT,
 ];

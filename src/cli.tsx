@@ -1,21 +1,31 @@
 #!/usr/bin/env node
 
-import React from "react";
 import { render } from "ink";
 import { InteractiveCSV } from "./interactive-csv.js";
 import { GitHubService } from "./github/github-service.js";
 import { writeFileSync, mkdirSync } from "fs";
 import { join } from "path";
+import { NUM_URLS_IN_PARALLEL } from "./consts/limits.js";
 
-async function processGitHubUrls(urls: string[], columnName: string, githubToken?: string) {
+async function processGitHubUrls(
+  urls: string[],
+  columnName: string,
+  githubToken?: string
+) {
   const githubService = new GitHubService(githubToken);
-  
+
   // Display authentication status
   if (githubToken) {
-    console.log(`✓ Using GitHub token for authentication (5,000 requests/hour)`);
+    console.log(
+      `✓ Using GitHub token for authentication (5,000 requests/hour)`
+    );
   } else {
-    console.log(`⚠ No GitHub token provided. Using unauthenticated requests (60 requests/hour)`);
-    console.log(`  To avoid rate limiting, set GITHUB_TOKEN environment variable or provide token interactively`);
+    console.log(
+      `⚠ No GitHub token provided. Using unauthenticated requests (60 requests/hour)`
+    );
+    console.log(
+      `  To avoid rate limiting, set GITHUB_TOKEN environment variable or provide token interactively`
+    );
   }
 
   console.log(`\nLoaded ${urls.length} GitHub URLs from column: ${columnName}`);
@@ -33,9 +43,12 @@ async function processGitHubUrls(urls: string[], columnName: string, githubToken
       // Directory might already exist
     }
 
-    for (let i = 0; i < urls.length; i++) {
-      const url = urls[i];
-      console.log(`\nProcessing GitHub URL ${i + 1}/${urls.length}: ${url}`);
+    // Process URLs concurrently with a limit of 10
+
+    const processUrl = async (url: string, index: number) => {
+      console.log(
+        `\nProcessing GitHub URL ${index + 1}/${urls.length}: ${url}`
+      );
 
       try {
         const repoInfo = githubService.parseGitHubUrl(url);
@@ -53,6 +66,26 @@ async function processGitHubUrls(urls: string[], columnName: string, githubToken
         }
       } catch (error) {
         console.error(`✗ Error processing ${url}:`, error);
+      }
+    };
+
+    // Process URLs in batches of up to 10 concurrent requests
+    for (let i = 0; i < urls.length; i += NUM_URLS_IN_PARALLEL) {
+      const batch = urls.slice(i, i + NUM_URLS_IN_PARALLEL);
+      const batchPromises = batch.map((url, batchIndex) =>
+        processUrl(url, i + batchIndex)
+      );
+
+      await Promise.all(batchPromises);
+
+      // Add a small delay between batches to be respectful to GitHub API
+      if (i + NUM_URLS_IN_PARALLEL < urls.length) {
+        console.log(
+          `\nCompleted batch ${
+            Math.floor(i / NUM_URLS_IN_PARALLEL) + 1
+          }. Pausing briefly before next batch...`
+        );
+        await new Promise((resolve) => setTimeout(resolve, 1000));
       }
     }
 
@@ -75,7 +108,11 @@ async function main() {
       const githubUrls = urls.filter((url: string) =>
         url.includes("github.com")
       );
-      await processGitHubUrls(githubUrls, "auto-detected", process.env.GITHUB_TOKEN);
+      await processGitHubUrls(
+        githubUrls,
+        "auto-detected",
+        process.env.GITHUB_TOKEN
+      );
     } catch (error) {
       console.error(
         "Error:",
