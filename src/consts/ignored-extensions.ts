@@ -50,6 +50,7 @@ export const DOCUMENT_EXTENSIONS = [
   ".xlsx",
   ".ppt",
   ".pptx",
+  ".pkl",
 ];
 
 export const EXECUTABLE_EXTENSIONS = [".exe", ".dll", ".so", ".dylib", ".app"];
