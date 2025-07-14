@@ -6,6 +6,8 @@ import csv from 'csv-parser';
 import open from 'open';
 import { TokenStorage } from './lib/token-storage.js';
 import { GitHubService } from './github/github-service.js';
+import { ProviderSelector } from './components/provider-selector.js';
+import { AIProvider } from './consts/ai-providers.js';
 
 export interface CSVColumn {
   name: string;
@@ -21,17 +23,18 @@ export interface CSVAnalysis {
 }
 
 interface InteractiveCSVProps {
-  onComplete: (filePath: string, columnName: string, urls: string[], githubToken?: string) => void;
+  onComplete: (filePath: string, columnName: string, urls: string[], githubToken?: string, provider?: AIProvider) => void;
   onError: (error: string) => void;
 }
 
-type Step = 'github-token' | 'validating-token' | 'input' | 'analyzing' | 'select' | 'loading' | 'complete';
+type Step = 'github-token' | 'validating-token' | 'provider-select' | 'input' | 'analyzing' | 'select' | 'loading' | 'complete';
 
 export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({ onComplete, onError }) => {
   const [step, setStep] = useState<Step>('github-token');
   const [csvPath, setCsvPath] = useState('');
   const [input, setInput] = useState('');
   const [githubToken, setGithubToken] = useState<string | undefined>();
+  const [selectedProvider, setSelectedProvider] = useState<AIProvider | null>(null);
   const [analysis, setAnalysis] = useState<CSVAnalysis | null>(null);
   const [selectedColumn, setSelectedColumn] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
@@ -59,7 +62,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({ onComplete, onEr
           
           if (validation.valid) {
             setTokenValid(true);
-            setStep('input');
+            setStep('provider-select');
           } else {
             setTokenValid(false);
             setStep('github-token');
@@ -205,7 +208,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({ onComplete, onEr
                 }
                 setGithubToken(newToken);
                 setTokenValid(true);
-                setStep('input');
+                setStep('provider-select');
               } else {
                 setTokenValid(false);
                 setStep('github-token');
@@ -222,7 +225,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({ onComplete, onEr
         } else {
           // Skip GitHub authentication
           setSkipGitHub(true);
-          setStep('input');
+          setStep('provider-select');
         }
         setInput('');
       } else if (key.backspace || key.delete) {
@@ -241,7 +244,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({ onComplete, onEr
       } else if (inputChar === 's' && !input) {
         // Skip GitHub authentication
         setSkipGitHub(true);
-        setStep('input');
+        setStep('provider-select');
       } else if (inputChar && !key.ctrl && !key.meta && !key.escape && !key.return) {
         setInput(prev => prev + inputChar);
       }
@@ -286,7 +289,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({ onComplete, onEr
         setStep('loading');
         try {
           const urls = await loadGitHubUrlsFromColumn(csvPath, analysis.columns[selectedColumn].name);
-          onComplete(csvPath, analysis.columns[selectedColumn].name, urls, skipGitHub ? undefined : githubToken);
+          onComplete(csvPath, analysis.columns[selectedColumn].name, urls, skipGitHub ? undefined : githubToken, selectedProvider || undefined);
           setStep('complete');
         } catch (err) {
           setError(err instanceof Error ? err.message : String(err));
@@ -336,12 +339,24 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({ onComplete, onEr
     );
   }
 
+  if (step === 'provider-select') {
+    return (
+      <ProviderSelector
+        onSelect={(provider) => {
+          setSelectedProvider(provider);
+          setStep('input');
+        }}
+      />
+    );
+  }
+
   if (step === 'input') {
     const authStatus = skipGitHub ? 'Skipped (60 requests/hour limit)' : githubToken ? '✓ Token configured' : '⚠ No token (60 requests/hour limit)';
     return (
       <Box flexDirection="column">
         <Text color="blue" bold>CSV GitHub URL Extractor</Text>
         <Text>Authentication: {authStatus}</Text>
+        <Text>AI Provider: {selectedProvider?.name || 'Not selected'}</Text>
         <Text></Text>
         {error && (
           <>

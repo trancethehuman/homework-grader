@@ -1,6 +1,7 @@
 import { Octokit } from "@octokit/rest";
 import { DEFAULT_IGNORED_EXTENSIONS } from "../consts/ignored-extensions.js";
 import { getRepoScores } from "../grader/grader.js";
+import { AIProvider } from "../consts/ai-providers.js";
 
 interface GitHubRepoInfo {
   owner: string;
@@ -290,7 +291,10 @@ export class GitHubService {
     }
   }
 
-  async processGitHubUrl(url: string): Promise<{ content: string; scores: Promise<any> }> {
+  async processGitHubUrl(
+    url: string,
+    provider: AIProvider
+  ): Promise<{ content: string; scores: Promise<any> }> {
     const repoInfo = this.parseGitHubUrl(url);
     if (!repoInfo) {
       throw new Error(`Invalid GitHub URL: ${url}`);
@@ -310,8 +314,7 @@ export class GitHubService {
       concatenatedContent += "\n```\n\n";
     }
 
-    // Start grading in parallel - don't await here
-    const scoresPromise = getRepoScores(concatenatedContent);
+    const scoresPromise = getRepoScores(concatenatedContent, provider);
 
     return { content: concatenatedContent, scores: scoresPromise };
   }
