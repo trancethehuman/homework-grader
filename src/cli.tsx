@@ -57,32 +57,45 @@ async function processGitHubUrls(
             `Fetching repository structure from ${repoInfo.owner}/${repoInfo.repo}...`
           );
           const result = await githubService.processGitHubUrl(url);
-          
+
           const fileName = `${repoInfo.owner}-${repoInfo.repo}.md`;
           const filePath = join("test-results", fileName);
-          
+
           const scoresFileName = `${repoInfo.owner}-${repoInfo.repo}-scores.json`;
           const scoresFilePath = join("test-results", scoresFileName);
 
           // Save content immediately when available
           writeFileSync(filePath, result.content);
           console.log(`✓ Saved content to ${filePath}`);
-          
+
           // Grade in parallel - content is already saved
           console.log(
             `Grading repository ${repoInfo.owner}/${repoInfo.repo}...`
           );
-          
+
           try {
             const scores = await result.scores;
-            writeFileSync(scoresFilePath, JSON.stringify(scores, null, 2));
+            const cleanedScores = {
+              object: scores.object,
+              usage: scores.usage,
+            };
+            writeFileSync(
+              scoresFilePath,
+              JSON.stringify(cleanedScores, null, 2)
+            );
             console.log(`✓ Saved scores to ${scoresFilePath}`);
           } catch (gradingError) {
-            console.error(`✗ Error grading ${repoInfo.owner}/${repoInfo.repo}:`, gradingError);
+            console.error(
+              `✗ Error grading ${repoInfo.owner}/${repoInfo.repo}:`,
+              gradingError
+            );
             // Save an error file to track failed gradings
             const errorScores = {
               error: "Grading failed",
-              message: gradingError instanceof Error ? gradingError.message : String(gradingError)
+              message:
+                gradingError instanceof Error
+                  ? gradingError.message
+                  : String(gradingError),
             };
             writeFileSync(scoresFilePath, JSON.stringify(errorScores, null, 2));
           }

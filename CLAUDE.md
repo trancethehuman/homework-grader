@@ -9,13 +9,17 @@ This is a homework grading system repository with TypeScript URL loading functio
 ## Development Setup
 
 ### Package Manager
+
 This project uses **pnpm** as the package manager. Install dependencies with:
+
 ```bash
 pnpm install
 ```
 
 ### Build Process
+
 **IMPORTANT**: Always build the project first before running any scripts:
+
 ```bash
 # Build first (REQUIRED)
 pnpm run build
@@ -25,6 +29,7 @@ pnpm start
 ```
 
 ### TypeScript Scripts
+
 - **Build**: `pnpm run build` (compiles TypeScript to JavaScript) - **REQUIRED FIRST STEP**
 - **Start**: `pnpm start` (runs compiled version from `dist/cli.js`)
 - **Dev**: `pnpm run dev` (development with ts-node, bypasses build)
@@ -32,11 +37,13 @@ pnpm start
 - **Test**: `pnpm test` (placeholder - no tests configured)
 
 ### Dependencies
+
 - **Core**: `csv-parser` for CSV parsing, `@octokit/rest` for GitHub API
 - **UI**: `ink` and `react` for interactive CLI, `open` for browser integration
 - **Dev**: TypeScript, ts-node, @types/node, @types/react
 
 ### Usage Workflow
+
 ```bash
 # Production workflow (recommended)
 pnpm run build          # Build first
@@ -49,11 +56,14 @@ pnpm run dev sample.csv # Legacy mode with CSV file (no build required)
 ```
 
 ### GitHub Authentication
+
 The application supports GitHub Personal Access Tokens for increased API rate limits:
+
 - **With token**: 5,000 requests/hour
 - **Without token**: 60 requests/hour (unauthenticated)
 
 Authentication features:
+
 - **Token Storage**: Securely stores tokens in platform-appropriate config directories
 - **Token Validation**: Real-time token validation with GitHub API
 - **Browser Integration**: Press 'o' to open GitHub token generation page
@@ -61,6 +71,7 @@ Authentication features:
 - **Environment Support**: Reads from `GITHUB_TOKEN` environment variable
 
 Set token via environment variable:
+
 ```bash
 export GITHUB_TOKEN=your_token_here
 pnpm run build
@@ -72,13 +83,16 @@ pnpm start
 The codebase includes:
 
 ### Core Components
+
 - **URLLoader Class** (`src/url-loader.ts`)
+
   - TypeScript implementation with strong typing
   - Loads URLs from CSV files with validation
   - Filters and deduplicates valid HTTP/HTTPS URLs
   - Async/await pattern for CSV processing
 
 - **GitHubService Class** (`src/github/github-service.ts`)
+
   - Processes GitHub repositories and extracts file contents
   - Token validation with `validateToken()` method
   - Rate limit handling with automatic retry logic
@@ -87,6 +101,7 @@ The codebase includes:
   - Error handling for authentication and permission issues
 
 - **Interactive CSV Component** (`src/interactive-csv.tsx`)
+
   - React/Ink based interactive CLI interface
   - Multi-step workflow: token setup → CSV input → column selection → processing
   - GitHub token input and management with secure storage
@@ -105,6 +120,7 @@ The codebase includes:
   - Token validation and cleanup methods
 
 ### CLI Interface
+
 - **Command Line Interface** (`src/cli.tsx`)
   - Supports both interactive mode and legacy CSV file argument
   - Processes GitHub URLs from CSV files
@@ -114,6 +130,7 @@ The codebase includes:
   - Authentication status display
 
 ### Constants
+
 - **Ignored Extensions** (`src/consts/ignored-extensions.ts`)
   - Comprehensive list of file extensions to ignore when processing repositories
   - Includes images, videos, audio, archives, documents, executables, fonts, binaries, compiled files, and vector databases
@@ -121,15 +138,18 @@ The codebase includes:
   - Configurable through GitHubService constructor
 
 ### Data Files
+
 - `sample.csv` - Example CSV file with name, website, and description columns
 - Supports any CSV format with URL data in any column
 - `test-results/` - Directory for generated repository content files
 - `dist/` - Compiled JavaScript output directory
 
 ### Examples
+
 - `src/example.ts` - Demonstrates TypeScript URLLoader usage
 
 ### Key Features
+
 - **TypeScript**: Full type safety and compilation
 - **Interactive CLI**: React/Ink components with step-by-step workflow
 - **GitHub Authentication Management**:
@@ -148,14 +168,17 @@ The codebase includes:
 ## Important Instructions
 
 **ALWAYS update this CLAUDE.md file as the last step of every successful change** when the user confirms the changes are good. Keep the file current with:
+
 - New build/test/lint commands as they're added
 - Architecture changes and new components
 - Development workflow updates
 - Any new conventions or patterns established
+- Never write in-line comments in the code
 
 ## Build-First Workflow
 
 Remember that users should always build the project first:
+
 1. `pnpm install` (install dependencies)
 2. `pnpm run build` (build TypeScript)
 3. `pnpm start` (run the built application)
