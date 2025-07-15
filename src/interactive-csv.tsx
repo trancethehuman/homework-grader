@@ -7,7 +7,8 @@ import open from 'open';
 import { TokenStorage } from './lib/token-storage.js';
 import { GitHubService } from './github/github-service.js';
 import { ProviderSelector } from './components/provider-selector.js';
-import { AIProvider } from './consts/ai-providers.js';
+import { AIProvider, DEFAULT_PROVIDER, AI_PROVIDERS } from './consts/ai-providers.js';
+import { PreferencesStorage } from './lib/preferences-storage.js';
 
 export interface CSVColumn {
   name: string;
@@ -39,6 +40,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({ onComplete, onEr
   const [selectedColumn, setSelectedColumn] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
   const [tokenStorage] = useState(new TokenStorage());
+  const [preferencesStorage] = useState(new PreferencesStorage());
   const [validatingToken, setValidatingToken] = useState(false);
   const [tokenValid, setTokenValid] = useState<boolean | null>(null);
   const [skipGitHub, setSkipGitHub] = useState(false);
@@ -50,6 +52,19 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({ onComplete, onEr
       const savedToken = tokenStorage.getToken();
       const envToken = process.env.GITHUB_TOKEN;
       const token = savedToken || envToken;
+      
+      // Load saved provider preference
+      try {
+        const preferences = await preferencesStorage.loadPreferences();
+        if (preferences.selectedProvider) {
+          const provider = AI_PROVIDERS.find(p => p.id === preferences.selectedProvider);
+          if (provider) {
+            setSelectedProvider(provider);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading saved provider:', error);
+      }
       
       if (token) {
         setGithubToken(token);
@@ -81,7 +96,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({ onComplete, onEr
     };
     
     initializeToken();
-  }, [tokenStorage]);
+  }, [tokenStorage, preferencesStorage]);
 
   const validateAndAnalyzeCSV = async (filePath: string): Promise<CSVAnalysis> => {
     if (!fs.existsSync(filePath)) {
@@ -289,7 +304,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({ onComplete, onEr
         setStep('loading');
         try {
           const urls = await loadGitHubUrlsFromColumn(csvPath, analysis.columns[selectedColumn].name);
-          onComplete(csvPath, analysis.columns[selectedColumn].name, urls, skipGitHub ? undefined : githubToken, selectedProvider || undefined);
+          onComplete(csvPath, analysis.columns[selectedColumn].name, urls, skipGitHub ? undefined : githubToken, selectedProvider || DEFAULT_PROVIDER);
           setStep('complete');
         } catch (err) {
           setError(err instanceof Error ? err.message : String(err));
