@@ -4,6 +4,12 @@ import * as os from 'os';
 
 interface Preferences {
   selectedProvider?: string;
+  notionDatabaseId?: string;
+  notionConfig?: {
+    lastUsedDatabase?: string;
+    preferredPropertyName?: string;
+    lastUsedPropertyName?: string;
+  };
   version: string;
 }
 
