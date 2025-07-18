@@ -20,6 +20,9 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: ^1.15.1
         version: 1.15.1
+      '@notionhq/client':
+        specifier: ^4.0.1
+        version: 4.0.1
       '@octokit/rest':
         specifier: ^22.0.0
         version: 22.0.0
@@ -121,6 +124,10 @@ packages:
 
   '@modelcontextprotocol/sdk@1.15.1':
     resolution: {integrity: sha512-W/XlN9c528yYn+9MQkVjxiTPgPxoxt+oczfjHBDsJx0+59+O7B75Zhsp0B16Xbwbz8ANISDajh6+V7nIcPMc5w==}
+    engines: {node: '>=18'}
+
+  '@notionhq/client@4.0.1':
+    resolution: {integrity: sha512-SdILqiiThECLR2KDUOvl4JqRaJWBwDYaEw/f0qu+G6rKN/QUCkaJ84vN5MgBw1yKsMAsKxBlDazs3Jw6vv2ikA==}
     engines: {node: '>=18'}
 
   '@octokit/auth-token@6.0.0':
@@ -935,6 +942,8 @@ snapshots:
       zod-to-json-schema: 3.24.6(zod@3.25.76)
     transitivePeerDependencies:
       - supports-color
+
+  '@notionhq/client@4.0.1': {}
 
   '@octokit/auth-token@6.0.0': {}
 

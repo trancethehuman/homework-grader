@@ -137,8 +137,9 @@ async function processGitHubUrls(
 async function main() {
   const args = process.argv.slice(2);
 
+
   // Check if a CSV file was provided as argument (legacy mode)
-  if (args.length > 0) {
+  if (args.length > 0 && !args[0].startsWith("--")) {
     const { URLLoader } = await import("./url-loader.js");
     const csvFilePath = args[0];
     const loader = new URLLoader();
