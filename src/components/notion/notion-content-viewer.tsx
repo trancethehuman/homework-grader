@@ -195,7 +195,7 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
   // Format the content for display
   const formatted = NotionFormatter.formatContent(content);
   const isDatabase = content.type === "database";
-  const contentType = isDatabase ? "Database" : "Page";
+  const displayType = isDatabase ? "Database" : "Page";
 
   return (
     <Box flexDirection="column">
@@ -207,7 +207,7 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
         <Text bold>Title:</Text> {formatted.icon} {formatted.title}
       </Text>
       <Text>
-        <Text bold>Type:</Text> {contentType}
+        <Text bold>Type:</Text> {displayType}
       </Text>
       <Text>
         <Text bold>Summary:</Text> {formatted.summary}
@@ -226,14 +226,28 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
       {formatted.properties.length > 0 && (
         <>
           <Text color="cyan" bold>Properties:</Text>
-          {formatted.properties.slice(0, 5).map((prop, index) => (
-            <Text key={index} dimColor>
-              • {prop.name}: {prop.value} {prop.type !== 'rich_text' && `(${prop.type})`}
-            </Text>
-          ))}
-          {formatted.properties.length > 5 && (
-            <Text dimColor>... and {formatted.properties.length - 5} more properties</Text>
-          )}
+          {(() => {
+            const displayCount = propertiesExpanded ? formatted.properties.length : Math.min(10, formatted.properties.length);
+            const propertiesToShow = formatted.properties.slice(0, displayCount);
+            
+            return (
+              <>
+                {propertiesToShow.map((prop, index) => (
+                  <Text key={index} dimColor>
+                    • {prop.name}: {prop.value} {prop.type !== 'rich_text' && `(${prop.type})`}
+                  </Text>
+                ))}
+                {formatted.properties.length > 10 && (
+                  <Text dimColor>
+                    {propertiesExpanded 
+                      ? `Press 'p' to collapse properties` 
+                      : `... and ${formatted.properties.length - 10} more properties (press 'p' to expand)`
+                    }
+                  </Text>
+                )}
+              </>
+            );
+          })()}
           <Text></Text>
         </>
       )}
@@ -247,7 +261,7 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
           <Text color="cyan" bold>
             Navigate to child pages/databases:
           </Text>
-          <Text dimColor>Use ↑/↓ arrows to navigate, ←/→ to change pages, Enter to select, 'b' to go back</Text>
+          <Text dimColor>Use ↑/↓ arrows to navigate, ←/→ to change pages, Enter to select, 'p' to expand/collapse properties, 'b' to go back</Text>
           <Text></Text>
           
           {(() => {
@@ -283,14 +297,14 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
           
           <Text></Text>
           <Text dimColor>
-            Press Enter to navigate, ←/→ for pages, 'b' to go back, Ctrl+C to exit
+            Press Enter to navigate, ←/→ for pages, 'p' for properties, 'b' to go back, Ctrl+C to exit
           </Text>
         </>
       )}
 
       {(!showingContent || navigableItems.length === 0) && (
         <Text dimColor>
-          Press any key to continue...
+          Press 'p' to expand/collapse properties, any other key to continue...
         </Text>
       )}
     </Box>

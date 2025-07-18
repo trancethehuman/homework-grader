@@ -17,6 +17,8 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showingDatabases, setShowingDatabases] = useState(false);
+  const [currentPage, setCurrentPage] = useState(0);
+  const itemsPerPage = 10;
 
   const allItems = showingDatabases ? databases : [...pages, ...databases];
 
@@ -49,10 +51,36 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
   useInput((input, key) => {
     if (isLoading || error) return;
 
+    const totalPages = Math.ceil(allItems.length / itemsPerPage);
+    const startIndex = currentPage * itemsPerPage;
+    const endIndex = Math.min(startIndex + itemsPerPage, allItems.length);
+
     if (key.upArrow) {
-      setSelectedIndex((prev) => Math.max(0, prev - 1));
+      setSelectedIndex((prev) => {
+        const newIndex = Math.max(0, prev - 1);
+        // If we go to the previous page
+        if (newIndex < startIndex && currentPage > 0) {
+          setCurrentPage(currentPage - 1);
+          return newIndex;
+        }
+        return newIndex;
+      });
     } else if (key.downArrow) {
-      setSelectedIndex((prev) => Math.min(allItems.length - 1, prev + 1));
+      setSelectedIndex((prev) => {
+        const newIndex = Math.min(allItems.length - 1, prev + 1);
+        // If we go to the next page
+        if (newIndex >= endIndex && currentPage < totalPages - 1) {
+          setCurrentPage(currentPage + 1);
+          return newIndex;
+        }
+        return newIndex;
+      });
+    } else if (key.leftArrow && currentPage > 0) {
+      setCurrentPage(currentPage - 1);
+      setSelectedIndex(Math.max(0, (currentPage - 1) * itemsPerPage));
+    } else if (key.rightArrow && currentPage < totalPages - 1) {
+      setCurrentPage(currentPage + 1);
+      setSelectedIndex(Math.min(allItems.length - 1, (currentPage + 1) * itemsPerPage));
     } else if (key.return) {
       if (allItems[selectedIndex]) {
         const item = allItems[selectedIndex];
@@ -61,6 +89,7 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
     } else if (input === "d") {
       setShowingDatabases(!showingDatabases);
       setSelectedIndex(0);
+      setCurrentPage(0);
     }
   });
 
@@ -120,7 +149,7 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
         Found {pages.length} pages and {databases.length} databases accessible to your integration.
       </Text>
       <Text dimColor>
-        Use ↑/↓ arrows to navigate, Enter to select, 'd' to toggle databases only
+        Use ↑/↓ arrows to navigate, ←/→ to change pages, Enter to select, 'd' to toggle databases only
       </Text>
       <Text></Text>
 
@@ -132,40 +161,51 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
         </Box>
       )}
 
-      {allItems.slice(0, 10).map((item, index) => {
-        const isSelected = index === selectedIndex;
-        const isDatabase = "properties" in item;
-        const itemType = isDatabase ? "Database" : "Page";
+      {(() => {
+        const totalPages = Math.ceil(allItems.length / itemsPerPage);
+        const startIndex = currentPage * itemsPerPage;
+        const endIndex = Math.min(startIndex + itemsPerPage, allItems.length);
+        const currentPageItems = allItems.slice(startIndex, endIndex);
         
         return (
-          <Box key={item.id} flexDirection="column" marginBottom={1}>
-            <Box>
-              <Text color={isSelected ? "blue" : "white"} bold={isSelected}>
-                {isSelected ? "→ " : "  "}
-                {item.title}
-              </Text>
-              <Text dimColor> ({itemType})</Text>
-            </Box>
-            <Box marginLeft={4}>
+          <>
+            {totalPages > 1 && (
               <Text dimColor>
-                Last edited: {new Date(item.lastEditedTime).toLocaleDateString()}
+                Page {currentPage + 1} of {totalPages} | Items {startIndex + 1}-{endIndex} of {allItems.length}
               </Text>
-            </Box>
-          </Box>
+            )}
+            <Text></Text>
+            
+            {currentPageItems.map((item, pageIndex) => {
+              const actualIndex = startIndex + pageIndex;
+              const isSelected = actualIndex === selectedIndex;
+              const isDatabase = "properties" in item;
+              const itemType = isDatabase ? "Database" : "Page";
+              
+              return (
+                <Box key={item.id} flexDirection="column" marginBottom={1}>
+                  <Box>
+                    <Text color={isSelected ? "blue" : "white"} bold={isSelected}>
+                      {isSelected ? "→ " : "  "}
+                      {item.title}
+                    </Text>
+                    <Text dimColor> ({itemType})</Text>
+                  </Box>
+                  <Box marginLeft={4}>
+                    <Text dimColor>
+                      Last edited: {new Date(item.lastEditedTime).toLocaleDateString()}
+                    </Text>
+                  </Box>
+                </Box>
+              );
+            })}
+          </>
         );
-      })}
-
-      {allItems.length > 10 && (
-        <Box marginTop={1}>
-          <Text dimColor>
-            ... and {allItems.length - 10} more items
-          </Text>
-        </Box>
-      )}
+      })()}
 
       <Text></Text>
       <Text dimColor>
-        Press Enter to select, 'd' to toggle databases only, Ctrl+C to exit
+        Press Enter to select, ←/→ for pages, 'd' to toggle databases only, Ctrl+C to exit
       </Text>
     </Box>
   );
