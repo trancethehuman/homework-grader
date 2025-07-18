@@ -83,6 +83,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
   const [oauthUrl, setOauthUrl] = useState<string>("");
   const [notionApiSelectedPageId, setNotionApiSelectedPageId] = useState<string>("");
   const [notionApiSelectedPageTitle, setNotionApiSelectedPageTitle] = useState<string>("");
+  const [notionApiContentType, setNotionApiContentType] = useState<string>("");
   const [analysis, setAnalysis] = useState<CSVAnalysis | null>(null);
   const [selectedColumn, setSelectedColumn] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
@@ -856,8 +857,16 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         <NotionContentViewer
           pageId={notionApiSelectedPageId}
           pageTitle={notionApiSelectedPageTitle}
+          contentType={notionApiContentType}
           onComplete={() => {
             setStep("complete");
+          }}
+          onNavigate={(pageId, pageTitle, contentType) => {
+            // Navigate to a new page/database
+            setNotionApiSelectedPageId(pageId);
+            setNotionApiSelectedPageTitle(pageTitle);
+            setNotionApiContentType(contentType || "");
+            // Stay in the same step to show the new content
           }}
         />
       </Box>

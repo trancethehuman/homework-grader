@@ -116,16 +116,69 @@ export class NotionService {
   }
 
   /**
-   * Fetch content of a specific page
+   * Fetch content of a specific page or database
    */
   async getPageContent(pageId: string): Promise<any> {
+    try {
+      // First try to get it as a page
+      const page = await this.notion.pages.retrieve({ page_id: pageId });
+      const blocks = await this.getPageBlocks(pageId);
+      
+      return {
+        page,
+        blocks,
+        type: "page"
+      };
+    } catch (error: any) {
+      // If it fails and mentions it's a database, try to get database metadata
+      if (error.code === 'validation_error' && error.message.includes('database')) {
+        const database = await this.notion.databases.retrieve({ database_id: pageId });
+        const entries = await this.queryDatabase(pageId);
+        
+        return {
+          database,
+          entries,
+          type: "database"
+        };
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Fetch database content directly
+   */
+  async getDatabaseContent(databaseId: string): Promise<any> {
+    const database = await this.notion.databases.retrieve({ database_id: databaseId });
+    const entries = await this.queryDatabase(databaseId);
+    
+    return {
+      database,
+      entries,
+      type: "database"
+    };
+  }
+
+  /**
+   * Fetch page content directly
+   */
+  async getPageContentDirect(pageId: string): Promise<any> {
     const page = await this.notion.pages.retrieve({ page_id: pageId });
     const blocks = await this.getPageBlocks(pageId);
     
     return {
       page,
-      blocks
+      blocks,
+      type: "page"
     };
+  }
+
+  /**
+   * Fetch database metadata
+   */
+  async getDatabaseMetadata(databaseId: string): Promise<any> {
+    const database = await this.notion.databases.retrieve({ database_id: databaseId });
+    return database;
   }
 
   /**
