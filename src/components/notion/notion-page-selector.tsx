@@ -2,15 +2,18 @@ import React, { useState, useEffect, useMemo } from "react";
 import { Text, Box, useInput } from "ink";
 import { NotionService, NotionPage, NotionDatabase } from "../../lib/notion/notion-service.js";
 import { SearchInput } from "../ui/search-input.js";
+import { BackButton, useBackNavigation } from "../ui/back-button.js";
 
 interface NotionPageSelectorProps {
   onSelect: (pageId: string, pageTitle: string) => void;
   onError: (error: string) => void;
+  onBack?: () => void;
 }
 
 export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
   onSelect,
   onError,
+  onBack,
 }) => {
   const [pages, setPages] = useState<NotionPage[]>([]);
   const [databases, setDatabases] = useState<NotionDatabase[]>([]);
@@ -38,6 +41,12 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
 
   const displayItems = isViewAllMode ? baseItems : filteredItems;
   const searchResultsItems = filteredItems.slice(0, maxSearchResults);
+
+  const { handleBackInput } = useBackNavigation(
+    () => onBack?.(),
+    !!onBack,
+    () => isSearchFocused && !isViewAllMode // Disable back navigation when search input is focused
+  );
 
   useEffect(() => {
     const loadNotionData = async () => {
@@ -72,6 +81,11 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
 
   useInput((input, key) => {
     if (isLoading || error) return;
+
+    // Handle back navigation first
+    if (handleBackInput(input, key)) {
+      return;
+    }
 
     // Handle 's' key to switch to search mode from anywhere
     if (input === 's' && !isSearchFocused) {
@@ -251,6 +265,8 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
           Use ↑/↓ arrows to navigate, ←/→ to change pages, Enter to select, 'd' to toggle databases only, 's' to search
         </Text>
         <Text></Text>
+        
+        <BackButton onBack={() => onBack?.()} isVisible={!!onBack} />
 
         {showingDatabases && (
           <Box marginBottom={1}>
@@ -313,6 +329,8 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
         Type to search, ↑/↓ arrows to navigate, Enter to select
       </Text>
       <Text></Text>
+      
+      <BackButton onBack={() => onBack?.()} isVisible={!!onBack} />
 
       <SearchInput
         value={searchTerm}

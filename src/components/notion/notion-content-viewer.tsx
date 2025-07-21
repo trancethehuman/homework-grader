@@ -2,12 +2,14 @@ import React, { useState, useEffect } from "react";
 import { Text, Box, useInput } from "ink";
 import { NotionService } from "../../lib/notion/notion-service.js";
 import { NotionFormatter, FormattedBlock } from "../../lib/notion/notion-formatter.js";
+import { BackButton, useBackNavigation } from "../ui/back-button.js";
 
 interface NotionContentViewerProps {
   pageId: string;
   pageTitle: string;
   onComplete: () => void;
   onNavigate?: (pageId: string, pageTitle: string, contentType?: string) => void;
+  onBack?: () => void;
   contentType?: string;
 }
 
@@ -16,6 +18,7 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
   pageTitle,
   onComplete,
   onNavigate,
+  onBack,
   contentType,
 }) => {
   const [isLoading, setIsLoading] = useState(true);
@@ -27,6 +30,11 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
   const [currentPage, setCurrentPage] = useState(0);
   const [propertiesExpanded, setPropertiesExpanded] = useState(false);
   const itemsPerPage = 10;
+
+  const { handleBackInput } = useBackNavigation(
+    () => onBack?.(),
+    !!onBack
+  );
 
   useEffect(() => {
     const fetchContent = async () => {
@@ -75,6 +83,11 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
   // Handle input for navigation
   useInput((input, key) => {
     if (isLoading || error) return;
+
+    // Handle back navigation first
+    if (handleBackInput(input, key)) {
+      return;
+    }
 
     if (showingContent && navigableItems.length > 0) {
       const totalPages = Math.ceil(navigableItems.length / itemsPerPage);
@@ -222,6 +235,8 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
         <Text bold>Last edited:</Text> {formatted.lastEditedTime}
       </Text>
       <Text></Text>
+      
+      <BackButton onBack={() => onBack?.()} isVisible={!!onBack} />
       
       {formatted.properties.length > 0 && (
         <>

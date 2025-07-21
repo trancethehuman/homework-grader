@@ -846,6 +846,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
             setError(error);
             setStep("data-source-select");
           }}
+          onBack={() => setStep("data-source-select")}
         />
       </Box>
     );
@@ -868,6 +869,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
             setNotionApiContentType(contentType || "");
             // Stay in the same step to show the new content
           }}
+          onBack={() => setStep("notion-api-page-select")}
         />
       </Box>
     );
