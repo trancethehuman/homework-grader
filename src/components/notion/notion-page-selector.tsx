@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Text, Box, useInput } from "ink";
 import { NotionService, NotionPage, NotionDatabase } from "../../lib/notion/notion-service.js";
+import { SearchInput } from "../ui/search-input.js";
 
 interface NotionPageSelectorProps {
   onSelect: (pageId: string, pageTitle: string) => void;
@@ -18,9 +19,25 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [showingDatabases, setShowingDatabases] = useState(false);
   const [currentPage, setCurrentPage] = useState(0);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [isSearchFocused, setIsSearchFocused] = useState(true);
+  const [isViewAllMode, setIsViewAllMode] = useState(false);
   const itemsPerPage = 10;
+  const maxSearchResults = 3;
 
-  const allItems = showingDatabases ? databases : [...pages, ...databases];
+  const baseItems = showingDatabases ? databases : [...pages, ...databases];
+  
+  const filteredItems = useMemo(() => {
+    if (!searchTerm.trim()) {
+      return baseItems;
+    }
+    return baseItems.filter(item => 
+      item.title.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [baseItems, searchTerm]);
+
+  const displayItems = isViewAllMode ? baseItems : filteredItems;
+  const searchResultsItems = filteredItems.slice(0, maxSearchResults);
 
   useEffect(() => {
     const loadNotionData = async () => {
@@ -48,48 +65,123 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
     loadNotionData();
   }, [onError]);
 
+  // Reset selection when search term changes
+  useEffect(() => {
+    setSelectedIndex(0);
+  }, [searchTerm]);
+
   useInput((input, key) => {
     if (isLoading || error) return;
 
-    const totalPages = Math.ceil(allItems.length / itemsPerPage);
-    const startIndex = currentPage * itemsPerPage;
-    const endIndex = Math.min(startIndex + itemsPerPage, allItems.length);
-
-    if (key.upArrow) {
-      setSelectedIndex((prev) => {
-        const newIndex = Math.max(0, prev - 1);
-        // If we go to the previous page
-        if (newIndex < startIndex && currentPage > 0) {
-          setCurrentPage(currentPage - 1);
-          return newIndex;
-        }
-        return newIndex;
-      });
-    } else if (key.downArrow) {
-      setSelectedIndex((prev) => {
-        const newIndex = Math.min(allItems.length - 1, prev + 1);
-        // If we go to the next page
-        if (newIndex >= endIndex && currentPage < totalPages - 1) {
-          setCurrentPage(currentPage + 1);
-          return newIndex;
-        }
-        return newIndex;
-      });
-    } else if (key.leftArrow && currentPage > 0) {
-      setCurrentPage(currentPage - 1);
-      setSelectedIndex(Math.max(0, (currentPage - 1) * itemsPerPage));
-    } else if (key.rightArrow && currentPage < totalPages - 1) {
-      setCurrentPage(currentPage + 1);
-      setSelectedIndex(Math.min(allItems.length - 1, (currentPage + 1) * itemsPerPage));
-    } else if (key.return) {
-      if (allItems[selectedIndex]) {
-        const item = allItems[selectedIndex];
-        onSelect(item.id, item.title);
-      }
-    } else if (input === "d") {
-      setShowingDatabases(!showingDatabases);
+    // Handle 's' key to switch to search mode from anywhere
+    if (input === 's' && !isSearchFocused) {
+      setIsViewAllMode(false);
+      setIsSearchFocused(true);
       setSelectedIndex(0);
-      setCurrentPage(0);
+      return;
+    }
+
+    // Handle search input when search is focused
+    if (isSearchFocused && !isViewAllMode) {
+      if (key.return) {
+        // If there are search results, select the first one
+        if (searchResultsItems.length > 0) {
+          const item = searchResultsItems[0];
+          onSelect(item.id, item.title);
+        }
+        return;
+      }
+      
+      if (key.downArrow) {
+        // Move to search results list if there are results
+        if (searchResultsItems.length > 0) {
+          setIsSearchFocused(false);
+          setSelectedIndex(0);
+        }
+        return;
+      }
+      
+      if (key.backspace || key.delete) {
+        setSearchTerm(searchTerm.slice(0, -1));
+        return;
+      }
+      
+      // Handle regular character input
+      if (input && input.length === 1 && !key.ctrl && !key.meta) {
+        setSearchTerm(searchTerm + input);
+        return;
+      }
+      
+      return;
+    }
+
+    // Handle view all mode (existing functionality)
+    if (isViewAllMode) {
+      const totalPages = Math.ceil(displayItems.length / itemsPerPage);
+      const startIndex = currentPage * itemsPerPage;
+      const endIndex = Math.min(startIndex + itemsPerPage, displayItems.length);
+
+      if (key.upArrow) {
+        setSelectedIndex((prev) => {
+          const newIndex = Math.max(0, prev - 1);
+          if (newIndex < startIndex && currentPage > 0) {
+            setCurrentPage(currentPage - 1);
+            return newIndex;
+          }
+          return newIndex;
+        });
+      } else if (key.downArrow) {
+        setSelectedIndex((prev) => {
+          const newIndex = Math.min(displayItems.length - 1, prev + 1);
+          if (newIndex >= endIndex && currentPage < totalPages - 1) {
+            setCurrentPage(currentPage + 1);
+            return newIndex;
+          }
+          return newIndex;
+        });
+      } else if (key.leftArrow && currentPage > 0) {
+        setCurrentPage(currentPage - 1);
+        setSelectedIndex(Math.max(0, (currentPage - 1) * itemsPerPage));
+      } else if (key.rightArrow && currentPage < totalPages - 1) {
+        setCurrentPage(currentPage + 1);
+        setSelectedIndex(Math.min(displayItems.length - 1, (currentPage + 1) * itemsPerPage));
+      } else if (key.return) {
+        if (displayItems[selectedIndex]) {
+          const item = displayItems[selectedIndex];
+          onSelect(item.id, item.title);
+        }
+      } else if (input === 'd') {
+        setShowingDatabases(!showingDatabases);
+        setSelectedIndex(0);
+        setCurrentPage(0);
+      }
+      return;
+    }
+
+    // Handle navigation in search results (not view all mode, not search focused)
+    if (!isViewAllMode && !isSearchFocused) {
+      const maxIndex = searchResultsItems.length; // +1 for "View All" button
+      
+      if (key.upArrow) {
+        if (selectedIndex === 0) {
+          setIsSearchFocused(true);
+        } else {
+          setSelectedIndex(selectedIndex - 1);
+        }
+      } else if (key.downArrow) {
+        setSelectedIndex(Math.min(maxIndex, selectedIndex + 1));
+      } else if (key.return) {
+        if (selectedIndex < searchResultsItems.length) {
+          // Select a search result
+          const item = searchResultsItems[selectedIndex];
+          onSelect(item.id, item.title);
+        } else if (selectedIndex === searchResultsItems.length) {
+          // "View All" button selected
+          setIsViewAllMode(true);
+          setSelectedIndex(0);
+          setCurrentPage(0);
+        }
+      }
     }
   });
 
@@ -121,7 +213,7 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
     );
   }
 
-  if (allItems.length === 0) {
+  if (baseItems.length === 0) {
     return (
       <Box flexDirection="column">
         <Text color="yellow" bold>
@@ -139,6 +231,75 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
     );
   }
 
+  // Render View All Mode
+  if (isViewAllMode) {
+    const totalPages = Math.ceil(displayItems.length / itemsPerPage);
+    const startIndex = currentPage * itemsPerPage;
+    const endIndex = Math.min(startIndex + itemsPerPage, displayItems.length);
+    const currentPageItems = displayItems.slice(startIndex, endIndex);
+
+    return (
+      <Box flexDirection="column">
+        <Text color="blue" bold>
+          Select Notion {showingDatabases ? "Database" : "Page/Database"} - View All Mode
+        </Text>
+        <Text></Text>
+        <Text>
+          Found {pages.length} pages and {databases.length} databases accessible to your integration.
+        </Text>
+        <Text dimColor>
+          Use ↑/↓ arrows to navigate, ←/→ to change pages, Enter to select, 'd' to toggle databases only, 's' to search
+        </Text>
+        <Text></Text>
+
+        {showingDatabases && (
+          <Box marginBottom={1}>
+            <Text color="yellow" bold>
+              Showing databases only (press 'd' to show all)
+            </Text>
+          </Box>
+        )}
+
+        {totalPages > 1 && (
+          <Text dimColor>
+            Page {currentPage + 1} of {totalPages} | Items {startIndex + 1}-{endIndex} of {displayItems.length}
+          </Text>
+        )}
+        <Text></Text>
+        
+        {currentPageItems.map((item, pageIndex) => {
+          const actualIndex = startIndex + pageIndex;
+          const isSelected = actualIndex === selectedIndex;
+          const isDatabase = "properties" in item;
+          const itemType = isDatabase ? "Database" : "Page";
+          
+          return (
+            <Box key={item.id} flexDirection="column" marginBottom={1}>
+              <Box>
+                <Text color={isSelected ? "blue" : "white"} bold={isSelected}>
+                  {isSelected ? "→ " : "  "}
+                  {item.title}
+                </Text>
+                <Text dimColor> ({itemType})</Text>
+              </Box>
+              <Box marginLeft={4}>
+                <Text dimColor>
+                  Last edited: {new Date(item.lastEditedTime).toLocaleDateString()}
+                </Text>
+              </Box>
+            </Box>
+          );
+        })}
+
+        <Text></Text>
+        <Text dimColor>
+          Press Enter to select, ←/→ for pages, 'd' to toggle databases only, 's' to search, Ctrl+C to exit
+        </Text>
+      </Box>
+    );
+  }
+
+  // Render Search Mode (default)
   return (
     <Box flexDirection="column">
       <Text color="blue" bold>
@@ -149,63 +310,70 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
         Found {pages.length} pages and {databases.length} databases accessible to your integration.
       </Text>
       <Text dimColor>
-        Use ↑/↓ arrows to navigate, ←/→ to change pages, Enter to select, 'd' to toggle databases only
+        Type to search, ↑/↓ arrows to navigate, Enter to select
       </Text>
       <Text></Text>
+
+      <SearchInput
+        value={searchTerm}
+        placeholder="Search pages and databases..."
+        isFocused={isSearchFocused}
+        onChange={setSearchTerm}
+      />
 
       {showingDatabases && (
         <Box marginBottom={1}>
           <Text color="yellow" bold>
-            Showing databases only (press 'd' to show all)
+            Showing databases only (press 'd' to show all in View All mode)
           </Text>
         </Box>
       )}
 
-      {(() => {
-        const totalPages = Math.ceil(allItems.length / itemsPerPage);
-        const startIndex = currentPage * itemsPerPage;
-        const endIndex = Math.min(startIndex + itemsPerPage, allItems.length);
-        const currentPageItems = allItems.slice(startIndex, endIndex);
-        
-        return (
-          <>
-            {totalPages > 1 && (
-              <Text dimColor>
-                Page {currentPage + 1} of {totalPages} | Items {startIndex + 1}-{endIndex} of {allItems.length}
-              </Text>
-            )}
-            <Text></Text>
+      {searchTerm && filteredItems.length === 0 ? (
+        <Box marginBottom={1}>
+          <Text color="yellow">
+            No results found for "{searchTerm}"
+          </Text>
+        </Box>
+      ) : (
+        <>
+          {searchResultsItems.map((item, index) => {
+            const isSelected = !isSearchFocused && selectedIndex === index;
+            const isDatabase = "properties" in item;
+            const itemType = isDatabase ? "Database" : "Page";
             
-            {currentPageItems.map((item, pageIndex) => {
-              const actualIndex = startIndex + pageIndex;
-              const isSelected = actualIndex === selectedIndex;
-              const isDatabase = "properties" in item;
-              const itemType = isDatabase ? "Database" : "Page";
-              
-              return (
-                <Box key={item.id} flexDirection="column" marginBottom={1}>
-                  <Box>
-                    <Text color={isSelected ? "blue" : "white"} bold={isSelected}>
-                      {isSelected ? "→ " : "  "}
-                      {item.title}
-                    </Text>
-                    <Text dimColor> ({itemType})</Text>
-                  </Box>
-                  <Box marginLeft={4}>
-                    <Text dimColor>
-                      Last edited: {new Date(item.lastEditedTime).toLocaleDateString()}
-                    </Text>
-                  </Box>
+            return (
+              <Box key={item.id} flexDirection="column" marginBottom={1}>
+                <Box>
+                  <Text color={isSelected ? "blue" : "white"} bold={isSelected}>
+                    {isSelected ? "→ " : "  "}
+                    {item.title}
+                  </Text>
+                  <Text dimColor> ({itemType})</Text>
                 </Box>
-              );
-            })}
-          </>
-        );
-      })()}
+                <Box marginLeft={4}>
+                  <Text dimColor>
+                    Last edited: {new Date(item.lastEditedTime).toLocaleDateString()}
+                  </Text>
+                </Box>
+              </Box>
+            );
+          })}
+          
+          {filteredItems.length > maxSearchResults && (
+            <Box marginBottom={1}>
+              <Text color={!isSearchFocused && selectedIndex === searchResultsItems.length ? "blue" : "gray"} bold={!isSearchFocused && selectedIndex === searchResultsItems.length}>
+                {!isSearchFocused && selectedIndex === searchResultsItems.length ? "→ " : "  "}
+                View All ({filteredItems.length} total results)
+              </Text>
+            </Box>
+          )}
+        </>
+      )}
 
       <Text></Text>
       <Text dimColor>
-        Press Enter to select, ←/→ for pages, 'd' to toggle databases only, Ctrl+C to exit
+        Press Enter to select, 's' to focus search, Ctrl+C to exit
       </Text>
     </Box>
   );
