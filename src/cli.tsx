@@ -3,10 +3,9 @@
 import { render } from "ink";
 import { InteractiveCSV } from "./interactive-csv.js";
 import { GitHubService } from "./github/github-service.js";
-import { writeFileSync, mkdirSync } from "fs";
-import { join } from "path";
 import { NUM_URLS_IN_PARALLEL } from "./consts/limits.js";
 import { AIProvider, DEFAULT_PROVIDER } from "./consts/ai-providers.js";
+import { saveRepositoryFiles } from "./lib/file-saver.js";
 
 async function processGitHubUrls(
   urls: string[],
@@ -41,15 +40,6 @@ async function processGitHubUrls(
   if (urls.length > 0) {
     console.log("\nProcessing GitHub repositories...");
 
-    // Ensure test-results directory exists
-    try {
-      mkdirSync("test-results", { recursive: true });
-    } catch (error) {
-      // Directory might already exist
-    }
-
-    // Process URLs concurrently with a limit of 10
-
     const processUrl = async (url: string, index: number) => {
       console.log(
         `\nProcessing GitHub URL ${index + 1}/${urls.length}: ${url}`
@@ -62,48 +52,8 @@ async function processGitHubUrls(
             `Fetching repository structure from ${repoInfo.owner}/${repoInfo.repo}...`
           );
           const result = await githubService.processGitHubUrl(url, provider);
-
-          const fileName = `${repoInfo.owner}-${repoInfo.repo}.md`;
-          const filePath = join("test-results", fileName);
-
-          const scoresFileName = `${repoInfo.owner}-${repoInfo.repo}-scores.json`;
-          const scoresFilePath = join("test-results", scoresFileName);
-
-          // Save content immediately when available
-          writeFileSync(filePath, result.content);
-          console.log(`✓ Saved content to ${filePath}`);
-
-          // Grade in parallel - content is already saved
-          console.log(
-            `Grading repository ${repoInfo.owner}/${repoInfo.repo}...`
-          );
-
-          try {
-            const scores = await result.scores;
-            const cleanedScores = {
-              object: scores.object,
-              usage: scores.usage,
-            };
-            writeFileSync(
-              scoresFilePath,
-              JSON.stringify(cleanedScores, null, 2)
-            );
-            console.log(`✓ Saved scores to ${scoresFilePath}`);
-          } catch (gradingError) {
-            console.error(
-              `✗ Error grading ${repoInfo.owner}/${repoInfo.repo}:`,
-              gradingError
-            );
-            // Save an error file to track failed gradings
-            const errorScores = {
-              error: "Grading failed",
-              message:
-                gradingError instanceof Error
-                  ? gradingError.message
-                  : String(gradingError),
-            };
-            writeFileSync(scoresFilePath, JSON.stringify(errorScores, null, 2));
-          }
+          
+          await saveRepositoryFiles(repoInfo, result, url);
         }
       } catch (error) {
         console.error(`✗ Error processing ${url}:`, error);

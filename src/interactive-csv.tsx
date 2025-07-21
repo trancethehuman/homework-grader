@@ -7,6 +7,7 @@ import open from "open";
 import { TokenStorage } from "./lib/token-storage.js";
 import { GitHubService } from "./github/github-service.js";
 import { GitHubUrlDetector } from "./lib/github-url-detector.js";
+import { saveRepositoryFiles } from "./lib/file-saver.js";
 import { ProviderSelector } from "./components/provider-selector.js";
 import { DataSourceSelector, DataSource } from "./components/data-source-selector.js";
 import { NotionMCPClient, NotionDatabase } from "./lib/notion/notion-mcp-client.js";
@@ -135,7 +136,13 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
 
           try {
             console.log(`Processing repository ${i + 1}/${notionGitHubUrls.length}: ${url}`);
-            await githubService.processGitHubUrl(url, selectedProvider || DEFAULT_PROVIDER);
+            
+            const repoInfo = githubService.parseGitHubUrl(url);
+            if (repoInfo) {
+              const result = await githubService.processGitHubUrl(url, selectedProvider || DEFAULT_PROVIDER);
+              await saveRepositoryFiles(repoInfo, result, url);
+            }
+            
             results.push({ url, success: true });
             console.log(`✓ Successfully processed ${url}`);
           } catch (error) {
