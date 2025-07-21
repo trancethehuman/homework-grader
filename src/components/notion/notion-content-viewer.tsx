@@ -7,8 +7,9 @@ import { BackButton, useBackNavigation } from "../ui/back-button.js";
 interface NotionContentViewerProps {
   pageId: string;
   pageTitle: string;
-  onComplete: () => void;
+  onComplete: (content?: any) => void;
   onNavigate?: (pageId: string, pageTitle: string, contentType?: string) => void;
+  onStartGrading?: (pageId: string, pageTitle: string) => void;
   onBack?: () => void;
   contentType?: string;
 }
@@ -18,6 +19,7 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
   pageTitle,
   onComplete,
   onNavigate,
+  onStartGrading,
   onBack,
   contentType,
 }) => {
@@ -87,6 +89,38 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
     // Handle back navigation first
     if (handleBackInput(input, key)) {
       return;
+    }
+
+    // Handle 'g' key to start grading directly (only for databases and only if onStartGrading is provided)
+    if (input === 'g' && onStartGrading && showingContent && navigableItems.length > 0) {
+      const selectedItem = navigableItems[selectedIndex];
+      if (selectedItem && (selectedItem.type === "child_database" || selectedItem.type === "database_entry")) {
+        let childId, childTitle;
+        
+        if (selectedItem.type === "database_entry") {
+          // For database entries, use the entry ID directly
+          childId = selectedItem.id;
+          childTitle = selectedItem.title || selectedItem.content;
+        } else {
+          // For child databases, find the matching block
+          const originalBlocks = content.blocks || [];
+          const matchingBlock = originalBlocks.find((block: any) => {
+            const blockTitle = block.child_database?.title || block.child_page?.title;
+            const itemTitle = selectedItem.content.replace(/^(📊|📄) /, '');
+            return blockTitle === itemTitle && block.type === "child_database";
+          });
+          
+          if (matchingBlock) {
+            childId = matchingBlock.id;
+            childTitle = matchingBlock.child_database?.title || selectedItem.content;
+          }
+        }
+        
+        if (childId && childTitle) {
+          onStartGrading(childId, childTitle);
+          return;
+        }
+      }
     }
 
     if (showingContent && navigableItems.length > 0) {
@@ -159,7 +193,7 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
         }
       } else if (input === 'b' || key.escape) {
         // Go back - complete the current view
-        onComplete();
+        onComplete(content);
       } else if (input === 'p') {
         // Toggle properties expansion
         setPropertiesExpanded(!propertiesExpanded);
@@ -169,7 +203,7 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
       if (input === 'p') {
         setPropertiesExpanded(!propertiesExpanded);
       } else {
-        onComplete();
+        onComplete(content);
       }
     }
   });
@@ -276,7 +310,7 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
           <Text color="cyan" bold>
             Navigate to child pages/databases:
           </Text>
-          <Text dimColor>Use ↑/↓ arrows to navigate, ←/→ to change pages, Enter to select, 'p' to expand/collapse properties, 'b' to go back</Text>
+          <Text dimColor>Use ↑/↓ arrows to navigate, ←/→ to change pages, Enter to select, 'p' to expand/collapse properties{onStartGrading && ", 'g' to grade database"}, 'b' to go back</Text>
           <Text></Text>
           
           {(() => {
@@ -297,11 +331,16 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
                 {currentPageItems.map((item, pageIndex) => {
                   const actualIndex = startIndex + pageIndex;
                   const isSelected = actualIndex === selectedIndex;
+                  const canGrade = onStartGrading && (item.type === "child_database" || item.type === "database_entry");
+                  
                   return (
                     <Box key={item.id} marginBottom={1}>
                       <Text color={isSelected ? "blue" : "white"} bold={isSelected}>
                         {isSelected ? "→ " : "  "}
                         {item.content}
+                        {isSelected && canGrade && (
+                          <Text color="green"> [Press 'g' to grade]</Text>
+                        )}
                       </Text>
                     </Box>
                   );
@@ -312,7 +351,7 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
           
           <Text></Text>
           <Text dimColor>
-            Press Enter to navigate, ←/→ for pages, 'p' for properties, 'b' to go back, Ctrl+C to exit
+            Press Enter to navigate, ←/→ for pages, 'p' for properties{onStartGrading && ", 'g' to grade database"}, 'b' to go back, Ctrl+C to exit
           </Text>
         </>
       )}

@@ -6,12 +6,15 @@ import csv from "csv-parser";
 import open from "open";
 import { TokenStorage } from "./lib/token-storage.js";
 import { GitHubService } from "./github/github-service.js";
+import { GitHubUrlDetector } from "./lib/github-url-detector.js";
 import { ProviderSelector } from "./components/provider-selector.js";
 import { DataSourceSelector, DataSource } from "./components/data-source-selector.js";
 import { NotionMCPClient, NotionDatabase } from "./lib/notion/notion-mcp-client.js";
 import { NotionService } from "./lib/notion/notion-service.js";
 import { NotionPageSelector } from "./components/notion/notion-page-selector.js";
 import { NotionContentViewer } from "./components/notion/notion-content-viewer.js";
+import { GitHubColumnSelector } from "./components/notion/github-column-selector.js";
+import { BackButton } from "./components/ui/back-button.js";
 import {
   AIProvider,
   DEFAULT_PROVIDER,
@@ -55,6 +58,8 @@ type Step =
   | "notion-property-select"
   | "notion-api-page-select"
   | "notion-api-content-view"
+  | "notion-github-column-select"
+  | "notion-processing"
   | "input"
   | "analyzing"
   | "select"
@@ -84,15 +89,92 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
   const [notionApiSelectedPageId, setNotionApiSelectedPageId] = useState<string>("");
   const [notionApiSelectedPageTitle, setNotionApiSelectedPageTitle] = useState<string>("");
   const [notionApiContentType, setNotionApiContentType] = useState<string>("");
+  const [notionApiContent, setNotionApiContent] = useState<any>(null);
+  const [notionSelectedProperty, setNotionSelectedProperty] = useState<any>(null);
+  const [notionGitHubUrls, setNotionGitHubUrls] = useState<string[]>([]);
+  // Cache Notion data to avoid refetching on back navigation
+  const [cachedNotionPages, setCachedNotionPages] = useState<any[]>([]);
+  const [cachedNotionDatabases, setCachedNotionDatabases] = useState<any[]>([]);
   const [analysis, setAnalysis] = useState<CSVAnalysis | null>(null);
   const [selectedColumn, setSelectedColumn] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
   const [tokenStorage] = useState(new TokenStorage());
   const [preferencesStorage] = useState(new PreferencesStorage());
+  const [processingResults, setProcessingResults] = useState<{
+    processed: number;
+    total: number;
+    currentUrl?: string;
+    results: Array<{ url: string; success: boolean; error?: string }>;
+  }>({ processed: 0, total: 0, results: [] });
   const [validatingToken, setValidatingToken] = useState(false);
   const [tokenValid, setTokenValid] = useState<boolean | null>(null);
   const [skipGitHub, setSkipGitHub] = useState(false);
   const { exit } = useApp();
+
+  // Process GitHub URLs when entering notion-processing step
+  useEffect(() => {
+    if (step === "notion-processing" && notionGitHubUrls.length > 0) {
+      const processGitHubUrls = async () => {
+        setProcessingResults({
+          processed: 0,
+          total: notionGitHubUrls.length,
+          results: []
+        });
+
+        const githubService = new GitHubService(githubToken);
+        const results: Array<{ url: string; success: boolean; error?: string }> = [];
+
+        for (let i = 0; i < notionGitHubUrls.length; i++) {
+          const url = notionGitHubUrls[i];
+          
+          setProcessingResults(prev => ({
+            ...prev,
+            processed: i,
+            currentUrl: url
+          }));
+
+          try {
+            console.log(`Processing repository ${i + 1}/${notionGitHubUrls.length}: ${url}`);
+            await githubService.processGitHubUrl(url, selectedProvider || DEFAULT_PROVIDER);
+            results.push({ url, success: true });
+            console.log(`✓ Successfully processed ${url}`);
+          } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            results.push({ url, success: false, error: errorMessage });
+            console.error(`✗ Failed to process ${url}:`, errorMessage);
+          }
+
+          // Update progress
+          setProcessingResults(prev => ({
+            ...prev,
+            processed: i + 1,
+            results: [...results]
+          }));
+
+          // Add small delay between requests to avoid overwhelming APIs
+          if (i < notionGitHubUrls.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+        }
+
+        // Processing complete
+        console.log(`\n✓ Processing complete! Processed ${results.length} repositories.`);
+        console.log(`✓ Successful: ${results.filter(r => r.success).length}`);
+        console.log(`✗ Failed: ${results.filter(r => !r.success).length}`);
+        
+        // Move to complete step after a short delay
+        setTimeout(() => {
+          setStep("complete");
+        }, 2000);
+      };
+
+      processGitHubUrls().catch(error => {
+        console.error("Failed to process GitHub URLs:", error);
+        setError(`Failed to process repositories: ${error instanceof Error ? error.message : String(error)}`);
+        setStep("notion-github-column-select");
+      });
+    }
+  }, [step, notionGitHubUrls, githubToken, selectedProvider]);
 
   // Initialize and validate token from storage or environment
   useEffect(() => {
@@ -530,6 +612,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
     }
   });
 
+  // All conditional rendering in a single return statement
   if (step === "github-token") {
     return (
       <Box flexDirection="column">
@@ -576,20 +659,20 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           continue | Ctrl+C = exit
         </Text>
       </Box>
-    );
-  }
+      );
+    }
 
   if (step === "validating-token") {
-    return (
+      return (
       <Box flexDirection="column">
         <Text color="yellow">Validating GitHub token...</Text>
         <Text>Please wait while we verify your token...</Text>
       </Box>
-    );
-  }
+      );
+    }
 
   if (step === "provider-select") {
-    return (
+      return (
       <ProviderSelector
         onSelect={(provider) => {
           setSelectedProvider(provider);
@@ -597,10 +680,10 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         }}
       />
     );
-  }
+    }
 
   if (step === "data-source-select") {
-    return (
+      return (
       <Box flexDirection="column">
         {error && (
           <>
@@ -612,6 +695,11 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           onSelect={(source) => {
             setError(null); // Clear any previous errors
             setSelectedDataSource(source);
+            
+            // Clear caches when switching data sources
+            setCachedNotionPages([]);
+            setCachedNotionDatabases([]);
+            
             if (source === "csv") {
               setStep("input");
             } else if (source === "notion") {
@@ -622,10 +710,10 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         />
       </Box>
     );
-  }
+    }
 
   if (step === "notion-auth") {
-    return (
+      return (
       <Box flexDirection="column">
         <Text color="blue" bold>
           Notion Authentication
@@ -637,10 +725,10 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         <Text color="yellow">Please wait while we connect to Notion...</Text>
       </Box>
     );
-  }
+    }
 
   if (step === "notion-oauth-prompt") {
-    return (
+      return (
       <Box flexDirection="column">
         <Text color="blue" bold>
           Notion OAuth Authentication Required
@@ -822,13 +910,32 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
     );
   }
 
+
   if (step === "complete") {
     return (
       <Box flexDirection="column">
         <Text color="green" bold>
           ✓ Complete!
         </Text>
-        <Text>GitHub URLs loaded successfully</Text>
+        {notionGitHubUrls.length > 0 ? (
+          <>
+            <Text>
+              Processed {processingResults.results.length} GitHub repositories from Notion
+            </Text>
+            <Text color="green">
+              ✓ Successful: {processingResults.results.filter(r => r.success).length}
+            </Text>
+            <Text color="red">
+              ✗ Failed: {processingResults.results.filter(r => !r.success).length}
+            </Text>
+            <Text></Text>
+            <Text dimColor>
+              Results saved to /test-results/ directory
+            </Text>
+          </>
+        ) : (
+          <Text>GitHub URLs loaded successfully</Text>
+        )}
       </Box>
     );
   }
@@ -842,11 +949,34 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
             setNotionApiSelectedPageTitle(pageTitle);
             setStep("notion-api-content-view");
           }}
+          onStartGrading={async (pageId, pageTitle) => {
+            // Start grading directly without viewing content first
+            setNotionApiSelectedPageId(pageId);
+            setNotionApiSelectedPageTitle(pageTitle);
+            
+            // Fetch the content directly and proceed to column selection
+            try {
+              const notionService = new NotionService();
+              const content = await notionService.getPageContent(pageId);
+              setNotionApiContent(content);
+              setStep("notion-github-column-select");
+            } catch (error) {
+              setError(`Failed to fetch content for grading: ${error instanceof Error ? error.message : String(error)}`);
+            }
+          }}
           onError={(error) => {
             setError(error);
             setStep("data-source-select");
           }}
           onBack={() => setStep("data-source-select")}
+          // Pass cached data to avoid refetching
+          cachedPages={cachedNotionPages}
+          cachedDatabases={cachedNotionDatabases}
+          // Cache data when first loaded
+          onDataLoaded={(pages, databases) => {
+            setCachedNotionPages(pages);
+            setCachedNotionDatabases(databases);
+          }}
         />
       </Box>
     );
@@ -859,8 +989,9 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           pageId={notionApiSelectedPageId}
           pageTitle={notionApiSelectedPageTitle}
           contentType={notionApiContentType}
-          onComplete={() => {
-            setStep("complete");
+          onComplete={(content) => {
+            setNotionApiContent(content);
+            setStep("notion-github-column-select");
           }}
           onNavigate={(pageId, pageTitle, contentType) => {
             // Navigate to a new page/database
@@ -869,8 +1000,123 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
             setNotionApiContentType(contentType || "");
             // Stay in the same step to show the new content
           }}
+          onStartGrading={async (pageId, pageTitle) => {
+            // Start grading directly from content viewer
+            setNotionApiSelectedPageId(pageId);
+            setNotionApiSelectedPageTitle(pageTitle);
+            
+            // Fetch the content directly and proceed to column selection
+            try {
+              const notionService = new NotionService();
+              // For databases, we need to get database content (entries), not page content
+              const content = await notionService.getDatabaseContent(pageId);
+              setNotionApiContent(content);
+              setStep("notion-github-column-select");
+            } catch (error) {
+              setError(`Failed to fetch content for grading: ${error instanceof Error ? error.message : String(error)}`);
+            }
+          }}
           onBack={() => setStep("notion-api-page-select")}
         />
+      </Box>
+    );
+  }
+
+  if (step === "notion-github-column-select") {
+    return (
+      <Box flexDirection="column">
+        <GitHubColumnSelector
+          notionContent={notionApiContent}
+          onSelect={(selectedProperty, githubUrls) => {
+            setNotionSelectedProperty(selectedProperty);
+            setNotionGitHubUrls(githubUrls);
+            setStep("notion-processing");
+          }}
+          onError={(error) => {
+            setError(error);
+            setStep("notion-api-content-view");
+          }}
+          onBack={() => setStep("notion-api-content-view")}
+        />
+      </Box>
+    );
+  }
+
+  if (step === "notion-processing") {
+    const progress = processingResults.total > 0 ? (processingResults.processed / processingResults.total) * 100 : 0;
+    const isComplete = processingResults.processed === processingResults.total && processingResults.total > 0;
+    
+    return (
+      <Box flexDirection="column">
+        <Text color="blue" bold>
+          Processing GitHub Repositories from Notion
+        </Text>
+        <Text></Text>
+        <Text>
+          Property: {notionSelectedProperty?.name} ({notionSelectedProperty?.type})
+        </Text>
+        <Text>
+          Total repositories: {processingResults.total}
+        </Text>
+        <Text></Text>
+        
+        {processingResults.total > 0 && (
+          <>
+            <Text>
+              Progress: {processingResults.processed}/{processingResults.total} ({Math.round(progress)}%)
+            </Text>
+            <Text></Text>
+            
+            {processingResults.currentUrl && !isComplete && (
+              <>
+                <Text color="yellow">
+                  Currently processing: {processingResults.currentUrl}
+                </Text>
+                <Text></Text>
+              </>
+            )}
+            
+            {processingResults.results.length > 0 && (
+              <>
+                <Text color="green">
+                  ✓ Successful: {processingResults.results.filter(r => r.success).length}
+                </Text>
+                <Text color="red">
+                  ✗ Failed: {processingResults.results.filter(r => !r.success).length}
+                </Text>
+                <Text></Text>
+              </>
+            )}
+            
+            {isComplete && (
+              <>
+                <Text color="green" bold>
+                  ✓ Processing Complete!
+                </Text>
+                <Text></Text>
+                <Text dimColor>
+                  All repositories have been processed and saved to /test-results/
+                </Text>
+                <Text dimColor>
+                  Redirecting to completion page...
+                </Text>
+                <Text></Text>
+              </>
+            )}
+          </>
+        )}
+        
+        <Text dimColor>
+          Each repository is graded individually using {selectedProvider?.name || DEFAULT_PROVIDER.name}
+        </Text>
+        <Text dimColor>
+          Results are saved as separate .md and -scores.json files
+        </Text>
+        <Text></Text>
+        
+        {!isComplete && (
+          <BackButton onBack={() => setStep("notion-github-column-select")} isVisible={true} />
+        )}
       </Box>
     );
   }

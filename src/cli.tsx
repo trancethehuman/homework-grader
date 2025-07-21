@@ -135,6 +135,9 @@ async function processGitHubUrls(
 }
 
 async function main() {
+  // Clear the terminal on startup
+  console.clear();
+  
   const args = process.argv.slice(2);
 
 

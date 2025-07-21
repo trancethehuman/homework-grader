@@ -6,14 +6,24 @@ import { BackButton, useBackNavigation } from "../ui/back-button.js";
 
 interface NotionPageSelectorProps {
   onSelect: (pageId: string, pageTitle: string) => void;
+  onStartGrading?: (pageId: string, pageTitle: string) => void;
   onError: (error: string) => void;
   onBack?: () => void;
+  // Optional pre-loaded data to avoid refetching
+  cachedPages?: NotionPage[];
+  cachedDatabases?: NotionDatabase[];
+  // Callback to cache data when first loaded
+  onDataLoaded?: (pages: NotionPage[], databases: NotionDatabase[]) => void;
 }
 
 export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
   onSelect,
+  onStartGrading,
   onError,
   onBack,
+  cachedPages,
+  cachedDatabases,
+  onDataLoaded,
 }) => {
   const [pages, setPages] = useState<NotionPage[]>([]);
   const [databases, setDatabases] = useState<NotionDatabase[]>([]);
@@ -52,6 +62,17 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
     const loadNotionData = async () => {
       try {
         setIsLoading(true);
+        
+        // Use cached data if available (and not empty)
+        if ((cachedPages && cachedPages.length > 0) || (cachedDatabases && cachedDatabases.length > 0)) {
+          setPages(cachedPages || []);
+          setDatabases(cachedDatabases || []);
+          setError(null);
+          setIsLoading(false);
+          return;
+        }
+        
+        // Otherwise fetch fresh data
         const notionService = new NotionService();
         
         const [pagesData, databasesData] = await Promise.all([
@@ -62,6 +83,9 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
         setPages(pagesData);
         setDatabases(databasesData);
         setError(null);
+        
+        // Cache the data for future use
+        onDataLoaded?.(pagesData, databasesData);
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : "Failed to load Notion data";
         setError(errorMessage);
@@ -72,7 +96,7 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
     };
 
     loadNotionData();
-  }, [onError]);
+  }, [onError, cachedPages, cachedDatabases, onDataLoaded]);
 
   // Reset selection when search term changes
   useEffect(() => {
@@ -93,6 +117,16 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
       setIsSearchFocused(true);
       setSelectedIndex(0);
       return;
+    }
+
+    // Handle 'g' key to start grading directly (only for databases and only if onStartGrading is provided)
+    if (input === 'g' && onStartGrading && !isSearchFocused) {
+      const items = isViewAllMode ? displayItems : searchResultsItems;
+      const currentItem = items[selectedIndex];
+      if (currentItem && "properties" in currentItem) { // It's a database
+        onStartGrading(currentItem.id, currentItem.title);
+        return;
+      }
     }
 
     // Handle search input when search is focused
@@ -263,6 +297,7 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
         </Text>
         <Text dimColor>
           Use ↑/↓ arrows to navigate, ←/→ to change pages, Enter to select, 'd' to toggle databases only, 's' to search
+          {onStartGrading && ", 'g' to start grading database"}
         </Text>
         <Text></Text>
         
@@ -288,6 +323,7 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
           const isSelected = actualIndex === selectedIndex;
           const isDatabase = "properties" in item;
           const itemType = isDatabase ? "Database" : "Page";
+          const canGrade = isDatabase && onStartGrading;
           
           return (
             <Box key={item.id} flexDirection="column" marginBottom={1}>
@@ -297,6 +333,9 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
                   {item.title}
                 </Text>
                 <Text dimColor> ({itemType})</Text>
+                {isSelected && canGrade && (
+                  <Text color="green"> [Press 'g' to grade]</Text>
+                )}
               </Box>
               <Box marginLeft={4}>
                 <Text dimColor>
@@ -309,7 +348,7 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
 
         <Text></Text>
         <Text dimColor>
-          Press Enter to select, ←/→ for pages, 'd' to toggle databases only, 's' to search, Ctrl+C to exit
+          Press Enter to select, ←/→ for pages, 'd' to toggle databases only, 's' to search{onStartGrading && ", 'g' to grade database"}, Ctrl+C to exit
         </Text>
       </Box>
     );
@@ -326,7 +365,7 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
         Found {pages.length} pages and {databases.length} databases accessible to your integration.
       </Text>
       <Text dimColor>
-        Type to search, ↑/↓ arrows to navigate, Enter to select
+        Type to search, ↑/↓ arrows to navigate, Enter to select{onStartGrading && ", 'g' to grade database"}
       </Text>
       <Text></Text>
       
@@ -359,6 +398,7 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
             const isSelected = !isSearchFocused && selectedIndex === index;
             const isDatabase = "properties" in item;
             const itemType = isDatabase ? "Database" : "Page";
+            const canGrade = isDatabase && onStartGrading;
             
             return (
               <Box key={item.id} flexDirection="column" marginBottom={1}>
@@ -368,6 +408,9 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
                     {item.title}
                   </Text>
                   <Text dimColor> ({itemType})</Text>
+                  {isSelected && canGrade && (
+                    <Text color="green"> [Press 'g' to grade]</Text>
+                  )}
                 </Box>
                 <Box marginLeft={4}>
                   <Text dimColor>
@@ -391,7 +434,7 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
 
       <Text></Text>
       <Text dimColor>
-        Press Enter to select, 's' to focus search, Ctrl+C to exit
+        Press Enter to select, 's' to focus search{onStartGrading && ", 'g' to grade database"}, Ctrl+C to exit
       </Text>
     </Box>
   );
