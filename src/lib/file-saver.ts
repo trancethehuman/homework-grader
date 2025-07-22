@@ -1,5 +1,7 @@
 import { writeFileSync, mkdirSync } from "fs";
 import { join } from "path";
+import { usageLogger } from "./usage-logger.js";
+import { AIProvider } from "../consts/ai-providers.js";
 
 export interface ProcessResult {
   content: string;
@@ -11,14 +13,22 @@ export interface RepoInfo {
   repo: string;
 }
 
+export interface GradingResult {
+  repositoryName: string;
+  githubUrl: string;
+  gradingData: any;
+  usage: any;
+}
+
 /**
  * Saves repository content and scores to the test-results directory
  */
 export async function saveRepositoryFiles(
   repoInfo: RepoInfo,
   result: ProcessResult,
-  url: string
-): Promise<void> {
+  url: string,
+  provider?: AIProvider
+): Promise<GradingResult | null> {
   // Ensure test-results directory exists
   try {
     mkdirSync("test-results", { recursive: true });
@@ -47,6 +57,27 @@ export async function saveRepositoryFiles(
     };
     writeFileSync(scoresFilePath, JSON.stringify(cleanedScores, null, 2));
     console.log(`✓ Saved scores to ${scoresFilePath}`);
+
+    // Log usage metadata
+    if (scores.usage && provider) {
+      await usageLogger.logUsage({
+        repository_name: `${repoInfo.owner}/${repoInfo.repo}`,
+        github_url: url,
+        provider: provider.id,
+        inputTokens: scores.usage.inputTokens || 0,
+        outputTokens: scores.usage.outputTokens || 0,
+        totalTokens: scores.usage.totalTokens || 0,
+        cachedInputTokens: scores.usage.cachedInputTokens || 0,
+      });
+    }
+
+    // Return grading result for potential Notion saving
+    return {
+      repositoryName: `${repoInfo.owner}/${repoInfo.repo}`,
+      githubUrl: url,
+      gradingData: scores.object,
+      usage: scores.usage,
+    };
   } catch (gradingError) {
     console.error(
       `✗ Error grading ${repoInfo.owner}/${repoInfo.repo}:`,
@@ -61,5 +92,6 @@ export async function saveRepositoryFiles(
           : String(gradingError),
     };
     writeFileSync(scoresFilePath, JSON.stringify(errorScores, null, 2));
+    return null;
   }
 }

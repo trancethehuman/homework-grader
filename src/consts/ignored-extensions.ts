@@ -76,7 +76,11 @@ export const VECTOR_DATABASE = [".faiss"];
 
 export const GIT = [".gitignore"];
 
-export const NODE_DEPENDENCIES = ["package-lock.json", "node_modules"];
+export const NODE_DEPENDENCIES = [
+  "package-lock.json",
+  "node_modules",
+  "pnpm-lock.yaml",
+];
 
 export const DEFAULT_IGNORED_EXTENSIONS = [
   ...IMAGE_EXTENSIONS,

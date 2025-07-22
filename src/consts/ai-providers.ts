@@ -8,6 +8,16 @@ export interface AIProvider {
 
 export const AI_PROVIDERS: AIProvider[] = [
   {
+    id: "gemini",
+    name: "Gemini 2.5 Flash Lite",
+    description: "Google Gemini's fastest model",
+    model: "gemini-2.5-flash",
+    getModelInstance: async () => {
+      const { google } = await import("@ai-sdk/google");
+      return google("gemini-2.5-flash");
+    },
+  },
+  {
     id: "openai",
     name: "OpenAI GPT-4.1",
     description: "OpenAI's latest GPT-4.1 model",

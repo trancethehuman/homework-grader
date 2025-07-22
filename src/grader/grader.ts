@@ -27,6 +27,12 @@ export async function getRepoScores(
         structuredOutputs: true,
       },
     };
+  } else if (provider.id === "gemini") {
+    generateObjectOptions.providerOptions = {
+      google: {
+        structuredOutputs: false,
+      },
+    };
   }
 
   const result = generateObject(generateObjectOptions);

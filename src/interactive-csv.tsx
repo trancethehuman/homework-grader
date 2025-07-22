@@ -22,6 +22,9 @@ import {
   AI_PROVIDERS,
 } from "./consts/ai-providers.js";
 import { PreferencesStorage } from "./lib/preferences-storage.js";
+import { GradingSaveOptions, SaveOption } from "./components/grading-save-options.js";
+import { GradingResult } from "./lib/file-saver.js";
+import { GradingDatabaseService } from "./lib/notion/grading-database-service.js";
 
 export interface CSVColumn {
   name: string;
@@ -61,6 +64,8 @@ type Step =
   | "notion-api-content-view"
   | "notion-github-column-select"
   | "notion-processing"
+  | "grading-save-options"
+  | "notion-saving"
   | "input"
   | "analyzing"
   | "select"
@@ -107,6 +112,8 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
     currentUrl?: string;
     results: Array<{ url: string; success: boolean; error?: string }>;
   }>({ processed: 0, total: 0, results: [] });
+  const [gradingResults, setGradingResults] = useState<GradingResult[]>([]);
+  const [originalDatabaseId, setOriginalDatabaseId] = useState<string | undefined>();
   const [validatingToken, setValidatingToken] = useState(false);
   const [tokenValid, setTokenValid] = useState<boolean | null>(null);
   const [skipGitHub, setSkipGitHub] = useState(false);
@@ -124,6 +131,12 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
 
         const githubService = new GitHubService(githubToken);
         const results: Array<{ url: string; success: boolean; error?: string }> = [];
+        const collectedGradingResults: GradingResult[] = [];
+
+        // Set original database ID if we came from Notion
+        if (notionApiSelectedPageId) {
+          setOriginalDatabaseId(notionApiSelectedPageId);
+        }
 
         for (let i = 0; i < notionGitHubUrls.length; i++) {
           const url = notionGitHubUrls[i];
@@ -140,7 +153,11 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
             const repoInfo = githubService.parseGitHubUrl(url);
             if (repoInfo) {
               const result = await githubService.processGitHubUrl(url, selectedProvider || DEFAULT_PROVIDER);
-              await saveRepositoryFiles(repoInfo, result, url);
+              const gradingResult = await saveRepositoryFiles(repoInfo, result, url, selectedProvider || DEFAULT_PROVIDER);
+              
+              if (gradingResult) {
+                collectedGradingResults.push(gradingResult);
+              }
             }
             
             results.push({ url, success: true });
@@ -169,9 +186,12 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         console.log(`✓ Successful: ${results.filter(r => r.success).length}`);
         console.log(`✗ Failed: ${results.filter(r => !r.success).length}`);
         
-        // Move to complete step after a short delay
+        // Save grading results and move to save options
+        setGradingResults(collectedGradingResults);
+        
+        // Show save options after a short delay
         setTimeout(() => {
-          setStep("complete");
+          setStep("grading-save-options");
         }, 2000);
       };
 
@@ -618,6 +638,43 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
       exit();
     }
   });
+
+  // Handle save option selection
+  const handleSaveOptionSelected = async (option: SaveOption, databaseId?: string) => {
+    try {
+      if (option === "file" || option === "skip") {
+        // Files are already saved, just complete
+        setStep("complete");
+      } else if (option === "original-database" || option === "new-database") {
+        if (!databaseId) {
+          setError("Database ID is required for Notion saving");
+          return;
+        }
+
+        setStep("notion-saving");
+        
+        // Save to Notion database
+        const service = new GradingDatabaseService();
+        
+        // Ensure database has grading schema
+        await service.ensureGradingDatabase(databaseId);
+        
+        // Save all grading results
+        const result = await service.saveGradingResults(databaseId, gradingResults);
+        
+        if (result.failed > 0) {
+          setError(`Saved ${result.success} entries, failed ${result.failed}. Errors: ${result.errors.join(", ")}`);
+        } else {
+          console.log(`✓ Successfully saved ${result.success} grading results to Notion database`);
+        }
+        
+        setStep("complete");
+      }
+    } catch (error: any) {
+      setError(`Failed to save to Notion: ${error.message}`);
+      setStep("grading-save-options");
+    }
+  };
 
   // All conditional rendering in a single return statement
   if (step === "github-token") {
@@ -1124,6 +1181,34 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         {!isComplete && (
           <BackButton onBack={() => setStep("notion-github-column-select")} isVisible={true} />
         )}
+      </Box>
+    );
+  }
+
+  if (step === "grading-save-options") {
+    return (
+      <GradingSaveOptions
+        gradingResults={gradingResults}
+        originalDatabaseId={originalDatabaseId}
+        onOptionSelected={handleSaveOptionSelected}
+        onError={setError}
+      />
+    );
+  }
+
+  if (step === "notion-saving") {
+    return (
+      <Box flexDirection="column">
+        <Text color="yellow" bold>
+          Saving Grading Results to Notion...
+        </Text>
+        <Text></Text>
+        <Text>
+          Saving {gradingResults.length} grading results to Notion database...
+        </Text>
+        <Text dimColor>
+          This may take a moment to create/update database schema and save entries.
+        </Text>
       </Box>
     );
   }

@@ -230,6 +230,83 @@ export class NotionService {
   }
 
   /**
+   * Create a new database with specified properties
+   */
+  async createDatabase(title: string, properties: Record<string, any>, parentPageId?: string): Promise<any> {
+    if (!parentPageId) {
+      throw new Error("Parent page ID is required to create a database. Notion doesn't support creating databases in workspace root.");
+    }
+
+    const response = await this.notion.databases.create({
+      parent: {
+        type: "page_id",
+        page_id: parentPageId,
+      },
+      title: [
+        {
+          type: "text",
+          text: {
+            content: title,
+          },
+        },
+      ],
+      properties,
+    });
+
+    return response;
+  }
+
+  /**
+   * Update database properties (add new columns)
+   */
+  async updateDatabaseSchema(databaseId: string, properties: Record<string, any>): Promise<any> {
+    const response = await this.notion.databases.update({
+      database_id: databaseId,
+      properties,
+    });
+
+    return response;
+  }
+
+  /**
+   * Create a new entry in a database
+   */
+  async createDatabaseEntry(databaseId: string, properties: Record<string, any>): Promise<any> {
+    const response = await this.notion.pages.create({
+      parent: {
+        type: "database_id",
+        database_id: databaseId,
+      },
+      properties,
+    });
+
+    return response;
+  }
+
+  /**
+   * Update an existing database entry
+   */
+  async updateDatabaseEntry(pageId: string, properties: Record<string, any>): Promise<any> {
+    const response = await this.notion.pages.update({
+      page_id: pageId,
+      properties,
+    });
+
+    return response;
+  }
+
+  /**
+   * Check if a database has specific properties
+   */
+  async getDatabaseProperties(databaseId: string): Promise<Record<string, any>> {
+    const database = await this.notion.databases.retrieve({
+      database_id: databaseId,
+    });
+
+    return database.properties;
+  }
+
+  /**
    * Extract title from page or database object
    */
   private extractTitle(item: any): string {
