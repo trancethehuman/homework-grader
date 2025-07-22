@@ -1,5 +1,20 @@
 import { z } from "zod";
 
+export const GRADING_CATEGORIES_GEMINI = z.object({
+  name: z.string(),
+  age: z.number(),
+  contact: z.union([
+    z.object({
+      type: z.literal("email"),
+      value: z.string(),
+    }),
+    z.object({
+      type: z.literal("phone"),
+      value: z.string(),
+    }),
+  ]),
+});
+
 export const GRADING_CATEGORIES = z
   .object({
     project_purpose: z
