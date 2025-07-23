@@ -82,17 +82,25 @@ export async function saveRepositoryFiles(
       pageId,
     };
   } catch (gradingError) {
+    const errorMessage = gradingError instanceof Error ? gradingError.message : String(gradingError);
     console.error(
       `✗ Error grading ${repoInfo.owner}/${repoInfo.repo}:`,
-      gradingError
+      errorMessage
     );
+    
+    // Provide more specific error context
+    if (errorMessage.includes('attempts')) {
+      console.error(`  → This was likely due to malformed JSON generation after multiple retry attempts`);
+    } else if (errorMessage.includes('JSON') || errorMessage.includes('parse')) {
+      console.error(`  → This appears to be a JSON parsing error`);
+    }
+    
     // Save an error file to track failed gradings
     const errorScores = {
       error: "Grading failed",
-      message:
-        gradingError instanceof Error
-          ? gradingError.message
-          : String(gradingError),
+      message: errorMessage,
+      timestamp: new Date().toISOString(),
+      repository: `${repoInfo.owner}/${repoInfo.repo}`,
     };
     writeFileSync(scoresFilePath, JSON.stringify(errorScores, null, 2));
     return null;
