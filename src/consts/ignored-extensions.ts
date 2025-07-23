@@ -50,7 +50,6 @@ export const DOCUMENT_EXTENSIONS = [
   ".xlsx",
   ".ppt",
   ".pptx",
-  ".pkl",
 ];
 
 export const EXECUTABLE_EXTENSIONS = [".exe", ".dll", ".so", ".dylib", ".app"];
@@ -74,12 +73,76 @@ export const LOCK_EXTENSIONS = [".lock"];
 
 export const VECTOR_DATABASE = [".faiss"];
 
-export const GIT = [".gitignore"];
+export const GIT = [".gitignore", ".git", ".gitattributes", ".gitkeep"];
+
+export const CONFIG_FILES = [
+  ".env",
+  ".env.local",
+  ".env.development",
+  ".env.production",
+  ".env.test",
+  ".DS_Store",
+  "Thumbs.db",
+  ".vscode",
+  ".idea",
+  ".swp",
+  ".swo",
+  ".tmp",
+  ".temp",
+  "dist",
+  "build",
+  "out",
+  ".next",
+  ".nuxt",
+  ".output",
+];
+
+export const TEST_FILES = [
+  ".snap", // Jest snapshots
+  "__snapshots__",
+  ".test.tsx.snap",
+  ".test.js.snap",
+  ".test.ts.snap",
+  ".spec.js.snap",
+  ".spec.ts.snap",
+  "coverage",
+  ".nyc_output",
+  ".coverage",
+  "htmlcov",
+  "test-results",
+  "playwright-report",
+  ".pytest_cache",
+  "__pycache__",
+  ".tox",
+];
 
 export const NODE_DEPENDENCIES = [
   "package-lock.json",
   "node_modules",
   "pnpm-lock.yaml",
+  "yarn.lock",
+  "uv.lock",
+  "Pipfile.lock",
+  "poetry.lock",
+  "composer.lock",
+  "Gemfile.lock",
+  "go.sum",
+  "Cargo.lock",
+];
+
+export const LARGE_FILES = [
+  ".pickle",
+  ".pkl", 
+  ".p",
+  ".joblib",
+  ".dill",
+  ".h5",
+  ".hdf5",
+  ".npz",
+  ".npy",
+  ".parquet",
+  ".feather",
+  ".zarr",
 ];
 
 export const DEFAULT_IGNORED_EXTENSIONS = [
@@ -96,5 +159,8 @@ export const DEFAULT_IGNORED_EXTENSIONS = [
   ...LOCK_EXTENSIONS,
   ...VECTOR_DATABASE,
   ...GIT,
+  ...CONFIG_FILES,
+  ...TEST_FILES,
   ...NODE_DEPENDENCIES,
+  ...LARGE_FILES,
 ];

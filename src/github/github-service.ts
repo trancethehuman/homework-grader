@@ -81,20 +81,57 @@ export class GitHubService {
         },
       };
     } catch (error: any) {
+      // Provide specific error messages based on the actual error
       if (error.status === 401) {
         return {
           valid: false,
-          error: "Token is invalid or expired",
+          error: "Invalid token: The token is malformed, expired, or revoked. Please check your token and try again.",
         };
       } else if (error.status === 403) {
+        // Parse the error message to provide more specific guidance
+        const errorMessage = error.message || '';
+        const errorResponse = error.response?.data?.message || '';
+        
+        if (errorMessage.includes('rate limit') || errorResponse.includes('rate limit')) {
+          return {
+            valid: false,
+            error: "Rate limit exceeded: Too many requests. Please wait and try again later.",
+          };
+        } else if (errorMessage.includes('scope') || errorResponse.includes('scope')) {
+          return {
+            valid: false,
+            error: "Insufficient permissions: Token needs 'repo' scope to access repository contents. Please update your token permissions.",
+          };
+        } else if (errorMessage.includes('suspended') || errorResponse.includes('suspended')) {
+          return {
+            valid: false,
+            error: "Account suspended: Your GitHub account or token has been suspended.",
+          };
+        } else {
+          return {
+            valid: false,
+            error: `Access forbidden: ${errorResponse || errorMessage || 'The token may lack required permissions or the resource is restricted.'}`,
+          };
+        }
+      } else if (error.status === 404) {
         return {
           valid: false,
-          error: "Token lacks required permissions (needs repo scope)",
+          error: "Resource not found: Unable to validate token. The GitHub API endpoint may be unavailable.",
+        };
+      } else if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
+        return {
+          valid: false,
+          error: "Network error: Unable to connect to GitHub. Please check your internet connection.",
+        };
+      } else if (error.code === 'ETIMEDOUT') {
+        return {
+          valid: false,
+          error: "Request timeout: GitHub API is taking too long to respond. Please try again.",
         };
       } else {
         return {
           valid: false,
-          error: `Token validation failed: ${error.message}`,
+          error: `Token validation failed: ${error.message || 'Unknown error occurred'}`,
         };
       }
     }
@@ -159,10 +196,34 @@ export class GitHubService {
   }
 
   private shouldIgnoreFile(filePath: string): boolean {
-    const extension = filePath
-      .toLowerCase()
-      .substring(filePath.lastIndexOf("."));
-    return this.ignoredExtensions.has(extension);
+    const lowerPath = filePath.toLowerCase();
+    const fileName = lowerPath.substring(lowerPath.lastIndexOf("/") + 1);
+    const extension = lowerPath.substring(lowerPath.lastIndexOf("."));
+    
+    // Check if the full filename is in the ignored list
+    if (this.ignoredExtensions.has(fileName)) {
+      return true;
+    }
+    
+    // Check if any directory in the path is ignored
+    const pathParts = lowerPath.split("/");
+    for (const part of pathParts) {
+      if (this.ignoredExtensions.has(part)) {
+        return true;
+      }
+    }
+    
+    // Check file extension
+    if (extension && this.ignoredExtensions.has(extension)) {
+      return true;
+    }
+    
+    // Check for snapshot files specifically
+    if (lowerPath.includes("__snapshots__") || lowerPath.endsWith(".snap")) {
+      return true;
+    }
+    
+    return false;
   }
 
   parseGitHubUrl(url: string): GitHubRepoInfo | null {
