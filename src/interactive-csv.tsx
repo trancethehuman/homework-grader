@@ -97,7 +97,8 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
   const [notionApiContentType, setNotionApiContentType] = useState<string>("");
   const [notionApiContent, setNotionApiContent] = useState<any>(null);
   const [notionSelectedProperty, setNotionSelectedProperty] = useState<any>(null);
-  const [notionGitHubUrls, setNotionGitHubUrls] = useState<string[]>([]);
+  const [notionGitHubUrls, setNotionGitHubUrls] = useState<Array<{url: string, pageId: string}>>([]);
+  const [selectedGitHubColumn, setSelectedGitHubColumn] = useState<string>("");
   // Cache Notion data to avoid refetching on back navigation
   const [cachedNotionPages, setCachedNotionPages] = useState<any[]>([]);
   const [cachedNotionDatabases, setCachedNotionDatabases] = useState<any[]>([]);
@@ -139,7 +140,9 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         }
 
         for (let i = 0; i < notionGitHubUrls.length; i++) {
-          const url = notionGitHubUrls[i];
+          const urlItem = notionGitHubUrls[i];
+          const url = urlItem.url;
+          const pageId = urlItem.pageId || undefined; // Convert empty string to undefined
           
           setProcessingResults(prev => ({
             ...prev,
@@ -153,7 +156,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
             const repoInfo = githubService.parseGitHubUrl(url);
             if (repoInfo) {
               const result = await githubService.processGitHubUrl(url, selectedProvider || DEFAULT_PROVIDER);
-              const gradingResult = await saveRepositoryFiles(repoInfo, result, url, selectedProvider || DEFAULT_PROVIDER);
+              const gradingResult = await saveRepositoryFiles(repoInfo, result, url, selectedProvider || DEFAULT_PROVIDER, pageId);
               
               if (gradingResult) {
                 collectedGradingResults.push(gradingResult);
@@ -656,11 +659,11 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         // Save to Notion database
         const service = new GradingDatabaseService();
         
-        // Ensure database has grading schema
-        await service.ensureGradingDatabase(databaseId);
+        // Ensure database has grading schema, but skip github_url column if we already have one
+        await service.ensureGradingDatabase(databaseId, { skipGithubUrlColumn: selectedGitHubColumn });
         
         // Save all grading results
-        const result = await service.saveGradingResults(databaseId, gradingResults);
+        const result = await service.saveGradingResults(databaseId, gradingResults, selectedGitHubColumn);
         
         if (result.failed > 0) {
           setError(`Saved ${result.success} entries, failed ${result.failed}. Errors: ${result.errors.join(", ")}`);
@@ -1093,7 +1096,14 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           notionContent={notionApiContent}
           onSelect={(selectedProperty, githubUrls) => {
             setNotionSelectedProperty(selectedProperty);
-            setNotionGitHubUrls(githubUrls);
+            
+            // Convert string[] to the expected format if needed
+            const urlsWithIds: Array<{url: string, pageId: string}> = Array.isArray(githubUrls) && githubUrls.length > 0 && typeof githubUrls[0] === 'string'
+              ? (githubUrls as string[]).map(url => ({ url, pageId: '' }))
+              : githubUrls as Array<{url: string, pageId: string}>;
+            
+            setNotionGitHubUrls(urlsWithIds);
+            setSelectedGitHubColumn(selectedProperty.name || selectedProperty.propertyName || "");
             setStep("notion-processing");
           }}
           onError={(error) => {

@@ -244,8 +244,8 @@ export class NotionMCPClient {
   async extractGitHubUrls(
     entries: NotionDatabaseEntry[],
     propertyName: string
-  ): Promise<string[]> {
-    const urls: string[] = [];
+  ): Promise<Array<{url: string, pageId: string}>> {
+    const urlsWithIds: Array<{url: string, pageId: string}> = [];
 
     for (const entry of entries) {
       const property = entry.properties[propertyName];
@@ -270,12 +270,23 @@ export class NotionMCPClient {
 
         // Check if it's a GitHub URL
         if (url && (url.includes("github.com") || url.includes("github.io"))) {
-          urls.push(url);
+          urlsWithIds.push({
+            url,
+            pageId: entry.id
+          });
         }
       }
     }
 
-    return urls.filter((url, index, self) => self.indexOf(url) === index); // Remove duplicates
+    // Remove duplicates by URL while keeping the first occurrence
+    const seen = new Set<string>();
+    return urlsWithIds.filter(item => {
+      if (seen.has(item.url)) {
+        return false;
+      }
+      seen.add(item.url);
+      return true;
+    });
   }
 
   async getAvailableTools(): Promise<any[]> {

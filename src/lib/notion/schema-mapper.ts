@@ -13,7 +13,10 @@ export class NotionSchemaMapper {
   /**
    * Generate Notion database properties from grading schema
    */
-  static generateGradingDatabaseProperties(includeTitle: boolean = true): Record<string, NotionProperty> {
+  static generateGradingDatabaseProperties(
+    includeTitle: boolean = true, 
+    options: { skipGithubUrlColumn?: boolean } = {}
+  ): Record<string, NotionProperty> {
     const properties: Record<string, NotionProperty> = {};
     
     // Repository identification (Title column) - only add if requested
@@ -24,11 +27,13 @@ export class NotionSchemaMapper {
       };
     }
       
-    // Repository metadata
-    properties.github_url = {
-      type: "url",
-      url: {},
-    };
+    // Repository metadata - only add if not skipped
+    if (!options.skipGithubUrlColumn) {
+      properties.github_url = {
+        type: "url",
+        url: {},
+      };
+    }
       
     properties.graded_at = {
       type: "date",
@@ -116,26 +121,17 @@ export class NotionSchemaMapper {
     gradingData: any,
     repositoryName: string,
     githubUrl: string,
-    titlePropertyName?: string
+    titlePropertyName?: string,
+    githubUrlColumnName?: string,
+    isUpdate: boolean = false
   ): Record<string, any> {
     const properties: Record<string, any> = {};
     
-    // Set the title property (use provided name or default to repository_name)
-    const titleProp = titlePropertyName || "repository_name";
-    properties[titleProp] = {
-      title: [
-        {
-          text: {
-            content: repositoryName,
-          },
-        },
-      ],
-    };
-    
-    // Only set repository_name if it's not the title property
-    if (titleProp !== "repository_name") {
-      properties.repository_name = {
-        rich_text: [
+    // Set the title property only for new entries (don't overwrite for updates)
+    if (!isUpdate) {
+      const titleProp = titlePropertyName || "repository_name";
+      properties[titleProp] = {
+        title: [
           {
             text: {
               content: repositoryName,
@@ -145,9 +141,14 @@ export class NotionSchemaMapper {
       };
     }
     
-    properties.github_url = {
-      url: githubUrl,
-    };
+    // Use the existing GitHub URL column name or default to github_url
+    const githubUrlProp = githubUrlColumnName || "github_url";
+    // Only set GitHub URL for new entries (existing rows already have it)
+    if (!isUpdate) {
+      properties[githubUrlProp] = {
+        url: githubUrl,
+      };
+    }
     
     properties.graded_at = {
       date: {
@@ -321,12 +322,17 @@ export class NotionSchemaMapper {
   /**
    * Get missing grading properties from database schema
    */
-  static getMissingGradingProperties(databaseProperties: Record<string, any>): Record<string, NotionProperty> {
+  static getMissingGradingProperties(
+    databaseProperties: Record<string, any>, 
+    options: { skipGithubUrlColumn?: boolean } = {}
+  ): Record<string, NotionProperty> {
     // Check if database already has a title property
     const hasExistingTitle = Object.values(databaseProperties).some((prop: any) => prop.type === "title");
     
-    // Generate required properties, excluding title if one already exists
-    const requiredProperties = this.generateGradingDatabaseProperties(!hasExistingTitle);
+    // Generate required properties, excluding title if one already exists, and optionally skip github_url
+    const requiredProperties = this.generateGradingDatabaseProperties(!hasExistingTitle, {
+      skipGithubUrlColumn: options.skipGithubUrlColumn
+    });
     const existingProperties = Object.keys(databaseProperties);
     const missingProperties: Record<string, NotionProperty> = {};
     

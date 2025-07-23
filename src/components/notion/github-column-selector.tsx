@@ -5,7 +5,7 @@ import { BackButton, useBackNavigation } from "../ui/back-button.js";
 
 interface GitHubColumnSelectorProps {
   notionContent: any;
-  onSelect: (selectedProperty: any, githubUrls: string[]) => void;
+  onSelect: (selectedProperty: any, githubUrls: Array<{url: string, pageId: string}> | string[]) => void;
   onBack?: () => void;
   onError: (error: string) => void;
 }
@@ -42,7 +42,11 @@ export const GitHubColumnSelector: React.FC<GitHubColumnSelectorProps> = ({
         if (result.candidates.length === 1 && result.topCandidate && result.topCandidate.confidence >= 80) {
           const property = findPropertyByName(result.topCandidate.propertyName);
           if (property) {
-            const urls = extractUrlsFromDatabaseProperty(result.topCandidate.propertyName);
+            // Use page IDs for database content, fallback to simple URLs for other content
+            const urls = notionContent?.type === "database" ? 
+              extractUrlsWithPageIds(result.topCandidate.propertyName) :
+              extractUrlsFromDatabaseProperty(result.topCandidate.propertyName);
+            
             // Auto-proceed with the high-confidence single option
             console.log(`Auto-selecting high-confidence GitHub column: ${result.topCandidate.propertyName} (${result.topCandidate.confidence}% confidence)`);
             onSelect(property, urls);
@@ -54,8 +58,15 @@ export const GitHubColumnSelector: React.FC<GitHubColumnSelectorProps> = ({
         if (result.topCandidate) {
           const property = findPropertyByName(result.topCandidate.propertyName);
           if (property) {
-            const urls = extractUrlsFromDatabaseProperty(result.topCandidate.propertyName);
-            setPreviewUrls(urls.slice(0, 5)); // Show up to 5 URLs
+            const urls = notionContent?.type === "database" ? 
+              extractUrlsWithPageIds(result.topCandidate.propertyName) :
+              extractUrlsFromDatabaseProperty(result.topCandidate.propertyName);
+            
+            // Extract just URLs for preview display
+            const previewUrls = Array.isArray(urls) && urls.length > 0 && typeof urls[0] === 'object' 
+              ? (urls as Array<{url: string, pageId: string}>).map(item => item.url)
+              : urls as string[];
+            setPreviewUrls(previewUrls.slice(0, 5)); // Show up to 5 URLs
           }
         }
       } catch (error) {
@@ -80,6 +91,69 @@ export const GitHubColumnSelector: React.FC<GitHubColumnSelectorProps> = ({
     }
     
     return null;
+  };
+
+  const extractUrlsWithPageIds = (propertyName: string): Array<{url: string, pageId: string}> => {
+    // Handle database content structure with page IDs
+    if (notionContent?.type === "database") {
+      const propertyDefinition = notionContent.database?.properties?.[propertyName];
+      const entries = notionContent.entries || [];
+      
+      if (!propertyDefinition) return [];
+      
+      const urlsWithIds: Array<{url: string, pageId: string}> = [];
+      
+      // Extract URLs from all database entries for this property
+      for (const entry of entries) {
+        const propertyValue = entry.properties?.[propertyName];
+        if (!propertyValue) continue;
+        
+        let valueText = '';
+        
+        // Extract the actual value based on property type
+        switch (propertyDefinition.type) {
+          case 'url':
+            valueText = propertyValue.url || '';
+            break;
+          case 'rich_text':
+            valueText = (propertyValue.rich_text || [])
+              .map((rt: any) => rt.plain_text || rt.text?.content || '')
+              .join('');
+            break;
+          case 'title':
+            valueText = (propertyValue.title || [])
+              .map((rt: any) => rt.plain_text || rt.text?.content || '')
+              .join('');
+            break;
+          default:
+            // For other types, try to extract text representation
+            if (typeof propertyValue === 'string') {
+              valueText = propertyValue;
+            } else if (propertyValue.plain_text) {
+              valueText = propertyValue.plain_text;
+            }
+        }
+
+        if (valueText) {
+          const urls = GitHubUrlDetector.extractGitHubUrls(valueText);
+          for (const url of urls) {
+            urlsWithIds.push({ url, pageId: entry.id });
+          }
+        }
+      }
+
+      // Remove duplicates by URL while keeping the first occurrence
+      const seen = new Set<string>();
+      return urlsWithIds.filter(item => {
+        if (seen.has(item.url)) {
+          return false;
+        }
+        seen.add(item.url);
+        return true;
+      });
+    }
+    
+    return [];
   };
 
   const extractUrlsFromDatabaseProperty = (propertyName: string): string[] => {
@@ -161,7 +235,9 @@ export const GitHubColumnSelector: React.FC<GitHubColumnSelectorProps> = ({
       if (selectedCandidate) {
         const property = findPropertyByName(selectedCandidate.propertyName);
         if (property) {
-          const urls = extractUrlsFromDatabaseProperty(selectedCandidate.propertyName);
+          const urls = notionContent?.type === "database" ? 
+            extractUrlsWithPageIds(selectedCandidate.propertyName) :
+            extractUrlsFromDatabaseProperty(selectedCandidate.propertyName);
           onSelect(property, urls);
         } else {
           onError("Could not find the selected property in the Notion content.");
@@ -171,7 +247,9 @@ export const GitHubColumnSelector: React.FC<GitHubColumnSelectorProps> = ({
       // Quick start with top candidate
       const property = findPropertyByName(detectionResult.topCandidate.propertyName);
       if (property) {
-        const urls = extractUrlsFromDatabaseProperty(detectionResult.topCandidate.propertyName);
+        const urls = notionContent?.type === "database" ? 
+          extractUrlsWithPageIds(detectionResult.topCandidate.propertyName) :
+          extractUrlsFromDatabaseProperty(detectionResult.topCandidate.propertyName);
         onSelect(property, urls);
       }
     }
@@ -184,8 +262,15 @@ export const GitHubColumnSelector: React.FC<GitHubColumnSelectorProps> = ({
     const selectedCandidate = detectionResult.candidates[selectedIndex];
     const property = findPropertyByName(selectedCandidate.propertyName);
     if (property) {
-      const urls = extractUrlsFromDatabaseProperty(selectedCandidate.propertyName);
-      setPreviewUrls(urls.slice(0, 5));
+      const urls = notionContent?.type === "database" ? 
+        extractUrlsWithPageIds(selectedCandidate.propertyName) :
+        extractUrlsFromDatabaseProperty(selectedCandidate.propertyName);
+      
+      // Extract just URLs for preview display
+      const previewUrls = Array.isArray(urls) && urls.length > 0 && typeof urls[0] === 'object' 
+        ? (urls as Array<{url: string, pageId: string}>).map(item => item.url)
+        : urls as string[];
+      setPreviewUrls(previewUrls.slice(0, 5));
     }
   }, [selectedIndex, detectionResult]);
 

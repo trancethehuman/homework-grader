@@ -59,4 +59,5 @@ After your evaluation, provide your assessment in the following format:
 </evaluation>
 
 Remember to be objective and constructive in your evaluation, providing specific examples from the code repository to support your assessments.
+You MUST respond in structured format and JSON only.
 `;

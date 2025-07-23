@@ -18,6 +18,7 @@ export interface GradingResult {
   githubUrl: string;
   gradingData: any;
   usage: any;
+  pageId?: string; // Notion page ID for updating existing rows
 }
 
 /**
@@ -27,7 +28,8 @@ export async function saveRepositoryFiles(
   repoInfo: RepoInfo,
   result: ProcessResult,
   url: string,
-  provider?: AIProvider
+  provider?: AIProvider,
+  pageId?: string
 ): Promise<GradingResult | null> {
   // Ensure test-results directory exists
   try {
@@ -77,6 +79,7 @@ export async function saveRepositoryFiles(
       githubUrl: url,
       gradingData: scores.object,
       usage: scores.usage,
+      pageId,
     };
   } catch (gradingError) {
     console.error(
