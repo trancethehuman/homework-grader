@@ -39,7 +39,7 @@ export class SandboxService {
       this.sandbox = await Sandbox.create({
         runtime: this.config.runtime || "node22",
         resources: {
-          vcpus: this.config.vcpus || 4,
+          vcpus: this.config.vcpus || 1,
         },
         timeout: this.config.timeout || ms("10m"),
       });
