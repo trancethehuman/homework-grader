@@ -1,13 +1,18 @@
 #!/usr/bin/env node
 
+import dotenv from "dotenv";
 import { render } from "ink";
 import { InteractiveCSV } from "./interactive-csv.js";
 import { GitHubService } from "./github/github-service.js";
+import { SandboxService } from "./lib/vercel-sandbox/index.js";
 import { NUM_URLS_IN_PARALLEL } from "./consts/limits.js";
 import { AIProvider, DEFAULT_PROVIDER } from "./consts/ai-providers.js";
 import { saveRepositoryFiles } from "./lib/file-saver.js";
 
-async function processGitHubUrls(
+// Load environment variables from .env file
+dotenv.config();
+
+async function processGitHubUrlsWithGitHubAPI(
   urls: string[],
   columnName: string,
   githubToken?: string,
@@ -33,6 +38,7 @@ async function processGitHubUrls(
   }
 
   console.log(`✓ Using AI provider: ${provider.name}`);
+  console.log(`✓ Using parsing method: GitHub API`);
 
   console.log(`\nLoaded ${urls.length} GitHub URLs from column: ${columnName}`);
   urls.forEach((url, index) => {
@@ -83,6 +89,87 @@ async function processGitHubUrls(
     }
 
     console.log("\nAll GitHub URLs processed successfully!");
+  }
+}
+
+async function processGitHubUrlsWithVercelSandbox(
+  urls: string[],
+  columnName: string,
+  aiProvider?: AIProvider
+) {
+  const sandboxService = new SandboxService();
+  const provider = aiProvider || DEFAULT_PROVIDER;
+
+  console.log(`✓ Using AI provider: ${provider.name}`);
+  console.log(`✓ Using parsing method: Vercel Sandbox`);
+
+  console.log(`\nLoaded ${urls.length} GitHub URLs from column: ${columnName}`);
+  urls.forEach((url, index) => {
+    console.log(`${index + 1}. ${url}`);
+  });
+
+  if (urls.length > 0) {
+    try {
+      // Initialize sandbox once for all repositories
+      console.log("\n" + "=".repeat(60));
+      console.log("🚀 VERCEL SANDBOX PROCESSING MODE");
+      console.log("=".repeat(60));
+      
+      await sandboxService.initialize();
+
+      console.log("\n" + "=".repeat(60));
+      console.log("📦 REPOSITORY PROCESSING");
+      console.log("=".repeat(60));
+
+      // Process URLs sequentially in sandbox (no concurrent processing needed)
+      for (let i = 0; i < urls.length; i++) {
+        const url = urls[i];
+
+        try {
+          const repoInfo = sandboxService.parseGitHubUrl(url);
+          if (repoInfo) {
+            const result = await sandboxService.processGitHubUrl(url, provider);
+            await saveRepositoryFiles(repoInfo, result, url);
+          }
+        } catch (error) {
+          console.error(`✗ Error processing ${url}:`, error);
+        }
+      }
+
+      console.log("\n" + "=".repeat(60));
+      console.log("✅ ALL REPOSITORIES PROCESSED SUCCESSFULLY!");
+      console.log("=".repeat(60));
+    } finally {
+      // Always cleanup sandbox
+      console.log("\n" + "=".repeat(60));
+      console.log("🧹 SANDBOX CLEANUP");
+      console.log("=".repeat(60));
+      await sandboxService.cleanup();
+    }
+  }
+}
+
+async function processGitHubUrls(
+  urls: string[],
+  columnName: string,
+  githubToken?: string,
+  aiProvider?: AIProvider
+) {
+  // Default to Vercel Sandbox, fallback to GitHub API if GITHUB_API_ONLY is set
+  const useGitHubAPI = process.env.GITHUB_API_ONLY === 'true';
+
+  if (useGitHubAPI) {
+    await processGitHubUrlsWithGitHubAPI(urls, columnName, githubToken, aiProvider);
+  } else {
+    try {
+      await processGitHubUrlsWithVercelSandbox(urls, columnName, aiProvider);
+    } catch (error) {
+      console.error('\n⚠️  Vercel Sandbox processing failed:', error);
+      console.log('\n🔄 Falling back to GitHub API approach...\n');
+      
+      // Fallback to GitHub API
+      await processGitHubUrlsWithGitHubAPI(urls, columnName, githubToken, aiProvider);
+    }
   }
 }
 

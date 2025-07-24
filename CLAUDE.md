@@ -94,6 +94,13 @@ pnpm start
 
 This helps improve performance and reduces token consumption when processing large codebases.
 
+### Environment Variables
+
+- **GITHUB_TOKEN**: Personal access token for GitHub API (when using GitHub API mode)
+- **GITHUB_MAX_DEPTH**: Maximum directory depth for GitHub API processing (default: 5)  
+- **GITHUB_API_ONLY**: Set to 'true' to force GitHub API mode instead of Vercel Sandbox
+- **AI provider variables**: Various API keys for different AI providers (OpenAI, Anthropic, Google, etc.)
+
 ## Architecture
 
 The codebase includes:
@@ -109,12 +116,23 @@ The codebase includes:
 
 - **GitHubService Class** (`src/github/github-service.ts`)
 
-  - Processes GitHub repositories and extracts file contents
+  - Processes GitHub repositories and extracts file contents using GitHub API
   - Token validation with `validateToken()` method
   - Rate limit handling with automatic retry logic
   - Configurable file extension filtering
   - Batch processing to respect GitHub API limits
   - Error handling for authentication and permission issues
+
+- **SandboxService Class** (`src/lib/vercel-sandbox/sandbox-service.ts`)
+
+  - **NEW**: Alternative repository processing using Vercel Sandbox (now default)
+  - Spins up isolated sandbox environment for repository cloning
+  - Clones GitHub repositories directly using git commands
+  - Processes files locally without GitHub API rate limits
+  - Identical output format to GitHubService for seamless integration
+  - Comprehensive logging for debugging and monitoring
+  - Automatic cleanup of sandbox resources
+  - Graceful fallback to GitHub API on failure
 
 - **Interactive CSV Component** (`src/interactive-csv.tsx`)
 
@@ -139,11 +157,12 @@ The codebase includes:
 
 - **Command Line Interface** (`src/cli.tsx`)
   - Supports both interactive mode and legacy CSV file argument
-  - Processes GitHub URLs from CSV files
-  - Displays authentication status and rate limit information
+  - **NEW**: Defaults to Vercel Sandbox processing with GitHub API fallback
+  - Processes GitHub URLs from CSV files using sandbox environment
+  - Displays comprehensive processing status and timing information
   - Generates repository content files in `test-results/` directory
-  - Comprehensive error handling for files and GitHub API
-  - Authentication status display
+  - Comprehensive error handling with automatic fallback mechanisms
+  - Authentication status display for GitHub API when used
 
 ### Constants
 
@@ -168,7 +187,15 @@ The codebase includes:
 
 - **TypeScript**: Full type safety and compilation
 - **Interactive CLI**: React/Ink components with step-by-step workflow
-- **GitHub Authentication Management**:
+- **Dual Processing Methods**:
+  - **Vercel Sandbox (Default)**: Isolated environment for direct repository cloning
+  - **GitHub API (Fallback)**: Traditional API-based repository processing
+- **Repository Processing**:
+  - **NEW**: No depth limitations in sandbox mode for complete repository analysis
+  - Identical output format between both processing methods
+  - Comprehensive file filtering using ignore patterns
+  - Real-time progress tracking and detailed logging
+- **GitHub Authentication Management** (GitHub API mode):
   - Secure token storage with platform-appropriate directories
   - Real-time token validation with GitHub API
   - Interactive token input with masked display
@@ -176,9 +203,8 @@ The codebase includes:
   - Environment variable support
   - Rate limit awareness (60 vs 5,000 requests/hour)
 - **CSV Processing**: File validation, analysis, and URL extraction
-- **GitHub Repository Processing**: Content extraction with file filtering
-- **Error Handling**: Comprehensive error handling throughout the application
-- **Rate Limiting**: Automatic retry logic for GitHub API rate limits
+- **Error Handling**: Comprehensive error handling with automatic fallback mechanisms
+- **Resource Management**: Automatic sandbox cleanup and resource deallocation
 - **File Management**: Automatic deduplication and validation
 
 ## Important Instructions

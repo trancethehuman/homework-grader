@@ -135,7 +135,6 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         const maxDepth = preferences.githubConfig?.maxDepth || 
                         parseInt(process.env.GITHUB_MAX_DEPTH || '5', 10);
         
-        const githubService = new GitHubService(githubToken, undefined, maxDepth);
         const results: Array<{ url: string; success: boolean; error?: string }> = [];
         const collectedGradingResults: GradingResult[] = [];
 
@@ -144,37 +143,75 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           setOriginalDatabaseId(notionApiSelectedPageId);
         }
 
-        for (let i = 0; i < notionGitHubUrls.length; i++) {
-          const urlItem = notionGitHubUrls[i];
-          const url = urlItem.url;
-          const pageId = urlItem.pageId || undefined; // Convert empty string to undefined
-          
-          setProcessingResults(prev => ({
-            ...prev,
-            processed: i,
-            currentUrl: url
-          }));
-
+        // Determine which processing method to use (default to Vercel Sandbox)
+        const useGitHubAPI = process.env.GITHUB_API_ONLY === 'true';
+        
+        // Initialize services once for efficiency
+        let githubService: GitHubService | null = null;
+        let sandboxService: any = null;
+        
+        if (useGitHubAPI) {
+          githubService = new GitHubService(githubToken, undefined, maxDepth);
+        } else {
           try {
-            console.log(`Processing repository ${i + 1}/${notionGitHubUrls.length}: ${url}`);
-            
-            const repoInfo = githubService.parseGitHubUrl(url);
-            if (repoInfo) {
-              const result = await githubService.processGitHubUrl(url, selectedProvider || DEFAULT_PROVIDER);
-              const gradingResult = await saveRepositoryFiles(repoInfo, result, url, selectedProvider || DEFAULT_PROVIDER, pageId);
-              
-              if (gradingResult) {
-                collectedGradingResults.push(gradingResult);
-              }
-            }
-            
-            results.push({ url, success: true });
-            console.log(`✓ Successfully processed ${url}`);
-          } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            results.push({ url, success: false, error: errorMessage });
-            console.error(`✗ Failed to process ${url}:`, errorMessage);
+            const { SandboxService } = await import("./lib/vercel-sandbox/index.js");
+            sandboxService = new SandboxService();
+            await sandboxService.initialize();
+            console.log(`🚀 Using Vercel Sandbox for processing ${notionGitHubUrls.length} repositories`);
+          } catch (sandboxError) {
+            console.warn(`Failed to initialize Vercel Sandbox, falling back to GitHub API:`, sandboxError);
+            githubService = new GitHubService(githubToken, undefined, maxDepth);
           }
+        }
+
+        try {
+          for (let i = 0; i < notionGitHubUrls.length; i++) {
+            const urlItem = notionGitHubUrls[i];
+            const url = urlItem.url;
+            const pageId = urlItem.pageId || undefined; // Convert empty string to undefined
+            
+            setProcessingResults(prev => ({
+              ...prev,
+              processed: i,
+              currentUrl: url
+            }));
+
+            try {
+              console.log(`Processing repository ${i + 1}/${notionGitHubUrls.length}: ${url}`);
+              
+              // Use the appropriate service
+              let result: any;
+              let repoInfo: any;
+              
+              if (sandboxService) {
+                // Use Vercel Sandbox
+                repoInfo = sandboxService.parseGitHubUrl(url);
+                if (repoInfo) {
+                  result = await sandboxService.processGitHubUrl(url, selectedProvider || DEFAULT_PROVIDER);
+                }
+              } else if (githubService) {
+                // Use GitHub API (either by choice or fallback)
+                repoInfo = githubService.parseGitHubUrl(url);
+                if (repoInfo) {
+                  result = await githubService.processGitHubUrl(url, selectedProvider || DEFAULT_PROVIDER);
+                }
+              }
+              
+              if (repoInfo && result) {
+                const gradingResult = await saveRepositoryFiles(repoInfo, result, url, selectedProvider || DEFAULT_PROVIDER, pageId);
+                
+                if (gradingResult) {
+                  collectedGradingResults.push(gradingResult);
+                }
+              }
+              
+              results.push({ url, success: true });
+              console.log(`✓ Successfully processed ${url}`);
+            } catch (error) {
+              const errorMessage = error instanceof Error ? error.message : String(error);
+              results.push({ url, success: false, error: errorMessage });
+              console.error(`✗ Failed to process ${url}:`, errorMessage);
+            }
 
           // Update progress
           setProcessingResults(prev => ({
@@ -187,20 +224,27 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           if (i < notionGitHubUrls.length - 1) {
             await new Promise(resolve => setTimeout(resolve, 1000));
           }
-        }
+          }
 
-        // Processing complete
-        console.log(`\n✓ Processing complete! Processed ${results.length} repositories.`);
-        console.log(`✓ Successful: ${results.filter(r => r.success).length}`);
-        console.log(`✗ Failed: ${results.filter(r => !r.success).length}`);
-        
-        // Save grading results and move to save options
-        setGradingResults(collectedGradingResults);
-        
-        // Show save options after a short delay
-        setTimeout(() => {
-          setStep("grading-save-options");
-        }, 2000);
+          // Processing complete
+          console.log(`\n✓ Processing complete! Processed ${results.length} repositories.`);
+          console.log(`✓ Successful: ${results.filter(r => r.success).length}`);
+          console.log(`✗ Failed: ${results.filter(r => !r.success).length}`);
+          
+          // Save grading results and move to save options
+          setGradingResults(collectedGradingResults);
+          
+          // Show save options after a short delay
+          setTimeout(() => {
+            setStep("grading-save-options");
+          }, 2000);
+        } finally {
+          // Cleanup sandbox if it was used
+          if (sandboxService) {
+            console.log(`🧹 Cleaning up Vercel Sandbox...`);
+            await sandboxService.cleanup();
+          }
+        }
       };
 
       processGitHubUrls().catch(error => {

@@ -41,3 +41,5 @@ coverage/
 .nyc_output
 
 test-results
+.vercel
+.env*.local
