@@ -389,6 +389,7 @@ export class GitHubService {
     url: string,
     provider: AIProvider
   ): Promise<{ content: string; scores: Promise<any> }> {
+    const totalStartTime = Date.now();
     const repoInfo = this.parseGitHubUrl(url);
     if (!repoInfo) {
       throw new Error(`Invalid GitHub URL: ${url}`);
@@ -408,7 +409,20 @@ export class GitHubService {
       concatenatedContent += "\n```\n\n";
     }
 
-    const scoresPromise = getRepoScores(concatenatedContent, provider);
+    const contentTime = Date.now() - totalStartTime;
+    console.log(`✓ Successfully processed ${repoInfo.owner}/${repoInfo.repo} via GitHub API - Content extraction: ${contentTime}ms`);
+
+    const gradingStartTime = Date.now();
+    const scoresPromise = getRepoScores(concatenatedContent, provider).then(result => {
+      const gradingTime = Date.now() - gradingStartTime;
+      const totalTime = Date.now() - totalStartTime;
+      console.log(`✓ Grading completed for ${repoInfo.owner}/${repoInfo.repo} - Grading: ${gradingTime}ms, Total: ${totalTime}ms`);
+      return result;
+    }).catch(error => {
+      const gradingTime = Date.now() - gradingStartTime;
+      console.log(`✗ Grading failed for ${repoInfo.owner}/${repoInfo.repo} - Grading: ${gradingTime}ms`);
+      throw error;
+    });
 
     return { content: concatenatedContent, scores: scoresPromise };
   }

@@ -369,7 +369,7 @@ export class SandboxService {
 
       const processTime = Date.now() - startTime;
       console.log(
-        `✓ Successfully processed ${clonedRepo.info.owner}/${clonedRepo.info.repo} in ${processTime}ms`
+        `✓ Successfully processed ${clonedRepo.info.owner}/${clonedRepo.info.repo} in ${processTime}ms - Content extraction: ${processTime}ms`
       );
       console.log(
         `   Final output: ${repositoryContent.totalFiles} files, ${repositoryContent.formattedContent.length} characters`
@@ -391,27 +391,44 @@ export class SandboxService {
     }
 
     try {
+      const totalStartTime = Date.now();
+      
       // Clone the repository
       const clonedRepo = await this.cloneRepository(repositoryInfo);
 
       // Process the repository to get content
       const repositoryContent = await this.processRepository(clonedRepo);
+      const contentTime = Date.now() - totalStartTime;
 
       // If aiProvider is provided, grade the content
       if (aiProvider) {
+        const gradingStartTime = Date.now();
         console.log(
           `Grading repository ${repositoryInfo.owner}/${repositoryInfo.repo}...`
         );
+        
         const scoresPromise = getRepoScores(
           repositoryContent.formattedContent,
           aiProvider
-        );
+        ).then(result => {
+          const gradingTime = Date.now() - gradingStartTime;
+          const totalTime = Date.now() - totalStartTime;
+          console.log(`✓ Grading completed for ${repositoryInfo.owner}/${repositoryInfo.repo} - Grading: ${gradingTime}ms, Total: ${totalTime}ms`);
+          return result;
+        }).catch(error => {
+          const gradingTime = Date.now() - gradingStartTime;
+          console.log(`✗ Grading failed for ${repositoryInfo.owner}/${repositoryInfo.repo} - Grading: ${gradingTime}ms`);
+          throw error;
+        });
 
         return {
           content: repositoryContent.formattedContent,
           scores: scoresPromise,
         };
       }
+
+      const totalTime = Date.now() - totalStartTime;
+      console.log(`✓ Repository processing completed for ${repositoryInfo.owner}/${repositoryInfo.repo} - Total: ${totalTime}ms (no grading)`);
 
       return {
         content: repositoryContent.formattedContent,
