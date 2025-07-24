@@ -10,6 +10,9 @@ interface Preferences {
     preferredPropertyName?: string;
     lastUsedPropertyName?: string;
   };
+  githubConfig?: {
+    maxDepth?: number;
+  };
   version: string;
 }
 
@@ -77,6 +80,12 @@ export class PreferencesStorage {
     } catch {
       // File doesn't exist, nothing to clear
     }
+  }
+
+  async saveGitHubConfig(config: { maxDepth?: number }): Promise<void> {
+    const preferences = await this.loadPreferences();
+    preferences.githubConfig = { ...preferences.githubConfig, ...config };
+    await this.savePreferences(preferences);
   }
 
   getConfigPath(): string {

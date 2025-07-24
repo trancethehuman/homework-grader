@@ -130,7 +130,12 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           results: []
         });
 
-        const githubService = new GitHubService(githubToken);
+        // Get max depth from preferences or environment variable, default to 5
+        const preferences = await preferencesStorage.loadPreferences();
+        const maxDepth = preferences.githubConfig?.maxDepth || 
+                        parseInt(process.env.GITHUB_MAX_DEPTH || '5', 10);
+        
+        const githubService = new GitHubService(githubToken, undefined, maxDepth);
         const results: Array<{ url: string; success: boolean; error?: string }> = [];
         const collectedGradingResults: GradingResult[] = [];
 
@@ -234,6 +239,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         setStep("validating-token");
 
         try {
+          // For token validation, we don't need depth limit configuration
           const githubService = new GitHubService(token);
           const validation = await githubService.validateToken();
 
@@ -420,6 +426,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           // Validate the token
           (async () => {
             try {
+              // For token validation, we don't need depth limit configuration
               const githubService = new GitHubService(newToken);
               const validation = await githubService.validateToken();
 

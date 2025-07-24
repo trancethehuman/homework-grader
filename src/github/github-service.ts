@@ -39,8 +39,9 @@ interface RateLimitInfo {
 export class GitHubService {
   private octokit: Octokit;
   private ignoredExtensions: Set<string>;
+  private maxDepth: number;
 
-  constructor(token?: string, ignoredExtensions?: string[]) {
+  constructor(token?: string, ignoredExtensions?: string[], maxDepth: number = 5) {
     this.octokit = new Octokit({
       auth: token,
     });
@@ -49,6 +50,8 @@ export class GitHubService {
       ...DEFAULT_IGNORED_EXTENSIONS,
       ...(ignoredExtensions || []),
     ]);
+    
+    this.maxDepth = maxDepth;
   }
 
   addIgnoredExtensions(extensions: string[]): void {
@@ -63,6 +66,14 @@ export class GitHubService {
 
   getIgnoredExtensions(): string[] {
     return Array.from(this.ignoredExtensions).sort();
+  }
+
+  setMaxDepth(depth: number): void {
+    this.maxDepth = Math.max(1, depth); // Ensure minimum depth of 1
+  }
+
+  getMaxDepth(): number {
+    return this.maxDepth;
   }
 
   /**
@@ -200,6 +211,12 @@ export class GitHubService {
     const fileName = lowerPath.substring(lowerPath.lastIndexOf("/") + 1);
     const extension = lowerPath.substring(lowerPath.lastIndexOf("."));
     
+    // Check depth limit
+    const pathDepth = filePath.split("/").length;
+    if (pathDepth > this.maxDepth) {
+      return true;
+    }
+    
     // Check if the full filename is in the ignored list
     if (this.ignoredExtensions.has(fileName)) {
       return true;
@@ -261,19 +278,35 @@ export class GitHubService {
         })
       );
 
-      const treeItems: TreeItem[] = treeResponse.data.tree
-        .filter(
-          (item) =>
-            item.type === "blob" &&
-            item.path &&
-            !this.shouldIgnoreFile(item.path)
-        )
+      const allFiles = treeResponse.data.tree.filter(item => item.type === "blob" && item.path);
+      const totalFiles = allFiles.length;
+      
+      const treeItems: TreeItem[] = allFiles
+        .filter(item => !this.shouldIgnoreFile(item.path!))
         .map((item) => ({
           path: item.path!,
           type: item.type as "blob",
           sha: item.sha!,
           size: item.size,
         }));
+
+      const filteredFiles = treeItems.length;
+      const skippedFiles = totalFiles - filteredFiles;
+      
+      console.log(`📁 Repository scan complete:`);
+      console.log(`   • Total files found: ${totalFiles}`);
+      console.log(`   • Files to process: ${filteredFiles}`);
+      console.log(`   • Files skipped: ${skippedFiles} (depth limit: ${this.maxDepth})`);
+      
+      if (skippedFiles > 0) {
+        const depthFiltered = allFiles.filter(item => {
+          const depth = item.path!.split("/").length;
+          return depth > this.maxDepth;
+        }).length;
+        if (depthFiltered > 0) {
+          console.log(`   • Files skipped due to depth (>${this.maxDepth}): ${depthFiltered}`);
+        }
+      }
 
       // Process files in batches to avoid overwhelming the API
       const batchSize = 10;

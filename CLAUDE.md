@@ -78,6 +78,22 @@ pnpm run build
 pnpm start
 ```
 
+### Repository Depth Limiting
+
+To prevent processing of very large repositories with deep directory structures, the system includes configurable depth limiting:
+
+- **Default depth**: 5 levels deep
+- **Environment variable**: Set `GITHUB_MAX_DEPTH=3` to limit to 3 levels
+- **Example**: `src/components/ui/Button.tsx` = 4 levels deep
+
+```bash
+export GITHUB_MAX_DEPTH=3  # Only process files up to 3 directories deep
+pnpm run build
+pnpm start
+```
+
+This helps improve performance and reduces token consumption when processing large codebases.
+
 ## Architecture
 
 The codebase includes:

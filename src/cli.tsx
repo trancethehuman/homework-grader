@@ -13,7 +13,9 @@ async function processGitHubUrls(
   githubToken?: string,
   aiProvider?: AIProvider
 ) {
-  const githubService = new GitHubService(githubToken);
+  // Get max depth from environment variable, default to 5
+  const maxDepth = parseInt(process.env.GITHUB_MAX_DEPTH || '5', 10);
+  const githubService = new GitHubService(githubToken, undefined, maxDepth);
   const provider = aiProvider || DEFAULT_PROVIDER;
 
   // Display authentication status
