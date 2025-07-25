@@ -29,7 +29,7 @@ export class SandboxService {
 
     console.log("🚀 Initializing Vercel Sandbox...");
     console.log(`   Runtime: ${this.config.runtime || "node22"}`);
-    console.log(`   vCPUs: ${this.config.vcpus || 4}`);
+    console.log(`   vCPUs: ${this.config.vcpus || 1}`);
     console.log(
       `   Timeout: ${ms(this.config.timeout || ms("10m"), { long: true })}`
     );
@@ -392,7 +392,7 @@ export class SandboxService {
 
     try {
       const totalStartTime = Date.now();
-      
+
       // Clone the repository
       const clonedRepo = await this.cloneRepository(repositoryInfo);
 
@@ -406,20 +406,26 @@ export class SandboxService {
         console.log(
           `Grading repository ${repositoryInfo.owner}/${repositoryInfo.repo}...`
         );
-        
+
         const scoresPromise = getRepoScores(
           repositoryContent.formattedContent,
           aiProvider
-        ).then(result => {
-          const gradingTime = Date.now() - gradingStartTime;
-          const totalTime = Date.now() - totalStartTime;
-          console.log(`✓ Grading completed for ${repositoryInfo.owner}/${repositoryInfo.repo} - Grading: ${gradingTime}ms, Total: ${totalTime}ms`);
-          return result;
-        }).catch(error => {
-          const gradingTime = Date.now() - gradingStartTime;
-          console.log(`✗ Grading failed for ${repositoryInfo.owner}/${repositoryInfo.repo} - Grading: ${gradingTime}ms`);
-          throw error;
-        });
+        )
+          .then((result) => {
+            const gradingTime = Date.now() - gradingStartTime;
+            const totalTime = Date.now() - totalStartTime;
+            console.log(
+              `✓ Grading completed for ${repositoryInfo.owner}/${repositoryInfo.repo} - Grading: ${gradingTime}ms, Total: ${totalTime}ms`
+            );
+            return result;
+          })
+          .catch((error) => {
+            const gradingTime = Date.now() - gradingStartTime;
+            console.log(
+              `✗ Grading failed for ${repositoryInfo.owner}/${repositoryInfo.repo} - Grading: ${gradingTime}ms`
+            );
+            throw error;
+          });
 
         return {
           content: repositoryContent.formattedContent,
@@ -428,7 +434,9 @@ export class SandboxService {
       }
 
       const totalTime = Date.now() - totalStartTime;
-      console.log(`✓ Repository processing completed for ${repositoryInfo.owner}/${repositoryInfo.repo} - Total: ${totalTime}ms (no grading)`);
+      console.log(
+        `✓ Repository processing completed for ${repositoryInfo.owner}/${repositoryInfo.repo} - Total: ${totalTime}ms (no grading)`
+      );
 
       return {
         content: repositoryContent.formattedContent,
