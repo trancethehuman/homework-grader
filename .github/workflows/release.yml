@@ -7,9 +7,11 @@ on:
 
 jobs:
   release:
+    name: Build, Test & Publish Release
     runs-on: ubuntu-latest
     permissions:
       contents: write # Needed to create GitHub releases
+      packages: write # Needed to publish to GitHub Packages
       
     steps:
       - name: Checkout repository
@@ -58,6 +60,29 @@ jobs:
         run: npm publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          
+      - name: Setup Node.js for GitHub Packages
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@trancethehuman'
+          
+      - name: Publish to GitHub Packages
+        run: |
+          # Create a temporary package.json with GitHub Packages scope
+          cp package.json package.json.backup
+          node -e "
+            const pkg = require('./package.json');
+            pkg.name = '@trancethehuman/' + pkg.name;
+            pkg.publishConfig = { registry: 'https://npm.pkg.github.com' };
+            require('fs').writeFileSync('package.json', JSON.stringify(pkg, null, 2));
+          "
+          npm publish
+          # Restore original package.json
+          mv package.json.backup package.json
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           
       - name: Create GitHub Release
         uses: actions/create-release@v1

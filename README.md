@@ -1,5 +1,10 @@
 # Homework Grader
 
+[![CI](https://github.com/trancethehuman/homework-grader/actions/workflows/ci.yml/badge.svg)](https://github.com/trancethehuman/homework-grader/actions/workflows/ci.yml)
+[![Release](https://github.com/trancethehuman/homework-grader/actions/workflows/release.yml/badge.svg)](https://github.com/trancethehuman/homework-grader/actions/workflows/release.yml)
+[![npm version](https://badge.fury.io/js/homework-grader.svg)](https://badge.fury.io/js/homework-grader)
+[![Node.js Version](https://img.shields.io/badge/node-%3E%3D22.0.0-brightgreen.svg)](https://nodejs.org/)
+
 A high-performance TypeScript CLI for processing homework submissions from CSV files and Notion databases with ultra-fast GitHub repository analysis.
 
 ## Installation
@@ -7,13 +12,21 @@ A high-performance TypeScript CLI for processing homework submissions from CSV f
 ### Global Installation (Recommended)
 
 ```bash
+# From NPM (public)
 npm install -g homework-grader
+
+# From GitHub Packages (alternative)
+npm install -g @trancethehuman/homework-grader
 ```
 
 ### Using npx (No Installation Required)
 
 ```bash
+# From NPM (public)
 npx homework-grader
+
+# From GitHub Packages (alternative)
+npx @trancethehuman/homework-grader
 ```
 
 ### Local Development
@@ -132,11 +145,34 @@ node --version  # Should be >= 22.0.0
 
 ### Publishing Releases
 
-This package uses automated NPM publishing via GitHub Actions:
+This package uses automated publishing via GitHub Actions to both NPM and GitHub Packages:
 
 1. **Update version**: `npm version patch|minor|major`
 2. **Push with tags**: `git push --follow-tags`
-3. **Automatic publishing**: GitHub Actions will build and publish to NPM
+3. **Automatic publishing**: GitHub Actions will build and publish to both registries
+
+#### Creating Your First Release
+
+To create the initial v1.0.0 release:
+
+```bash
+# Ensure you're on main branch with latest changes
+git checkout main
+git pull origin main
+
+# Create version 1.0.0 (if not already)
+npm version 1.0.0
+
+# Push with tags to trigger release
+git push --follow-tags
+```
+
+This will:
+- ✅ Trigger the release workflow
+- ✅ Publish to NPM as `homework-grader`
+- ✅ Publish to GitHub Packages as `@trancethehuman/homework-grader`  
+- ✅ Create a GitHub Release with changelog
+- ✅ Make the package visible in GitHub Packages tab
 
 ### Setting up NPM Token (Maintainers)
 
@@ -162,10 +198,12 @@ For automated publishing, add `NPM_TOKEN` to repository secrets:
 
 ### CI/CD Pipeline
 
-- ✅ **Build testing** on Node.js 22+
-- ✅ **Package verification** 
-- ✅ **Automated NPM publishing** on version tags
-- ✅ **GitHub releases** with changelog
+- ✅ **Multi-version testing** on Node.js 22 & 23
+- ✅ **Package installation verification**
+- ✅ **Dual publishing** to NPM + GitHub Packages
+- ✅ **Automated GitHub releases** with changelog
+- ✅ **Build artifacts** stored for debugging
+- ✅ **Status badges** show real-time build status
 
 ## License
 
