@@ -2,10 +2,12 @@ services:
   - type: web
     name: notion-proxy
     runtime: node
+    plan: free
     rootDir: notion-proxy
     buildCommand: npm install
     startCommand: npm start
     autoDeploy: true
+    healthCheckPath: /health
     envVars:
       - key: NOTION_CLIENT_ID
         sync: false
