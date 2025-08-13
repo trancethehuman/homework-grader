@@ -170,36 +170,37 @@ homework-grader
 
 ## Development & Contributing
 
-### Publishing Releases
+### Automatic Publishing
 
-This package uses automated publishing via GitHub Actions to both NPM and GitHub Packages:
+This package uses **fully automated publishing** - no manual steps required!
 
-1. **Update version**: `npm version patch|minor|major`
-2. **Push with tags**: `git push --follow-tags`
-3. **Automatic publishing**: GitHub Actions will build and publish to both registries
+**Every push to `main` branch automatically:**
+1. ✅ **Builds and tests** the package
+2. ✅ **Auto-increments version** if needed (patch version bump)
+3. ✅ **Publishes to NPM** as `homework-grader`
+4. ✅ **Publishes to GitHub Packages** as `@trancethehuman/homework-grader`
+5. ✅ **Creates GitHub Release** with changelog
+6. ✅ **Creates git tag** for the version
 
-#### Creating Your First Release
-
-To create the initial v1.0.0 release:
+#### How It Works
 
 ```bash
-# Ensure you're on main branch with latest changes
-git checkout main
-git pull origin main
+# Just push your changes to main
+git add .
+git commit -m "Add new feature"
+git push origin main
 
-# Create version 1.0.0 (if not already)
-npm version 1.0.0
-
-# Push with tags to trigger release
-git push --follow-tags
+# GitHub Actions automatically:
+# - Detects if version exists on NPM
+# - Increments patch version if needed (1.0.0 → 1.0.1)
+# - Publishes to both NPM and GitHub Packages
+# - Creates release notes
 ```
 
-This will:
-- ✅ Trigger the release workflow
-- ✅ Publish to NPM as `homework-grader`
-- ✅ Publish to GitHub Packages as `@trancethehuman/homework-grader`  
-- ✅ Create a GitHub Release with changelog
-- ✅ Make the package visible in GitHub Packages tab
+#### Version Management
+- **First publish**: Uses version from `package.json` (currently 1.0.0)
+- **Subsequent pushes**: Auto-increments patch version (1.0.0 → 1.0.1 → 1.0.2...)
+- **Manual control**: Update `package.json` version manually for major/minor releases
 
 ### Setting up NPM Token (Maintainers)
 

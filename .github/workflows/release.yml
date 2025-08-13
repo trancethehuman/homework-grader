@@ -2,8 +2,7 @@ name: Release & Publish
 
 on:
   push:
-    tags:
-      - 'v*' # Triggers on version tags like v1.0.0, v1.1.0, etc.
+    branches: [main] # Trigger on every push to main branch
 
 jobs:
   release:
@@ -39,22 +38,36 @@ jobs:
           timeout 10s node dist/cli.js --help || true
           echo "CLI smoke test passed"
           
-      - name: Extract version from tag
+      - name: Auto-increment version
         id: version
         run: |
-          VERSION=${GITHUB_REF#refs/tags/v}
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Releasing version: $VERSION"
+          # Get current version from package.json
+          CURRENT_VERSION=$(node -p "require('./package.json').version")
+          echo "Current version: $CURRENT_VERSION"
           
-      - name: Verify package.json version matches tag
-        run: |
-          PACKAGE_VERSION=$(node -p "require('./package.json').version")
-          TAG_VERSION="${{ steps.version.outputs.version }}"
-          if [ "$PACKAGE_VERSION" != "$TAG_VERSION" ]; then
-            echo "Version mismatch: package.json has $PACKAGE_VERSION but tag is $TAG_VERSION"
-            exit 1
+          # Check if this version exists on NPM
+          if npm view homework-grader@$CURRENT_VERSION version 2>/dev/null; then
+            echo "Version $CURRENT_VERSION already exists on NPM, incrementing patch version..."
+            # Auto-increment patch version
+            NEW_VERSION=$(node -e "
+              const semver = '$CURRENT_VERSION'.split('.');
+              semver[2] = String(parseInt(semver[2]) + 1);
+              console.log(semver.join('.'));
+            ")
+            echo "New version: $NEW_VERSION"
+            
+            # Update package.json with new version
+            node -e "
+              const pkg = require('./package.json');
+              pkg.version = '$NEW_VERSION';
+              require('fs').writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+            "
+            
+            echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          else
+            echo "Version $CURRENT_VERSION is new, proceeding with current version"
+            echo "version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
           fi
-          echo "Version verification passed: $PACKAGE_VERSION"
           
       - name: Publish to NPM
         run: npm publish
@@ -84,15 +97,24 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           
+      - name: Create Git Tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "v${{ steps.version.outputs.version }}" -m "Release v${{ steps.version.outputs.version }}"
+          git push origin "v${{ steps.version.outputs.version }}"
+
       - name: Create GitHub Release
         uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ github.ref }}
-          release_name: Release ${{ steps.version.outputs.version }}
+          tag_name: v${{ steps.version.outputs.version }}
+          release_name: Release v${{ steps.version.outputs.version }}
           body: |
-            ## 🚀 Release ${{ steps.version.outputs.version }}
+            ## 🚀 Release v${{ steps.version.outputs.version }}
+            
+            **Auto-published from commit:** ${{ github.sha }}
             
             ### Installation
             ```bash
@@ -102,9 +124,9 @@ jobs:
             ```
             
             ### What's New
-            - See commit history for detailed changes
+            - Latest changes from main branch
             - Built and tested on Node.js 22+
-            - Ready for production use
+            - Automatically published on every push
             
             ### Links
             - 📦 [NPM Package](https://www.npmjs.com/package/homework-grader)
