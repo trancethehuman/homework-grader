@@ -12,8 +12,8 @@ pnpm start
 
 ## Features
 
-- **Ultra-Fast Processing**: Vercel Sandbox integration with 5-20x performance boost
-- **Dual Processing Modes**: Vercel Sandbox (default) with GitHub API fallback
+- **Ultra-Fast Processing**: Sandbox integration with 5-20x performance boost
+- **Dual Processing Modes**: Sandbox (default) with GitHub API fallback
 - **Interactive CLI**: React/Ink-based interface with step-by-step workflow
 - **Real-Time Metrics**: Processing speed and timing data for all operations
 - **Smart Optimization**: Adapts strategy based on repository size
@@ -43,20 +43,19 @@ GOOGLE_GENERATIVE_AI_API_KEY="your-google-ai-api-key"
 # Optional override (defaults to hosted proxy if omitted):
 # NOTION_PROXY_URL=https://<your-render-service>.onrender.com
 
-# Vercel Sandbox (required for ultra-fast processing)
-VERCEL_OIDC_TOKEN="your-vercel-oidc-token"
-VERCEL_SANDBOX_ENABLED=true
+# Sandbox (required for ultra-fast processing)
+E2B_API_KEY="your-e2b-api-key"
 
 # Optional GitHub API settings
 GITHUB_TOKEN="your-github-token"
-GITHUB_API_ONLY=true  # Force GitHub API mode (skip Vercel Sandbox)
+GITHUB_API_ONLY=true  # Force GitHub API mode (skip sandbox)
 ```
 
 **Setup Instructions:**
 
 1. **AI Providers**: Get API keys from [OpenAI](https://platform.openai.com/api-keys), [Anthropic](https://console.anthropic.com/), or [Google AI](https://makersuite.google.com/app/apikey)
 2. **Notion**: Create integration at [Notion Developers](https://www.notion.so/my-integrations). Use OAuth via the bundled proxy instead of a Notion API key. The CLI will open a browser to connect your workspace.
-3. **Vercel Sandbox**: Get OIDC token from your Vercel project settings
+3. **Sandbox**: Get API key from your [E2B Dashboard](https://e2b.dev/)
 
 ## Notion OAuth Architecture (short)
 

@@ -14,14 +14,14 @@ export const DataSourceSelector: React.FC<DataSourceSelectorProps> = ({
 
   const options: { id: DataSource; name: string; description: string }[] = [
     {
-      id: "csv",
-      name: "CSV File",
-      description: "Load GitHub URLs from a CSV file",
-    },
-    {
       id: "notion",
       name: "Notion Database",
       description: "Load GitHub URLs from a Notion database",
+    },
+    {
+      id: "csv",
+      name: "CSV File",
+      description: "Load GitHub URLs from a CSV file",
     },
   ];
 

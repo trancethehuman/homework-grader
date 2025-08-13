@@ -160,7 +160,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
     if (step === "notion-auth-loading") {
       interval = setInterval(() => {
         setLoadingIconIndex((prev) => (prev + 1) % 6);
-      }, 300);
+      }, 2000);
     }
     
     return () => {
@@ -198,7 +198,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           setOriginalDatabaseId(notionApiSelectedPageId);
         }
 
-        // Determine which processing method to use (default to Vercel Sandbox)
+        // Determine which processing method to use (default to sandbox)
         const useGitHubAPI = process.env.GITHUB_API_ONLY === "true";
 
         // Initialize services once for efficiency
@@ -215,11 +215,11 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
             sandboxService = new SandboxService();
             await sandboxService.initialize();
             console.log(
-              `🚀 Using Vercel Sandbox for processing ${notionGitHubUrls.length} repositories`
+              `🚀 Using sandbox for processing ${notionGitHubUrls.length} repositories`
             );
           } catch (sandboxError) {
             console.warn(
-              `Failed to initialize Vercel Sandbox, falling back to GitHub API:`,
+              `Failed to initialize sandbox, falling back to GitHub API:`,
               sandboxError
             );
             githubService = new GitHubService(githubToken, undefined, maxDepth);
@@ -250,7 +250,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
               let repoInfo: any;
 
               if (sandboxService) {
-                // Use Vercel Sandbox
+                // Use sandbox
                 repoInfo = sandboxService.parseGitHubUrl(url);
                 if (repoInfo) {
                   result = await sandboxService.processGitHubUrl(
@@ -324,7 +324,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         } finally {
           // Cleanup sandbox if it was used
           if (sandboxService) {
-            console.log(`🧹 Cleaning up Vercel Sandbox...`);
+            console.log(`🧹 Cleaning up sandbox...`);
             await sandboxService.cleanup();
           }
         }
