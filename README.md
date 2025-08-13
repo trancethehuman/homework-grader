@@ -128,6 +128,45 @@ node --version  # Should be >= 22.0.0
 3. **Notion OAuth fails** - The proxy service may be cold starting
    - Try: Wait a moment and retry the authentication
 
+## Development & Contributing
+
+### Publishing Releases
+
+This package uses automated NPM publishing via GitHub Actions:
+
+1. **Update version**: `npm version patch|minor|major`
+2. **Push with tags**: `git push --follow-tags`
+3. **Automatic publishing**: GitHub Actions will build and publish to NPM
+
+### Setting up NPM Token (Maintainers)
+
+For automated publishing, add `NPM_TOKEN` to repository secrets:
+
+1. **Get NPM Token**:
+   - Go to [npmjs.com](https://www.npmjs.com) → Profile → Access Tokens
+   - Generate "Automation" token for `homework-grader`
+   - Copy the token (starts with `npm_...`)
+
+2. **Add to GitHub**:
+   - Go to repository → Settings → Secrets and variables → Actions
+   - Add secret: `NPM_TOKEN` with your token value
+
+3. **Release Process**:
+   ```bash
+   # Update version and create git tag
+   npm version patch  # or minor/major
+   
+   # Push to trigger automated release
+   git push --follow-tags
+   ```
+
+### CI/CD Pipeline
+
+- ✅ **Build testing** on Node.js 22+
+- ✅ **Package verification** 
+- ✅ **Automated NPM publishing** on version tags
+- ✅ **GitHub releases** with changelog
+
 ## License
 
 MIT

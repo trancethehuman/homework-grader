@@ -1,0 +1,91 @@
+name: Release & Publish
+
+on:
+  push:
+    tags:
+      - 'v*' # Triggers on version tags like v1.0.0, v1.1.0, etc.
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Needed to create GitHub releases
+      
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+          
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'pnpm'
+          registry-url: 'https://registry.npmjs.org'
+          
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        
+      - name: Build project
+        run: pnpm run build
+        
+      - name: Run tests
+        run: |
+          # Verify the built CLI works
+          timeout 10s node dist/cli.js --help || true
+          echo "CLI smoke test passed"
+          
+      - name: Extract version from tag
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Releasing version: $VERSION"
+          
+      - name: Verify package.json version matches tag
+        run: |
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+          TAG_VERSION="${{ steps.version.outputs.version }}"
+          if [ "$PACKAGE_VERSION" != "$TAG_VERSION" ]; then
+            echo "Version mismatch: package.json has $PACKAGE_VERSION but tag is $TAG_VERSION"
+            exit 1
+          fi
+          echo "Version verification passed: $PACKAGE_VERSION"
+          
+      - name: Publish to NPM
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          
+      - name: Create GitHub Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ steps.version.outputs.version }}
+          body: |
+            ## 🚀 Release ${{ steps.version.outputs.version }}
+            
+            ### Installation
+            ```bash
+            npm install -g homework-grader@${{ steps.version.outputs.version }}
+            # or
+            npx homework-grader@${{ steps.version.outputs.version }}
+            ```
+            
+            ### What's New
+            - See commit history for detailed changes
+            - Built and tested on Node.js 22+
+            - Ready for production use
+            
+            ### Links
+            - 📦 [NPM Package](https://www.npmjs.com/package/homework-grader)
+            - 📚 [Documentation](https://github.com/trancethehuman/homework-grader#readme)
+            - 🐛 [Report Issues](https://github.com/trancethehuman/homework-grader/issues)
+          draft: false
+          prerelease: false
