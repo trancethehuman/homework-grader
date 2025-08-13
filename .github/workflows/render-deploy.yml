@@ -12,7 +12,7 @@ jobs:
       - name: Install jq
         run: sudo apt-get update && sudo apt-get install -y jq
 
-      - name: Deploy via Render API (with status)
+      - name: Deploy via Render (hook + API status)
         env:
           RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
           RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
@@ -20,56 +20,44 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [ -n "${RENDER_API_KEY:-}" ] && [ -n "${RENDER_SERVICE_ID:-}" ]; then
-            echo "Creating deploy on Render service $RENDER_SERVICE_ID"
-            DEPLOY_JSON=$(curl -fsSL -X POST \
-              -H "Authorization: Bearer $RENDER_API_KEY" \
-              -H "Content-Type: application/json" \
-              https://api.render.com/v1/services/$RENDER_SERVICE_ID/deploys \
-              -d '{}')
-            DEPLOY_ID=$(echo "$DEPLOY_JSON" | jq -r '.id')
-            if [ -z "$DEPLOY_ID" ] || [ "$DEPLOY_ID" = "null" ]; then
-              echo "Failed to create deploy: $DEPLOY_JSON" >&2
-              exit 1
-            fi
-            echo "Deploy created: $DEPLOY_ID"
-
-            # Poll until completion (use service-scoped endpoint; 404-safe)
-            sleep 5
-            while true; do
-              STATUS_JSON=$(curl -sS -w "\n%{http_code}" \
-                -H "Authorization: Bearer $RENDER_API_KEY" \
-                https://api.render.com/v1/services/$RENDER_SERVICE_ID/deploys/$DEPLOY_ID)
-              HTTP_CODE=$(echo "$STATUS_JSON" | tail -n1)
-              BODY=$(echo "$STATUS_JSON" | head -n-1)
-              if [ "$HTTP_CODE" = "404" ]; then
-                # Fallback: list latest deploy
-                LIST_JSON=$(curl -fsSL -H "Authorization: Bearer $RENDER_API_KEY" \
-                  "https://api.render.com/v1/services/$RENDER_SERVICE_ID/deploys?limit=1")
-                BODY=$(echo "$LIST_JSON" | jq '.[0]')
-              fi
-              STATUS=$(echo "$BODY" | jq -r '.status')
-              echo "Deploy status: $STATUS"
-              case "$STATUS" in
-                live|succeeded)
-                  echo "Deploy succeeded"
-                  break
-                  ;;
-                failed|build_failed|canceled)
-                  echo "Deploy failed: $BODY" >&2
-                  exit 1
-                  ;;
-                *)
-                  sleep 5
-                  ;;
-              esac
-            done
-          else
-            # Fallback to hook if API credentials not provided
-            if [ -z "${RENDER_DEPLOY_HOOK_URL:-}" ]; then
-              echo "Neither RENDER_API_KEY/RENDER_SERVICE_ID nor RENDER_DEPLOY_HOOK_URL is set" >&2
-              exit 1
-            fi
-            echo "Triggering Render deploy hook"
-            curl -fsSL -X POST "$RENDER_DEPLOY_HOOK_URL"
+          # Require hook + API for status polling
+          if [ -z "${RENDER_DEPLOY_HOOK_URL:-}" ]; then
+            echo "RENDER_DEPLOY_HOOK_URL secret is not set" >&2
+            exit 1
           fi
+          if [ -z "${RENDER_API_KEY:-}" ] || [ -z "${RENDER_SERVICE_ID:-}" ]; then
+            echo "RENDER_API_KEY and/or RENDER_SERVICE_ID not set for status polling" >&2
+            exit 1
+          fi
+
+          echo "Triggering Render deploy hook"
+          curl -fsSL -X POST "$RENDER_DEPLOY_HOOK_URL"
+
+          echo "Polling latest deploy status for service $RENDER_SERVICE_ID"
+          # Wait for deploy to appear and complete
+          for i in $(seq 1 240); do # ~20 minutes max
+            LIST_JSON=$(curl -fsSL -H "Authorization: Bearer $RENDER_API_KEY" \
+              "https://api.render.com/v1/services/$RENDER_SERVICE_ID/deploys?limit=1")
+            DEPLOY=$(echo "$LIST_JSON" | jq '.[0]')
+            ID=$(echo "$DEPLOY" | jq -r '.id')
+            STATUS=$(echo "$DEPLOY" | jq -r '.status')
+            echo "Latest deploy: $ID status=$STATUS"
+            case "$STATUS" in
+              live|succeeded)
+                echo "Deploy succeeded"
+                exit 0
+                ;;
+              failed|build_failed|canceled)
+                echo "Deploy failed: $DEPLOY" >&2
+                exit 1
+                ;;
+              null|"" )
+                sleep 5
+                ;;
+              * )
+                sleep 5
+                ;;
+            esac
+          done
+          echo "Timed out waiting for Render deploy to finish" >&2
+          exit 1
