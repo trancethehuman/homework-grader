@@ -3,12 +3,21 @@
   "version": "1.0.0",
   "description": "A homework grading system with CSV URL loading functionality",
   "main": "dist/cli.js",
+  "bin": {
+    "homework-grader": "./dist/cli.js"
+  },
   "type": "module",
   "packageManager": "pnpm@9.15.0",
+  "files": [
+    "dist/**/*",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc",
     "start": "pnpm run build && node dist/cli.js",
     "clean": "rm -rf dist",
+    "prepublishOnly": "pnpm run clean && pnpm run build",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
@@ -28,16 +37,16 @@
     "typescript": "^5.8.3"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "2.0.0-beta.5",
-    "@ai-sdk/google": "2.0.0-beta.13",
-    "@ai-sdk/openai": "2.0.0-beta.6",
-    "@ai-sdk/react": "2.0.0-beta.14",
+    "@ai-sdk/anthropic": "^2.0.0",
+    "@ai-sdk/google": "^2.0.0",
+    "@ai-sdk/openai": "^2.0.0",
+    "@ai-sdk/react": "^2.0.0",
     "@modelcontextprotocol/sdk": "^1.15.1",
     "@notionhq/client": "^4.0.1",
     "@octokit/rest": "^22.0.0",
     "@types/react": "^19.1.8",
-    "@vercel/sandbox": "^0.0.13",
-    "ai": "5.0.0-beta.14",
+    "@e2b/code-interpreter": "^1.5.1",
+    "ai": "^5.0.0",
     "csv-parser": "^3.2.0",
     "dotenv": "^17.2.0",
     "ink": "^6.0.1",

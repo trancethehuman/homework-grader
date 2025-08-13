@@ -1,0 +1,42 @@
+# Source files
+src/
+tsconfig.json
+tsconfig.tsbuildinfo
+
+# Development files
+.env*
+.env
+.env.local
+.env.development
+.env.production
+.env.example
+node_modules/
+pnpm-lock.yaml
+
+# Test and sample files
+test-results/
+sample.csv
+
+# Development configuration
+notion-proxy/
+shared/
+
+# Build artifacts
+*.log
+*.tgz
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db

@@ -5,6 +5,7 @@ import * as path from "path";
 import csv from "csv-parser";
 import open from "open";
 import { TokenStorage } from "./lib/token-storage.js";
+import { E2BTokenStorage } from "./lib/e2b-token-storage.js";
 import { GitHubService } from "./github/github-service.js";
 import { GitHubUrlDetector } from "./lib/github-url-detector.js";
 import { saveRepositoryFiles } from "./lib/file-saver.js";
@@ -57,6 +58,7 @@ interface InteractiveCSVProps {
     columnName: string,
     urls: string[],
     githubToken?: string,
+    e2bApiKey?: string,
     provider?: AIProvider
   ) => void;
   onError: (error: string) => void;
@@ -65,9 +67,12 @@ interface InteractiveCSVProps {
 type Step =
   | "github-token"
   | "validating-token"
+  | "e2b-api-key"
+  | "validating-e2b-key"
   | "provider-select"
   | "data-source-select"
   | "notion-auth"
+  | "notion-auth-loading"
   | "notion-oauth-prompt"
   | "notion-url-input"
   | "notion-fetching"
@@ -93,6 +98,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
   const [csvPath, setCsvPath] = useState("");
   const [input, setInput] = useState("");
   const [githubToken, setGithubToken] = useState<string | undefined>();
+  const [e2bApiKey, setE2bApiKey] = useState<string | undefined>();
   const [selectedProvider, setSelectedProvider] = useState<AIProvider | null>(
     null
   );
@@ -127,6 +133,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
   const [selectedColumn, setSelectedColumn] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
   const [tokenStorage] = useState(new TokenStorage());
+  const [e2bTokenStorage] = useState(new E2BTokenStorage());
   const [preferencesStorage] = useState(new PreferencesStorage());
   const [processingResults, setProcessingResults] = useState<{
     processed: number;
@@ -140,8 +147,28 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
   >();
   const [validatingToken, setValidatingToken] = useState(false);
   const [tokenValid, setTokenValid] = useState<boolean | null>(null);
+  const [validatingE2BKey, setValidatingE2BKey] = useState(false);
+  const [e2bKeyValid, setE2BKeyValid] = useState<boolean | null>(null);
   const [skipGitHub, setSkipGitHub] = useState(false);
+  const [loadingIconIndex, setLoadingIconIndex] = useState(0);
   const { exit } = useApp();
+
+  // Loading animation for Notion auth
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    
+    if (step === "notion-auth-loading") {
+      interval = setInterval(() => {
+        setLoadingIconIndex((prev) => (prev + 1) % 6);
+      }, 300);
+    }
+    
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
+  }, [step]);
 
   // Process GitHub URLs when entering notion-processing step
   useEffect(() => {
@@ -183,7 +210,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         } else {
           try {
             const { SandboxService } = await import(
-              "./lib/vercel-sandbox/index.js"
+              "./lib/sandbox/index.js"
             );
             sandboxService = new SandboxService();
             await sandboxService.initialize();
@@ -349,7 +376,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
 
           if (validation.valid) {
             setTokenValid(true);
-            setStep("provider-select");
+            setStep("e2b-api-key");
           } else {
             setTokenValid(false);
             setStep("github-token");
@@ -369,6 +396,71 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
 
     initializeToken();
   }, [tokenStorage, preferencesStorage]);
+
+  // Handle E2B API key initialization
+  useEffect(() => {
+    const initializeE2BKey = async () => {
+      if (step !== "e2b-api-key") return;
+      
+      const savedKey = e2bTokenStorage.getToken();
+      const envKey = process.env.E2B_API_KEY;
+      const key = savedKey || envKey;
+
+      if (key) {
+        setE2bApiKey(key);
+        setValidatingE2BKey(true);
+        setStep("validating-e2b-key");
+
+        try {
+          // Validate E2B API key format
+          if (e2bTokenStorage.validateKeyFormat(key)) {
+            setE2BKeyValid(true);
+            setStep("provider-select");
+          } else {
+            setE2BKeyValid(false);
+            setStep("e2b-api-key");
+            console.error("E2B API key format is invalid");
+          }
+        } catch (error) {
+          setE2BKeyValid(false);
+          setStep("e2b-api-key");
+          console.error("E2B API key validation error:", error);
+        } finally {
+          setValidatingE2BKey(false);
+        }
+      }
+    };
+
+    initializeE2BKey();
+  }, [step, e2bTokenStorage]);
+
+  // Handle Notion authentication loading transition
+  useEffect(() => {
+    if (step === "notion-auth-loading") {
+      const timer = setTimeout(async () => {
+        // Check if user already has authentication
+        const storage = new NotionTokenStorage();
+        const hasExistingAuth = storage.hasToken();
+        
+        if (hasExistingAuth) {
+          // Try to use existing auth directly
+          try {
+            await notionOAuthClient.refreshIfPossible();
+            await notionOAuthClient.ensureAuthenticated();
+            setStep("notion-api-page-select");
+          } catch (e: any) {
+            // Auth failed, show OAuth info page
+            setStep("notion-oauth-info");
+          }
+        } else {
+          // No existing auth, show OAuth info page
+          setStep("notion-oauth-info");
+        }
+      }, 1500); // Show loading animation for 1.5 seconds
+      
+      return () => clearTimeout(timer);
+    }
+  }, [step, notionOAuthClient]);
 
   // Handle Notion authentication flow
   useEffect(() => {
@@ -561,7 +653,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
                 }
                 setGithubToken(newToken);
                 setTokenValid(true);
-                setStep("provider-select");
+                setStep("e2b-api-key");
               } else {
                 setTokenValid(false);
                 setStep("github-token");
@@ -578,7 +670,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         } else {
           // Skip GitHub authentication
           setSkipGitHub(true);
-          setStep("provider-select");
+          setStep("e2b-api-key");
         }
         setInput("");
       } else if (key.backspace || key.delete) {
@@ -599,6 +691,74 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
       } else if (inputChar === "s" && !input) {
         // Skip GitHub authentication
         setSkipGitHub(true);
+        setStep("e2b-api-key");
+      } else if (
+        inputChar &&
+        !key.ctrl &&
+        !key.meta &&
+        !key.escape &&
+        !key.return
+      ) {
+        setInput((prev) => prev + inputChar);
+      }
+    } else if (step === "e2b-api-key") {
+      if (key.return) {
+        const newKey = input.trim() || e2bApiKey;
+        if (newKey) {
+          setValidatingE2BKey(true);
+          setStep("validating-e2b-key");
+
+          // Validate the E2B API key
+          (async () => {
+            try {
+              if (e2bTokenStorage.validateKeyFormat(newKey)) {
+                if (newKey !== e2bApiKey) {
+                  try {
+                    e2bTokenStorage.saveToken(newKey);
+                    console.log(
+                      "✓ E2B API key saved securely to:",
+                      e2bTokenStorage.getConfigDir()
+                    );
+                  } catch (err) {
+                    console.error("Error saving E2B API key:", err);
+                  }
+                }
+                setE2bApiKey(newKey);
+                setE2BKeyValid(true);
+                setStep("provider-select");
+              } else {
+                setE2BKeyValid(false);
+                setStep("e2b-api-key");
+                console.error("E2B API key format is invalid");
+              }
+            } catch (error) {
+              setE2BKeyValid(false);
+              setStep("e2b-api-key");
+              console.error("E2B API key validation error:", error);
+            } finally {
+              setValidatingE2BKey(false);
+            }
+          })();
+        } else {
+          // Skip E2B, proceed to provider selection
+          setStep("provider-select");
+        }
+        setInput("");
+      } else if (key.backspace || key.delete) {
+        setInput((prev) => prev.slice(0, -1));
+      } else if (inputChar === "o" && !input) {
+        // Open browser to E2B dashboard
+        open("https://e2b.dev/");
+        setInput("");
+      } else if (inputChar === "c" && !input) {
+        // Clear stored E2B API key
+        e2bTokenStorage.clearToken();
+        setE2bApiKey(undefined);
+        setE2BKeyValid(null);
+        setInput("");
+        console.log("✓ E2B API key cleared from storage");
+      } else if (inputChar === "s" && !input) {
+        // Skip E2B API key
         setStep("provider-select");
       } else if (
         inputChar &&
@@ -617,8 +777,8 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         // Copy URL to clipboard - for CLI we'll just show it
         console.log("OAuth URL copied to console:", oauthUrl);
       } else if (inputChar === "r") {
-        // Retry authentication after OAuth
-        setStep("notion-auth");
+        // Retry authentication after OAuth with loading animation
+        setStep("notion-auth-loading");
       } else if (inputChar === "b") {
         // Go back to data source selection
         setStep("data-source-select");
@@ -685,6 +845,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
             selectedProperty,
             [], // We'll implement URL extraction later
             skipGitHub ? undefined : githubToken,
+            e2bApiKey,
             selectedProvider || DEFAULT_PROVIDER
           );
           setStep("complete");
@@ -756,6 +917,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
             analysis.columns[selectedColumn].name,
             urls,
             skipGitHub ? undefined : githubToken,
+            e2bApiKey,
             selectedProvider || DEFAULT_PROVIDER
           );
           setStep("complete");
@@ -883,6 +1045,105 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
     );
   }
 
+  if (step === "e2b-api-key") {
+    return (
+      <Box flexDirection="column">
+        <Text bold color="blue">
+          E2B API Key Setup
+        </Text>
+        <Text>
+          To process repositories efficiently, please enter your E2B API key:
+        </Text>
+        <Text color="gray">
+          • Press 'o' to open E2B dashboard to get your API key
+        </Text>
+        <Text color="gray">
+          • Press 'c' to clear stored API key and start fresh
+        </Text>
+        <Text color="gray">
+          • Press 's' to skip E2B (will use GitHub API instead)
+        </Text>
+        <Text color="gray">• Or press Enter to continue</Text>
+
+        <Box marginTop={1}>
+          <Text color="gray">Current key: </Text>
+          <Text color={e2bApiKey ? "green" : "red"}>
+            {e2bApiKey ? "****************************" + e2bApiKey.slice(-4) : "None"}
+          </Text>
+        </Box>
+        <Box marginTop={1}>
+          <Text color="gray">Stored in: </Text>
+          <Text color="gray">{e2bTokenStorage.getConfigDir()}</Text>
+        </Box>
+
+        <Box marginTop={1}>
+          <Text color="cyan">Enter E2B API key (or press Enter to skip):</Text>
+          <Text color="white">
+            &gt; {input.replace(/./g, "*")}█
+          </Text>
+        </Box>
+
+        <Box marginTop={1}>
+          <Text color="gray">
+            Commands: 'o' = open E2B dashboard | 'c' = clear key | 's' = skip | Enter = continue | Ctrl+C = exit
+          </Text>
+        </Box>
+
+        {e2bKeyValid === false && (
+          <Box marginTop={1}>
+            <Text color="red">
+              ✗ Invalid E2B API key format. Please check your key and try again.
+            </Text>
+          </Box>
+        )}
+      </Box>
+    );
+  }
+
+  if (step === "validating-e2b-key") {
+    return (
+      <Box flexDirection="column">
+        <Text color="yellow">Validating E2B API key...</Text>
+        <Text>Please wait while we verify your API key format...</Text>
+      </Box>
+    );
+  }
+
+  if (step === "notion-auth-loading") {
+    const loadingIcons = ["🔄", "⚡", "🚀", "✨", "🔮", "💫"];
+    const loadingMessages = [
+      "Connecting to Notion...",
+      "Authenticating your access...",
+      "Preparing your workspace...",
+      "Establishing secure connection...",
+      "Verifying permissions...",
+      "Almost ready..."
+    ];
+    
+    return (
+      <Box flexDirection="column" alignItems="center">
+        <Text bold color="blue">
+          Notion Authentication
+        </Text>
+        <Box marginTop={1} alignItems="center">
+          <Text>
+            {loadingIcons[loadingIconIndex]}
+          </Text>
+        </Box>
+        <Box marginTop={1}>
+          <Text color="cyan">
+            {loadingMessages[loadingIconIndex]}
+          </Text>
+        </Box>
+        <Box marginTop={2}>
+          <Text color="gray">
+            This may take a moment while we connect to your Notion workspace...
+          </Text>
+        </Box>
+      </Box>
+    );
+  }
+
   if (step === "provider-select") {
     return (
       <ProviderSelector
@@ -915,7 +1176,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
             if (source === "csv") {
               setStep("input");
             } else if (source === "notion") {
-              setStep("notion-oauth-info");
+              setStep("notion-auth-loading");
             }
           }}
         />
@@ -1219,8 +1480,8 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
 
             // Fetch the content directly and proceed to column selection
             try {
-              await notionOAuthClient.ensureAuthenticated();
-              const notionService = new NotionService();
+              const token = await notionOAuthClient.ensureAuthenticated();
+              const notionService = new NotionService(token.access_token);
               const content = await notionService.getPageContent(pageId);
               setNotionApiContent(content);
               setStep("notion-github-column-select");
@@ -1275,8 +1536,8 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
 
             // Fetch the content directly and proceed to column selection
             try {
-              await notionOAuthClient.ensureAuthenticated();
-              const notionService = new NotionService();
+              const token = await notionOAuthClient.ensureAuthenticated();
+              const notionService = new NotionService(token.access_token);
               // For databases, we need to get database content (entries), not page content
               const content = await notionService.getDatabaseContent(pageId);
               setNotionApiContent(content);

@@ -83,8 +83,8 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
         // Otherwise fetch fresh data
         const oauth = new NotionOAuthClient();
         await oauth.refreshIfPossible();
-        await oauth.ensureAuthenticated();
-        const notionService = new NotionService();
+        const token = await oauth.ensureAuthenticated();
+        const notionService = new NotionService(token.access_token);
 
         const [pagesData, databasesData] = await Promise.all([
           notionService.getAllPages(),

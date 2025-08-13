@@ -4,7 +4,7 @@ import dotenv from "dotenv";
 import { render } from "ink";
 import { InteractiveCSV } from "./interactive-csv.js";
 import { GitHubService } from "./github/github-service.js";
-import { SandboxService } from "./lib/vercel-sandbox/index.js";
+import { SandboxService } from "./lib/sandbox/index.js";
 import { NUM_URLS_IN_PARALLEL } from "./consts/limits.js";
 import { AIProvider, DEFAULT_PROVIDER } from "./consts/ai-providers.js";
 import { saveRepositoryFiles } from "./lib/file-saver.js";
@@ -92,16 +92,17 @@ async function processGitHubUrlsWithGitHubAPI(
   }
 }
 
-async function processGitHubUrlsWithVercelSandbox(
+async function processGitHubUrlsWithE2BSandbox(
   urls: string[],
   columnName: string,
+  e2bApiKey: string,
   aiProvider?: AIProvider
 ) {
-  const sandboxService = new SandboxService();
+  const sandboxService = new SandboxService({}, e2bApiKey);
   const provider = aiProvider || DEFAULT_PROVIDER;
 
   console.log(`✓ Using AI provider: ${provider.name}`);
-  console.log(`✓ Using parsing method: Vercel Sandbox`);
+  console.log(`✓ Using parsing method: E2B Sandbox`);
 
   console.log(`\nLoaded ${urls.length} GitHub URLs from column: ${columnName}`);
   urls.forEach((url, index) => {
@@ -112,7 +113,7 @@ async function processGitHubUrlsWithVercelSandbox(
     try {
       // Initialize sandbox once for all repositories
       console.log("\n" + "=".repeat(60));
-      console.log("🚀 VERCEL SANDBOX PROCESSING MODE");
+      console.log("🚀 E2B SANDBOX PROCESSING MODE");
       console.log("=".repeat(60));
       
       await sandboxService.initialize();
@@ -153,18 +154,19 @@ async function processGitHubUrls(
   urls: string[],
   columnName: string,
   githubToken?: string,
+  e2bApiKey?: string,
   aiProvider?: AIProvider
 ) {
-  // Default to Vercel Sandbox, fallback to GitHub API if GITHUB_API_ONLY is set
-  const useGitHubAPI = process.env.GITHUB_API_ONLY === 'true';
+  // Default to E2B Sandbox, fallback to GitHub API if GITHUB_API_ONLY is set or no E2B key
+  const useGitHubAPI = process.env.GITHUB_API_ONLY === 'true' || !e2bApiKey;
 
   if (useGitHubAPI) {
     await processGitHubUrlsWithGitHubAPI(urls, columnName, githubToken, aiProvider);
   } else {
     try {
-      await processGitHubUrlsWithVercelSandbox(urls, columnName, aiProvider);
+      await processGitHubUrlsWithE2BSandbox(urls, columnName, e2bApiKey, aiProvider);
     } catch (error) {
-      console.error('\n⚠️  Vercel Sandbox processing failed:', error);
+      console.error('\n⚠️  E2B Sandbox processing failed:', error);
       console.log('\n🔄 Falling back to GitHub API approach...\n');
       
       // Fallback to GitHub API
@@ -196,6 +198,7 @@ async function main() {
         githubUrls,
         "auto-detected",
         process.env.GITHUB_TOKEN,
+        process.env.E2B_API_KEY,
         DEFAULT_PROVIDER
       );
     } catch (error) {
@@ -209,9 +212,9 @@ async function main() {
     // Interactive mode
     const app = render(
       <InteractiveCSV
-        onComplete={async (filePath, columnName, urls, githubToken, aiProvider) => {
+        onComplete={async (filePath, columnName, urls, githubToken, e2bApiKey, aiProvider) => {
           app.unmount();
-          await processGitHubUrls(urls, columnName, githubToken, aiProvider);
+          await processGitHubUrls(urls, columnName, githubToken, e2bApiKey, aiProvider);
         }}
         onError={(error) => {
           app.unmount();

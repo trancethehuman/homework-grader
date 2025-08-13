@@ -51,15 +51,34 @@ pnpm start
 
 ### Usage Workflow
 
+#### NPM Package Installation (Recommended)
+
+The application can be installed and used via npm/npx:
+
 ```bash
-# Production workflow (recommended)
+# One-time execution (no installation required)
+npx homework-grader
+
+# Global installation for repeated use
+npm install -g homework-grader
+homework-grader
+
+# Local installation in a project
+npm install homework-grader
+npx homework-grader
+```
+
+#### Development Workflow
+
+```bash
+# Production workflow (for development)
 pnpm run build          # Build first
 pnpm start              # Interactive mode
 pnpm start sample.csv   # Legacy mode with CSV file
 
 ### Notion in the CLI (very short)
 
-- Selecting “Notion Database” shows a brief screen, detects existing access, and provides a shortcut to clear.
+- Selecting "Notion Database" shows a brief screen, detects existing access, and provides a shortcut to clear.
 - We refresh tokens when possible and prompt for OAuth only when needed.
 
 # Development workflow
@@ -110,12 +129,13 @@ This helps improve performance and reduces token consumption when processing lar
 
 - **GITHUB_TOKEN**: Personal access token for GitHub API (when using GitHub API mode)
 - **GITHUB_MAX_DEPTH**: Maximum directory depth for GitHub API processing (default: 5)
-- **GITHUB_API_ONLY**: Set to 'true' to force GitHub API mode instead of Vercel Sandbox
+- **GITHUB_API_ONLY**: Set to 'true' to force GitHub API mode instead of E2B Sandbox
+- **E2B_API_KEY**: E2B API key for sandbox-based repository processing
 - **AI provider variables**: Various API keys for different AI providers (OpenAI, Anthropic, Google, etc.)
 
-### Vercel Sandbox Performance Architecture
+### E2B Sandbox Performance Architecture
 
-The system now uses **Vercel Sandbox** as the primary repository processing method, delivering dramatically improved performance:
+The system now uses **E2B Sandbox** as the primary repository processing method, delivering dramatically improved performance:
 
 #### **Performance Characteristics**
 
@@ -123,6 +143,7 @@ The system now uses **Vercel Sandbox** as the primary repository processing meth
 - **No rate limits** - processes repositories as fast as the sandbox can handle
 - **No depth restrictions** - analyzes complete repository structure
 - **Real-time metrics** - displays files/second processing speed
+- **Secure isolated environment** - Each processing session runs in a dedicated sandbox
 
 #### **File Reading Optimization Strategies**
 
@@ -143,25 +164,26 @@ The system now uses **Vercel Sandbox** as the primary repository processing meth
    ```
 
 3. **Multi-Level Fallback System**:
-   - Primary: Bulk bash script reading
+   - Primary: Bulk bash script reading via E2B commands
    - Secondary: Parallel individual file reads
-   - Tertiary: Sequential file reads (GitHub API style)
+   - Tertiary: Sequential file reads (GitHub API fallback)
 
 #### **Expected Performance Improvements**
 
-| Repository Size | GitHub API Time | Vercel Sandbox Time | Speed Improvement |
-| --------------- | --------------- | ------------------- | ----------------- |
-| 10 files        | 10-20 seconds   | 1-2 seconds         | **5-10x faster**  |
-| 50 files        | 50-100 seconds  | 2-5 seconds         | **10-20x faster** |
-| 100+ files      | 2-5 minutes     | 5-15 seconds        | **10-20x faster** |
+| Repository Size | GitHub API Time | E2B Sandbox Time | Speed Improvement |
+| --------------- | --------------- | ---------------- | ----------------- |
+| 10 files        | 10-20 seconds   | 1-2 seconds      | **5-10x faster**  |
+| 50 files        | 50-100 seconds  | 2-5 seconds      | **10-20x faster** |
+| 100+ files      | 2-5 minutes     | 5-15 seconds     | **10-20x faster** |
 
 #### **Sandbox Infrastructure**
 
-- **Runtime**: Amazon Linux 2023 with Node.js 22 or Python 3.13
-- **Resources**: 4 vCPUs, 8GB memory (2GB per vCPU)
-- **Timeout**: 10 minutes default (up to 45 minutes maximum)
-- **Network**: Isolated environment with internet access for git cloning
-- **Storage**: Ephemeral `/tmp` directory for repository cloning
+- **Runtime**: E2B cloud-based execution environment
+- **Isolation**: Each processing session runs in a dedicated sandbox
+- **Timeout**: 10 minutes default (configurable)
+- **Network**: Secure internet access for git repository cloning
+- **Storage**: Isolated temporary directory for repository processing
+- **Security**: API key-based authentication with local storage
 
 ## Architecture
 
@@ -185,22 +207,23 @@ The codebase includes:
   - Batch processing to respect GitHub API limits
   - Error handling for authentication and permission issues
 
-- **SandboxService Class** (`src/lib/vercel-sandbox/sandbox-service.ts`)
+- **SandboxService Class** (`src/lib/sandbox/sandbox-service.ts`)
 
-  - **NEW**: High-performance repository processing using Vercel Sandbox (now default)
+  - **NEW**: High-performance repository processing using E2B Sandbox (now default)
   - **Ultra-Fast File Reading**: Optimized parallel and bulk reading strategies
     - Bulk reading: Single bash command processes multiple files simultaneously
     - Parallel batching: Up to 20-100 files processed concurrently
     - Performance metrics: Real-time files/second tracking
     - Smart adaptation: Different strategies for small vs large repositories
     - Robust fallback: Automatic fallback to individual reads if bulk fails
-  - **Isolated Environment**: Spins up dedicated Linux MicroVM for each session
+  - **Isolated Environment**: Spins up dedicated E2B sandbox for each session
   - **Direct Git Cloning**: Clones repositories with shallow depth for performance
   - **No Depth Limitations**: Processes complete repository structure without artificial limits
   - **Comprehensive Logging**: Detailed status tracking with emojis and timing metrics
   - **Resource Management**: Automatic cleanup of sandbox and cloned repositories
   - **Error Resilience**: Multiple fallback mechanisms and graceful error handling
   - **Identical Output Format**: 100% compatible with existing grading pipeline
+  - **Secure API Key Management**: Local storage with format validation
 
 - **Interactive CSV Component** (`src/interactive-csv.tsx`)
 
@@ -225,27 +248,33 @@ The codebase includes:
 
 - **Command Line Interface** (`src/cli.tsx`)
   - Supports both interactive mode and legacy CSV file argument
-  - **NEW**: Defaults to Vercel Sandbox processing with GitHub API fallback
-  - Processes GitHub URLs from CSV files using sandbox environment
+  - **NEW**: Defaults to E2B Sandbox processing with GitHub API fallback
+  - Processes GitHub URLs from CSV files using E2B sandbox environment
   - Displays comprehensive processing status and timing information
   - Generates repository content files in `test-results/` directory
   - Comprehensive error handling with automatic fallback mechanisms
   - Authentication status display for GitHub API when used
 
-### Vercel Sandbox Components
+### E2B Sandbox Components
 
-- **SandboxFileProcessor Class** (`src/lib/vercel-sandbox/sandbox-file-processor.ts`)
+- **SandboxFileProcessor Class** (`src/lib/sandbox/sandbox-file-processor.ts`)
 
   - **High-Performance File Filtering**: Uses identical logic to GitHubService but optimized for local processing
   - **No Depth Restrictions**: Removed artificial depth limitations for complete analysis
   - **Efficient Pattern Matching**: Fast file path and extension filtering
   - **Optimized Find Commands**: Builds efficient find command arguments
 
-- **Sandbox Types** (`src/lib/vercel-sandbox/sandbox-types.ts`)
+- **Sandbox Types** (`src/lib/sandbox/sandbox-types.ts`)
   - **TypeScript Interfaces**: Complete type safety for all sandbox operations
   - **Repository Information**: Structured data for cloned repositories
   - **File Content Types**: Optimized structures for bulk file processing
   - **Configuration Types**: Sandbox runtime and resource configuration
+
+- **E2B Token Storage** (`src/lib/e2b-token-storage.ts`)
+  - **Secure API Key Storage**: Platform-appropriate config directories
+  - **Format Validation**: Validates E2B API key format (e2b_[32-char hex])
+  - **Cross-platform Support**: Works on Windows, macOS, and Linux
+  - **Token Management**: Save, retrieve, and clear API keys securely
 
 ### Constants
 
@@ -271,7 +300,7 @@ The codebase includes:
 - **TypeScript**: Full type safety and compilation
 - **Interactive CLI**: React/Ink components with step-by-step workflow
 - **Dual Processing Methods**:
-  - **Vercel Sandbox (Default)**: High-performance isolated environment processing
+  - **E2B Sandbox (Default)**: High-performance isolated cloud environment processing
   - **GitHub API (Fallback)**: Traditional API-based repository processing
 - **Ultra-High Performance Repository Processing**:
   - **5-20x faster** than traditional GitHub API approach
@@ -282,13 +311,13 @@ The codebase includes:
   - **Smart optimization**: Adapts strategy based on repository size
   - **Robust error handling**: Multiple fallback mechanisms for reliability
   - **Identical output format**: 100% compatible with existing grading pipeline
-- **GitHub Authentication Management** (GitHub API mode):
-  - Secure token storage with platform-appropriate directories
-  - Real-time token validation with GitHub API
-  - Interactive token input with masked display
-  - Browser integration for token generation
-  - Environment variable support
-  - Rate limit awareness (60 vs 5,000 requests/hour)
+- **Authentication Management**:
+  - **GitHub**: Secure token storage, validation, browser integration for token generation
+  - **E2B**: API key storage with format validation and secure local storage
+  - Platform-appropriate config directories (Windows/macOS/Linux)
+  - Interactive credential setup with masked input display
+  - Environment variable support for development
+  - Rate limit awareness (GitHub: 60 vs 5,000 requests/hour, E2B: no limits)
 - **CSV Processing**: File validation, analysis, and URL extraction
 - **Error Handling**: Comprehensive error handling with automatic fallback mechanisms
 - **Resource Management**: Automatic sandbox cleanup and resource deallocation

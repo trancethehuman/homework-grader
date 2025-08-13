@@ -1,4 +1,4 @@
-import { Sandbox } from "@vercel/sandbox";
+import { Sandbox } from "@e2b/code-interpreter";
 import { v4 as uuidv4 } from "uuid";
 import ms from "ms";
 import {
@@ -13,12 +13,14 @@ import { AIProvider } from "../../consts/ai-providers.js";
 import { getRepoScores } from "../../grader/grader.js";
 
 export class SandboxService {
-  private sandbox: any = null;
+  private sandbox: Sandbox | null = null;
   private fileProcessor: SandboxFileProcessor;
   private clonedRepositories: ClonedRepository[] = [];
+  private apiKey: string | null = null;
 
-  constructor(private config: SandboxConfig = {}) {
+  constructor(private config: SandboxConfig = {}, apiKey?: string) {
     this.fileProcessor = new SandboxFileProcessor();
+    this.apiKey = apiKey || process.env.E2B_API_KEY || null;
   }
 
   async initialize(): Promise<void> {
@@ -27,9 +29,11 @@ export class SandboxService {
       return;
     }
 
-    console.log("🚀 Initializing Vercel Sandbox...");
-    console.log(`   Runtime: ${this.config.runtime || "node22"}`);
-    console.log(`   vCPUs: ${this.config.vcpus || 1}`);
+    if (!this.apiKey) {
+      throw new Error("E2B API key is required. Please provide it via constructor or E2B_API_KEY environment variable.");
+    }
+
+    console.log("🚀 Initializing E2B Sandbox...");
     console.log(
       `   Timeout: ${ms(this.config.timeout || ms("10m"), { long: true })}`
     );
@@ -37,18 +41,15 @@ export class SandboxService {
     try {
       const startTime = Date.now();
       this.sandbox = await Sandbox.create({
-        runtime: this.config.runtime || "node22",
-        resources: {
-          vcpus: this.config.vcpus || 1,
-        },
-        timeout: this.config.timeout || ms("10m"),
+        apiKey: this.apiKey,
+        timeoutMs: this.config.timeout || ms("10m"),
       });
 
       const initTime = Date.now() - startTime;
-      console.log(`✓ Vercel Sandbox initialized successfully in ${initTime}ms`);
-      console.log(`   Sandbox ID: ${this.sandbox.id || "unknown"}`);
+      console.log(`✓ E2B Sandbox initialized successfully in ${initTime}ms`);
+      console.log(`   Sandbox ID: ${this.sandbox.sandboxId || "unknown"}`);
     } catch (error: any) {
-      console.error("✗ Failed to initialize Vercel Sandbox:", error);
+      console.error("✗ Failed to initialize E2B Sandbox:", error);
       throw error;
     }
   }
@@ -94,28 +95,17 @@ export class SandboxService {
 
       // Create the repos directory
       console.log("   Creating repository directory...");
-      await this.sandbox.runCommand({
-        cmd: "mkdir",
-        args: ["-p", "/tmp/repos"],
-      });
+      await this.sandbox.commands.run("mkdir -p /tmp/repos");
 
       // Clone the repository
       console.log("   Executing git clone (shallow)...");
-      const cloneResult = await this.sandbox.runCommand({
-        cmd: "git",
-        args: [
-          "clone",
-          "--depth",
-          "1", // Shallow clone for performance
-          repositoryInfo.url,
-          localPath,
-        ],
-      });
+      const cloneResult = await this.sandbox.commands.run(
+        `git clone --depth 1 "${repositoryInfo.url}" "${localPath}"`
+      );
 
       if (cloneResult.exitCode !== 0) {
-        const errorOutput = await cloneResult.stderr();
         throw new Error(
-          `Git clone failed with exit code ${cloneResult.exitCode}: ${errorOutput}`
+          `Git clone failed with exit code ${cloneResult.exitCode}: ${cloneResult.stderr}`
         );
       }
 
@@ -160,21 +150,17 @@ export class SandboxService {
         clonedRepo.localPath
       );
 
-      console.log(`   Executing: find ${findArgs.join(" ")}`);
-      const result = await this.sandbox.runCommand({
-        cmd: "find",
-        args: findArgs,
-      });
+      const findCommand = `find ${findArgs.join(" ")}`;
+      console.log(`   Executing: ${findCommand}`);
+      const result = await this.sandbox.commands.run(findCommand);
 
       if (result.exitCode !== 0) {
-        const errorOutput = await result.stderr();
         throw new Error(
-          `Find command failed with exit code ${result.exitCode}: ${errorOutput}`
+          `Find command failed with exit code ${result.exitCode}: ${result.stderr}`
         );
       }
 
-      // Get stdout using the correct Vercel Sandbox API
-      const stdout = await result.stdout();
+      const stdout = result.stdout;
 
       // Parse the output to get file paths
       const files = stdout
@@ -200,22 +186,17 @@ export class SandboxService {
     }
 
     try {
-      const result = await this.sandbox.runCommand({
-        cmd: "cat",
-        args: [filePath],
-      });
+      const result = await this.sandbox.commands.run(`cat "${filePath}"`);
 
       if (result.exitCode !== 0) {
-        const errorOutput = await result.stderr();
         console.warn(
           `Warning: Could not read file ${filePath} (exit code ${result.exitCode}):`,
-          errorOutput
+          result.stderr
         );
         return "";
       }
 
-      // Get stdout using the correct Vercel Sandbox API
-      return await result.stdout();
+      return result.stdout;
     } catch (error: any) {
       console.warn(`Warning: Could not read file ${filePath}:`, error);
       return "";
@@ -272,10 +253,7 @@ export class SandboxService {
         })
         .join("; ");
 
-      const result = await this.sandbox.runCommand({
-        cmd: "bash",
-        args: ["-c", scriptContent],
-      });
+      const result = await this.sandbox.commands.run(scriptContent);
 
       if (result.exitCode !== 0) {
         // Fallback to individual file reading if bulk fails
@@ -293,7 +271,7 @@ export class SandboxService {
       }
 
       // Parse the bulk output
-      const stdout = await result.stdout();
+      const stdout = result.stdout;
       const fileBlocks = stdout.split(/FILE_START:[^\n]*\n/);
 
       for (let i = 1; i < fileBlocks.length; i++) {
@@ -473,8 +451,8 @@ export class SandboxService {
       return;
     }
 
-    const sandboxId = this.sandbox.id || "unknown";
-    console.log(`🧹 Cleaning up Vercel Sandbox (ID: ${sandboxId})...`);
+    const sandboxId = this.sandbox.sandboxId || "unknown";
+    console.log(`🧹 Cleaning up E2B Sandbox (ID: ${sandboxId})...`);
 
     try {
       const startTime = Date.now();
@@ -484,15 +462,11 @@ export class SandboxService {
         console.log(
           `   Removing ${this.clonedRepositories.length} cloned repositories from /tmp/repos...`
         );
-        const removeResult = await this.sandbox.runCommand({
-          cmd: "rm",
-          args: ["-rf", "/tmp/repos"],
-        });
+        const removeResult = await this.sandbox.commands.run("rm -rf /tmp/repos");
 
         if (removeResult.exitCode !== 0) {
-          const errorOutput = await removeResult.stderr();
           console.warn(
-            `   Warning: Could not remove repositories (exit code ${removeResult.exitCode}): ${errorOutput}`
+            `   Warning: Could not remove repositories (exit code ${removeResult.exitCode}): ${removeResult.stderr}`
           );
         } else {
           console.log(`   ✓ Repositories cleaned up`);
@@ -501,13 +475,13 @@ export class SandboxService {
 
       // Close the sandbox
       console.log(`   Shutting down sandbox...`);
-      await this.sandbox.stop();
+      await this.sandbox.kill();
       this.sandbox = null;
       this.clonedRepositories = [];
 
       const cleanupTime = Date.now() - startTime;
       console.log(
-        `✓ Vercel Sandbox cleaned up successfully in ${cleanupTime}ms`
+        `✓ E2B Sandbox cleaned up successfully in ${cleanupTime}ms`
       );
     } catch (error: any) {
       console.error("✗ Error during sandbox cleanup:", error);
@@ -528,7 +502,7 @@ export class SandboxService {
     const startTime = Date.now();
 
     console.log(
-      `🔄 Processing ${urls.length} GitHub repositories using Vercel Sandbox...`
+      `🔄 Processing ${urls.length} GitHub repositories using E2B Sandbox...`
     );
 
     for (let i = 0; i < urls.length; i++) {

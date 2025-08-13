@@ -49,8 +49,8 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
         setIsLoading(true);
         const oauth = new NotionOAuthClient();
         await oauth.refreshIfPossible();
-        await oauth.ensureAuthenticated();
-        const notionService = new NotionService();
+        const token = await oauth.ensureAuthenticated();
+        const notionService = new NotionService(token.access_token);
 
         // Use the correct API based on content type
         let pageContent;
