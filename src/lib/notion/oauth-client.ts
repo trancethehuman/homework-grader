@@ -26,6 +26,25 @@ export class NotionOAuthClient {
     return token;
   }
 
+  async refreshIfPossible(): Promise<NotionOAuthToken | null> {
+    const existing = this.storage.getToken();
+    if (!existing || !existing.refresh_token) {
+      return null;
+    }
+    const res = await fetch(`${this.proxyBaseUrl}/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh_token: existing.refresh_token }),
+    });
+    if (!res.ok) {
+      return null;
+    }
+    const updated = await res.json();
+    const merged = { ...existing, ...updated } as NotionOAuthToken;
+    this.storage.saveToken(merged);
+    return merged;
+  }
+
   private async performOAuth(): Promise<NotionOAuthToken> {
     const startRes = await fetch(`${this.proxyBaseUrl}/auth/start`);
     if (!startRes.ok) {

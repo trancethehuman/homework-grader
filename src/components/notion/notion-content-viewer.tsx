@@ -48,6 +48,7 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
       try {
         setIsLoading(true);
         const oauth = new NotionOAuthClient();
+        await oauth.refreshIfPossible();
         await oauth.ensureAuthenticated();
         const notionService = new NotionService();
 

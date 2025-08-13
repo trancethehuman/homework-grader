@@ -23,6 +23,7 @@ import { NotionPageSelector } from "./components/notion/notion-page-selector.js"
 import { NotionContentViewer } from "./components/notion/notion-content-viewer.js";
 import { GitHubColumnSelector } from "./components/notion/github-column-selector.js";
 import { BackButton } from "./components/ui/back-button.js";
+import { NotionOAuthInfo } from "./components/notion/oauth-info.js";
 import {
   AIProvider,
   DEFAULT_PROVIDER,
@@ -72,6 +73,7 @@ type Step =
   | "notion-property-select"
   | "notion-api-page-select"
   | "notion-api-content-view"
+  | "notion-oauth-info"
   | "notion-github-column-select"
   | "notion-processing"
   | "grading-save-options"
@@ -912,24 +914,36 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
             if (source === "csv") {
               setStep("input");
             } else if (source === "notion") {
-              setStep("loading");
-              (async () => {
-                try {
-                  await notionOAuthClient.ensureAuthenticated();
-                  setStep("notion-api-page-select");
-                } catch (e: any) {
-                  setError(
-                    `Notion authentication failed: ${
-                      e instanceof Error ? e.message : String(e)
-                    }`
-                  );
-                  setStep("data-source-select");
-                }
-              })();
+              setStep("notion-oauth-info");
             }
           }}
         />
       </Box>
+    );
+  }
+
+  if (step === "notion-oauth-info") {
+    return (
+      <NotionOAuthInfo
+        onContinue={() => {
+          setStep("loading");
+          (async () => {
+            try {
+              await notionOAuthClient.refreshIfPossible();
+              await notionOAuthClient.ensureAuthenticated();
+              setStep("notion-api-page-select");
+            } catch (e: any) {
+              setError(
+                `Notion authentication failed: ${
+                  e instanceof Error ? e.message : String(e)
+                }`
+              );
+              setStep("data-source-select");
+            }
+          })();
+        }}
+        onBack={() => setStep("data-source-select")}
+      />
     );
   }
 

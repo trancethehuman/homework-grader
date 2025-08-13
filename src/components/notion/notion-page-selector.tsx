@@ -82,6 +82,7 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
 
         // Otherwise fetch fresh data
         const oauth = new NotionOAuthClient();
+        await oauth.refreshIfPossible();
         await oauth.ensureAuthenticated();
         const notionService = new NotionService();
 
