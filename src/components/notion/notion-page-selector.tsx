@@ -1,7 +1,12 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Text, Box, useInput } from "ink";
-import { NotionService, NotionPage, NotionDatabase } from "../../lib/notion/notion-service.js";
+import {
+  NotionService,
+  NotionPage,
+  NotionDatabase,
+} from "../../lib/notion/notion-service.js";
 import { SearchInput } from "../ui/search-input.js";
+import { NotionOAuthClient } from "../../lib/notion/oauth-client.js";
 import { BackButton, useBackNavigation } from "../ui/back-button.js";
 
 interface NotionPageSelectorProps {
@@ -39,12 +44,12 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
   const maxSearchResults = 3;
 
   const baseItems = showingDatabases ? databases : [...pages, ...databases];
-  
+
   const filteredItems = useMemo(() => {
     if (!searchTerm.trim()) {
       return baseItems;
     }
-    return baseItems.filter(item => 
+    return baseItems.filter((item) =>
       item.title.toLowerCase().includes(searchTerm.toLowerCase())
     );
   }, [baseItems, searchTerm]);
@@ -62,19 +67,24 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
     const loadNotionData = async () => {
       try {
         setIsLoading(true);
-        
+
         // Use cached data if available (and not empty)
-        if ((cachedPages && cachedPages.length > 0) || (cachedDatabases && cachedDatabases.length > 0)) {
+        if (
+          (cachedPages && cachedPages.length > 0) ||
+          (cachedDatabases && cachedDatabases.length > 0)
+        ) {
           setPages(cachedPages || []);
           setDatabases(cachedDatabases || []);
           setError(null);
           setIsLoading(false);
           return;
         }
-        
+
         // Otherwise fetch fresh data
+        const oauth = new NotionOAuthClient();
+        await oauth.ensureAuthenticated();
         const notionService = new NotionService();
-        
+
         const [pagesData, databasesData] = await Promise.all([
           notionService.getAllPages(),
           notionService.getAllDatabases(),
@@ -83,11 +93,12 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
         setPages(pagesData);
         setDatabases(databasesData);
         setError(null);
-        
+
         // Cache the data for future use
         onDataLoaded?.(pagesData, databasesData);
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : "Failed to load Notion data";
+        const errorMessage =
+          err instanceof Error ? err.message : "Failed to load Notion data";
         setError(errorMessage);
         onError(errorMessage);
       } finally {
@@ -112,7 +123,7 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
     }
 
     // Handle 's' key to switch to search mode from anywhere
-    if (input === 's' && !isSearchFocused) {
+    if (input === "s" && !isSearchFocused) {
       setIsViewAllMode(false);
       setIsSearchFocused(true);
       setSelectedIndex(0);
@@ -120,10 +131,11 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
     }
 
     // Handle 'g' key to start grading directly (only for databases and only if onStartGrading is provided)
-    if (input === 'g' && onStartGrading && !isSearchFocused) {
+    if (input === "g" && onStartGrading && !isSearchFocused) {
       const items = isViewAllMode ? displayItems : searchResultsItems;
       const currentItem = items[selectedIndex];
-      if (currentItem && "properties" in currentItem) { // It's a database
+      if (currentItem && "properties" in currentItem) {
+        // It's a database
         onStartGrading(currentItem.id, currentItem.title);
         return;
       }
@@ -139,7 +151,7 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
         }
         return;
       }
-      
+
       if (key.downArrow) {
         // Move to search results list if there are results
         if (searchResultsItems.length > 0) {
@@ -148,18 +160,18 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
         }
         return;
       }
-      
+
       if (key.backspace || key.delete) {
         setSearchTerm(searchTerm.slice(0, -1));
         return;
       }
-      
+
       // Handle regular character input
       if (input && input.length === 1 && !key.ctrl && !key.meta) {
         setSearchTerm(searchTerm + input);
         return;
       }
-      
+
       return;
     }
 
@@ -192,13 +204,15 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
         setSelectedIndex(Math.max(0, (currentPage - 1) * itemsPerPage));
       } else if (key.rightArrow && currentPage < totalPages - 1) {
         setCurrentPage(currentPage + 1);
-        setSelectedIndex(Math.min(displayItems.length - 1, (currentPage + 1) * itemsPerPage));
+        setSelectedIndex(
+          Math.min(displayItems.length - 1, (currentPage + 1) * itemsPerPage)
+        );
       } else if (key.return) {
         if (displayItems[selectedIndex]) {
           const item = displayItems[selectedIndex];
           onSelect(item.id, item.title);
         }
-      } else if (input === 'd') {
+      } else if (input === "d") {
         setShowingDatabases(!showingDatabases);
         setSelectedIndex(0);
         setCurrentPage(0);
@@ -209,7 +223,7 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
     // Handle navigation in search results (not view all mode, not search focused)
     if (!isViewAllMode && !isSearchFocused) {
       const maxIndex = searchResultsItems.length; // +1 for "View All" button
-      
+
       if (key.upArrow) {
         if (selectedIndex === 0) {
           setIsSearchFocused(true);
@@ -255,7 +269,7 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
         <Text>{error}</Text>
         <Text></Text>
         <Text dimColor>
-          Make sure your NOTION_API_KEY is set correctly and the integration has access to your pages.
+          Authenticate with Notion first from the CLI prompt, then try again.
         </Text>
       </Box>
     );
@@ -269,7 +283,8 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
         </Text>
         <Text></Text>
         <Text>
-          No pages or databases were found that are accessible to your integration.
+          No pages or databases were found that are accessible to your
+          integration.
         </Text>
         <Text></Text>
         <Text dimColor>
@@ -289,18 +304,21 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
     return (
       <Box flexDirection="column">
         <Text color="blue" bold>
-          Select Notion {showingDatabases ? "Database" : "Page/Database"} - View All Mode
+          Select Notion {showingDatabases ? "Database" : "Page/Database"} - View
+          All Mode
         </Text>
         <Text></Text>
         <Text>
-          Found {pages.length} pages and {databases.length} databases accessible to your integration.
+          Found {pages.length} pages and {databases.length} databases accessible
+          to your integration.
         </Text>
         <Text dimColor>
-          Use ↑/↓ arrows to navigate, ←/→ to change pages, Enter to select, 'd' to toggle databases only, 's' to search
+          Use ↑/↓ arrows to navigate, ←/→ to change pages, Enter to select, 'd'
+          to toggle databases only, 's' to search
           {onStartGrading && ", 'g' to start grading database"}
         </Text>
         <Text></Text>
-        
+
         <BackButton onBack={() => onBack?.()} isVisible={!!onBack} />
 
         {showingDatabases && (
@@ -313,18 +331,19 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
 
         {totalPages > 1 && (
           <Text dimColor>
-            Page {currentPage + 1} of {totalPages} | Items {startIndex + 1}-{endIndex} of {displayItems.length}
+            Page {currentPage + 1} of {totalPages} | Items {startIndex + 1}-
+            {endIndex} of {displayItems.length}
           </Text>
         )}
         <Text></Text>
-        
+
         {currentPageItems.map((item, pageIndex) => {
           const actualIndex = startIndex + pageIndex;
           const isSelected = actualIndex === selectedIndex;
           const isDatabase = "properties" in item;
           const itemType = isDatabase ? "Database" : "Page";
           const canGrade = isDatabase && onStartGrading;
-          
+
           return (
             <Box key={item.id} flexDirection="column" marginBottom={1}>
               <Box>
@@ -339,7 +358,8 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
               </Box>
               <Box marginLeft={4}>
                 <Text dimColor>
-                  Last edited: {new Date(item.lastEditedTime).toLocaleDateString()}
+                  Last edited:{" "}
+                  {new Date(item.lastEditedTime).toLocaleDateString()}
                 </Text>
               </Box>
             </Box>
@@ -348,7 +368,9 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
 
         <Text></Text>
         <Text dimColor>
-          Press Enter to select, ←/→ for pages, 'd' to toggle databases only, 's' to search{onStartGrading && ", 'g' to grade database"}, Ctrl+C to exit
+          Press Enter to select, ←/→ for pages, 'd' to toggle databases only,
+          's' to search{onStartGrading && ", 'g' to grade database"}, Ctrl+C to
+          exit
         </Text>
       </Box>
     );
@@ -362,13 +384,15 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
       </Text>
       <Text></Text>
       <Text>
-        Found {pages.length} pages and {databases.length} databases accessible to your integration.
+        Found {pages.length} pages and {databases.length} databases accessible
+        to your integration.
       </Text>
       <Text dimColor>
-        Type to search, ↑/↓ arrows to navigate, Enter to select{onStartGrading && ", 'g' to grade database"}
+        Type to search, ↑/↓ arrows to navigate, Enter to select
+        {onStartGrading && ", 'g' to grade database"}
       </Text>
       <Text></Text>
-      
+
       <BackButton onBack={() => onBack?.()} isVisible={!!onBack} />
 
       <SearchInput
@@ -388,9 +412,7 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
 
       {searchTerm && filteredItems.length === 0 ? (
         <Box marginBottom={1}>
-          <Text color="yellow">
-            No results found for "{searchTerm}"
-          </Text>
+          <Text color="yellow">No results found for "{searchTerm}"</Text>
         </Box>
       ) : (
         <>
@@ -399,7 +421,7 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
             const isDatabase = "properties" in item;
             const itemType = isDatabase ? "Database" : "Page";
             const canGrade = isDatabase && onStartGrading;
-            
+
             return (
               <Box key={item.id} flexDirection="column" marginBottom={1}>
                 <Box>
@@ -414,17 +436,31 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
                 </Box>
                 <Box marginLeft={4}>
                   <Text dimColor>
-                    Last edited: {new Date(item.lastEditedTime).toLocaleDateString()}
+                    Last edited:{" "}
+                    {new Date(item.lastEditedTime).toLocaleDateString()}
                   </Text>
                 </Box>
               </Box>
             );
           })}
-          
+
           {filteredItems.length > maxSearchResults && (
             <Box marginBottom={1}>
-              <Text color={!isSearchFocused && selectedIndex === searchResultsItems.length ? "blue" : "gray"} bold={!isSearchFocused && selectedIndex === searchResultsItems.length}>
-                {!isSearchFocused && selectedIndex === searchResultsItems.length ? "→ " : "  "}
+              <Text
+                color={
+                  !isSearchFocused &&
+                  selectedIndex === searchResultsItems.length
+                    ? "blue"
+                    : "gray"
+                }
+                bold={
+                  !isSearchFocused &&
+                  selectedIndex === searchResultsItems.length
+                }
+              >
+                {!isSearchFocused && selectedIndex === searchResultsItems.length
+                  ? "→ "
+                  : "  "}
                 View All ({filteredItems.length} total results)
               </Text>
             </Box>
@@ -434,7 +470,8 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
 
       <Text></Text>
       <Text dimColor>
-        Press Enter to select, 's' to focus search{onStartGrading && ", 'g' to grade database"}, Ctrl+C to exit
+        Press Enter to select, 's' to focus search
+        {onStartGrading && ", 'g' to grade database"}, Ctrl+C to exit
       </Text>
     </Box>
   );

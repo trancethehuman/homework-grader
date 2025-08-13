@@ -3,6 +3,7 @@ import { Text, Box, useInput } from "ink";
 import { GradingResult } from "../lib/file-saver.js";
 import { GradingDatabaseService } from "../lib/notion/grading-database-service.js";
 import { NotionService } from "../lib/notion/notion-service.js";
+import { NotionOAuthClient } from "../lib/notion/oauth-client.js";
 
 export type SaveOption = "file" | "original-database" | "new-database" | "skip";
 
@@ -29,7 +30,11 @@ export const GradingSaveOptions: React.FC<GradingSaveOptionsProps> = ({
     missingProperties: string[];
   } | null>(null);
 
-  const availableOptions: Array<{ key: SaveOption; label: string; description: string }> = [
+  const availableOptions: Array<{
+    key: SaveOption;
+    label: string;
+    description: string;
+  }> = [
     {
       key: "file",
       label: "Save to files (JSON format)",
@@ -42,8 +47,12 @@ export const GradingSaveOptions: React.FC<GradingSaveOptionsProps> = ({
     availableOptions.push({
       key: "original-database",
       label: `Save to original Notion database`,
-      description: originalDatabaseInfo 
-        ? `"${originalDatabaseInfo.title}"${!originalDatabaseInfo.hasGradingSchema ? " (will add grading columns)" : ""}`
+      description: originalDatabaseInfo
+        ? `"${originalDatabaseInfo.title}"${
+            !originalDatabaseInfo.hasGradingSchema
+              ? " (will add grading columns)"
+              : ""
+          }`
         : "Loading database info...",
     });
   }
@@ -52,7 +61,8 @@ export const GradingSaveOptions: React.FC<GradingSaveOptionsProps> = ({
     {
       key: "new-database",
       label: "Create new Notion database (requires parent page)",
-      description: "Note: Not currently supported without selecting a parent page",
+      description:
+        "Note: Not currently supported without selecting a parent page",
     },
     {
       key: "skip",
@@ -66,6 +76,8 @@ export const GradingSaveOptions: React.FC<GradingSaveOptionsProps> = ({
     const loadDatabaseInfo = async () => {
       if (originalDatabaseId) {
         try {
+          const oauth = new NotionOAuthClient();
+          await oauth.ensureAuthenticated();
           const service = new GradingDatabaseService();
           const info = await service.getDatabaseInfo(originalDatabaseId);
           setOriginalDatabaseInfo(info);
@@ -83,9 +95,9 @@ export const GradingSaveOptions: React.FC<GradingSaveOptionsProps> = ({
       if (key.return) {
         handleCreateNewDatabase();
       } else if (key.backspace || key.delete) {
-        setNewDatabaseTitle(prev => prev.slice(0, -1));
+        setNewDatabaseTitle((prev) => prev.slice(0, -1));
       } else if (input && !key.ctrl && !key.meta) {
-        setNewDatabaseTitle(prev => prev + input);
+        setNewDatabaseTitle((prev) => prev + input);
       }
       return;
     }
@@ -99,7 +111,9 @@ export const GradingSaveOptions: React.FC<GradingSaveOptionsProps> = ({
     } else if (key.return) {
       const selected = availableOptions[selectedIndex];
       if (selected.key === "new-database") {
-        const defaultTitle = `Homework Grading Results - ${new Date().toISOString().split('T')[0]}`;
+        const defaultTitle = `Homework Grading Results - ${
+          new Date().toISOString().split("T")[0]
+        }`;
         setNewDatabaseTitle(defaultTitle);
         setShowTitleInput(true);
       } else {
@@ -119,7 +133,9 @@ export const GradingSaveOptions: React.FC<GradingSaveOptionsProps> = ({
 
     try {
       // For now, we'll show an error message since creating new databases requires a parent page
-      onError("Creating new databases requires selecting a parent page from your Notion workspace. Please use the 'Save to original database' option if available, or create a database manually in Notion first.");
+      onError(
+        "Creating new databases requires selecting a parent page from your Notion workspace. Please use the 'Save to original database' option if available, or create a database manually in Notion first."
+      );
       setIsCreatingDatabase(false);
       setShowTitleInput(false);
     } catch (error: any) {
@@ -132,7 +148,9 @@ export const GradingSaveOptions: React.FC<GradingSaveOptionsProps> = ({
   if (isCreatingDatabase) {
     return (
       <Box flexDirection="column" marginY={1}>
-        <Text color="yellow">Creating Notion database "{newDatabaseTitle}"...</Text>
+        <Text color="yellow">
+          Creating Notion database "{newDatabaseTitle}"...
+        </Text>
       </Box>
     );
   }

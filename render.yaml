@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: notion-proxy
+    runtime: node
+    rootDir: notion-proxy
+    buildCommand: npm install
+    startCommand: npm start
+    autoDeploy: true
+    envVars:
+      - key: NOTION_CLIENT_ID
+        sync: false
+      - key: NOTION_CLIENT_SECRET
+        sync: false
+      - key: REDIRECT_URI
+        sync: false

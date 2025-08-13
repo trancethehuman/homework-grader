@@ -53,18 +53,20 @@ export class NotionMCPClient {
       console.log("=== CONNECTION ERROR (OAuth Analysis) ===");
       console.log("Error object:", JSON.stringify(error, null, 2));
       console.log("=== END CONNECTION ERROR ===");
-      
+
       // Check if this is a 401 OAuth error at connection level
-      if (error instanceof Error && error.message.includes('HTTP 401')) {
+      if (error instanceof Error && error.message.includes("HTTP 401")) {
         console.log("🔒 OAuth authentication required at connection level!");
-        console.log("This is the expected OAuth flow - the server is requesting authentication.");
-        
+        console.log(
+          "This is the expected OAuth flow - the server is requesting authentication."
+        );
+
         // Throw a specific OAuth error that the UI can handle
         const oauthError = new Error("OAuth authentication required");
         (oauthError as any).isOAuthRequired = true;
         throw oauthError;
       }
-      
+
       throw error;
     }
   }
@@ -88,30 +90,35 @@ export class NotionMCPClient {
       await this.connect();
 
       console.log("Discovering available tools...");
-      
+
       const tools = await this.client.listTools();
       console.log("=== NOTION MCP TOOLS DISCOVERY ===");
       console.log("Available tools:", JSON.stringify(tools, null, 2));
       console.log("=== END TOOLS DISCOVERY ===");
-      
+
       return tools.tools || [];
     } catch (error) {
       console.error("Error discovering tools:", error);
       console.log("=== TOOL DISCOVERY ERROR (OAuth Analysis) ===");
       console.log("Error object:", JSON.stringify(error, null, 2));
       console.log("=== END TOOL DISCOVERY ERROR ===");
-      
+
       // Check if this is a 401 OAuth error (from connection or tool discovery)
-      if (error instanceof Error && ((error as any).isOAuthRequired || error.message.includes('HTTP 401'))) {
+      if (
+        error instanceof Error &&
+        ((error as any).isOAuthRequired || error.message.includes("HTTP 401"))
+      ) {
         console.log("🔒 OAuth authentication required!");
-        console.log("This is the expected OAuth flow - the server is requesting authentication.");
-        
+        console.log(
+          "This is the expected OAuth flow - the server is requesting authentication."
+        );
+
         // Throw a specific OAuth error that the UI can handle
         const oauthError = new Error("OAuth authentication required");
         (oauthError as any).isOAuthRequired = true;
         throw oauthError;
       }
-      
+
       throw error;
     }
   }
@@ -120,51 +127,66 @@ export class NotionMCPClient {
     // Generate OAuth URL similar to the one you saw in Cursor
     // The client_id and other parameters would come from the MCP server's response
     // For now, we'll construct a basic OAuth URL based on the pattern you showed
-    
-    const clientId = "1f8d872b-594c-80a4-b2f4-00370af2b13f"; // This would normally come from server
-    const redirectUri = "https://mcp.notion.com/callback";
-    const state = btoa(JSON.stringify({
-      responseType: "code",
-      clientId: clientId,
-      redirectUri: redirectUri,
-      scope: [],
-      state: "",
-      codeChallenge: this.generateCodeChallenge(),
-      codeChallengeMethod: "S256"
-    }));
 
-    const authUrl = `https://www.notion.so/install-integration?response_type=code&client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(state)}&owner=user`;
-    
+    const clientId = "234d872b-594c-80ec-9dac-00379870e655";
+    const redirectUri = "http://localhost:8765/callback";
+    const state = btoa(
+      JSON.stringify({
+        responseType: "code",
+        clientId: clientId,
+        redirectUri: redirectUri,
+        scope: [],
+        state: "",
+        codeChallenge: this.generateCodeChallenge(),
+        codeChallengeMethod: "S256",
+      })
+    );
+
+    const authUrl = `https://www.notion.so/install-integration?response_type=code&client_id=${clientId}&redirect_uri=${encodeURIComponent(
+      redirectUri
+    )}&state=${encodeURIComponent(state)}&owner=user`;
+
     console.log("=== NOTION OAUTH URL ===");
     console.log("Generated OAuth URL:", authUrl);
     console.log("=== END OAUTH URL ===");
-    
+
     return authUrl;
   }
 
   private generateCodeChallenge(): string {
     // Generate a code challenge for PKCE
-    const codeVerifier = btoa(Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15));
+    const codeVerifier = btoa(
+      Math.random().toString(36).substring(2, 15) +
+        Math.random().toString(36).substring(2, 15)
+    );
     // In a real implementation, this would be a proper SHA256 hash
-    return btoa(codeVerifier).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+    return btoa(codeVerifier)
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=/g, "");
   }
 
-  async fetchDatabaseFromUrl(databaseUrl: string): Promise<NotionDatabase | null> {
+  async fetchDatabaseFromUrl(
+    databaseUrl: string
+  ): Promise<NotionDatabase | null> {
     await this.connect();
 
     try {
       console.log(`Fetching database from URL: ${databaseUrl}`);
-      
+
       // First try to discover tools to see what's available
       const tools = await this.discoverTools();
-      console.log("Available tools for database fetch:", tools.map(t => t.name));
+      console.log(
+        "Available tools for database fetch:",
+        tools.map((t) => t.name)
+      );
 
       // Use the fetch tool to get database information
       const response = await this.client.callTool({
         name: "fetch",
         arguments: {
-          url: databaseUrl
-        }
+          url: databaseUrl,
+        },
       });
 
       console.log("=== NOTION DATABASE FETCH RESPONSE ===");
@@ -174,23 +196,23 @@ export class NotionMCPClient {
       // Handle the response based on what we receive
       if (response.content && Array.isArray(response.content)) {
         const content = response.content[0];
-        if (content && content.type === 'text') {
+        if (content && content.type === "text") {
           try {
             // Parse the text content as JSON if it's database info
             const databaseInfo = JSON.parse(content.text);
             return {
-              id: databaseInfo.id || '',
-              title: databaseInfo.title?.[0]?.plain_text || 'Untitled Database',
+              id: databaseInfo.id || "",
+              title: databaseInfo.title?.[0]?.plain_text || "Untitled Database",
               url: databaseUrl,
-              properties: databaseInfo.properties || {}
+              properties: databaseInfo.properties || {},
             };
           } catch {
             // If parsing fails, return basic info
             return {
               id: databaseUrl,
-              title: 'Database from URL',
+              title: "Database from URL",
               url: databaseUrl,
-              properties: {}
+              properties: {},
             };
           }
         }
@@ -202,7 +224,7 @@ export class NotionMCPClient {
       console.log("=== DATABASE FETCH ERROR (for OAuth flow analysis) ===");
       console.log("Error object:", JSON.stringify(error, null, 2));
       console.log("=== END DATABASE FETCH ERROR ===");
-      
+
       // Re-throw to handle in the calling code
       throw error;
     }
@@ -244,8 +266,8 @@ export class NotionMCPClient {
   async extractGitHubUrls(
     entries: NotionDatabaseEntry[],
     propertyName: string
-  ): Promise<Array<{url: string, pageId: string}>> {
-    const urlsWithIds: Array<{url: string, pageId: string}> = [];
+  ): Promise<Array<{ url: string; pageId: string }>> {
+    const urlsWithIds: Array<{ url: string; pageId: string }> = [];
 
     for (const entry of entries) {
       const property = entry.properties[propertyName];
@@ -272,7 +294,7 @@ export class NotionMCPClient {
         if (url && (url.includes("github.com") || url.includes("github.io"))) {
           urlsWithIds.push({
             url,
-            pageId: entry.id
+            pageId: entry.id,
           });
         }
       }
@@ -280,7 +302,7 @@ export class NotionMCPClient {
 
     // Remove duplicates by URL while keeping the first occurrence
     const seen = new Set<string>();
-    return urlsWithIds.filter(item => {
+    return urlsWithIds.filter((item) => {
       if (seen.has(item.url)) {
         return false;
       }

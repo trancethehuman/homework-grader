@@ -1,5 +1,6 @@
 import { Client } from "@notionhq/client";
 import { config } from "dotenv";
+import { NotionTokenStorage } from "./notion-token-storage.js";
 
 // Load environment variables
 config();
@@ -28,15 +29,19 @@ export interface NotionDatabase {
 export class NotionService {
   private notion: Client;
 
-  constructor(apiKey?: string) {
-    const key = apiKey || process.env.NOTION_API_KEY;
-    if (!key) {
-      throw new Error("Notion API key is required. Set NOTION_API_KEY environment variable or provide it directly.");
+  constructor(accessToken?: string) {
+    let token = accessToken;
+    if (!token) {
+      const storage = new NotionTokenStorage();
+      const saved = storage.getToken();
+      token = saved?.access_token;
     }
-    
-    this.notion = new Client({
-      auth: key,
-    });
+    if (!token) {
+      throw new Error(
+        "Notion access token is missing. Please authenticate via Notion OAuth in the CLI."
+      );
+    }
+    this.notion = new Client({ auth: token });
   }
 
   /**
@@ -51,10 +56,10 @@ export class NotionService {
       const response = await this.notion.search({
         filter: {
           property: "object",
-          value: "page"
+          value: "page",
         },
         start_cursor: nextCursor,
-        page_size: 100
+        page_size: 100,
       });
 
       for (const page of response.results) {
@@ -65,7 +70,7 @@ export class NotionService {
             title,
             url: page.url,
             lastEditedTime: page.last_edited_time,
-            parent: page.parent
+            parent: page.parent,
           });
         }
       }
@@ -89,21 +94,26 @@ export class NotionService {
       const response = await this.notion.search({
         filter: {
           property: "object",
-          value: "database"
+          value: "database",
         },
         start_cursor: nextCursor,
-        page_size: 100
+        page_size: 100,
       });
 
       for (const database of response.results) {
-        if (database.object === "database" && "properties" in database && "url" in database && "last_edited_time" in database) {
+        if (
+          database.object === "database" &&
+          "properties" in database &&
+          "url" in database &&
+          "last_edited_time" in database
+        ) {
           const title = this.extractTitle(database);
           databases.push({
             id: database.id,
             title,
             url: database.url,
             lastEditedTime: database.last_edited_time,
-            properties: database.properties
+            properties: database.properties,
           });
         }
       }
@@ -123,22 +133,27 @@ export class NotionService {
       // First try to get it as a page
       const page = await this.notion.pages.retrieve({ page_id: pageId });
       const blocks = await this.getPageBlocks(pageId);
-      
+
       return {
         page,
         blocks,
-        type: "page"
+        type: "page",
       };
     } catch (error: any) {
       // If it fails and mentions it's a database, try to get database metadata
-      if (error.code === 'validation_error' && error.message.includes('database')) {
-        const database = await this.notion.databases.retrieve({ database_id: pageId });
+      if (
+        error.code === "validation_error" &&
+        error.message.includes("database")
+      ) {
+        const database = await this.notion.databases.retrieve({
+          database_id: pageId,
+        });
         const entries = await this.queryDatabase(pageId);
-        
+
         return {
           database,
           entries,
-          type: "database"
+          type: "database",
         };
       }
       throw error;
@@ -149,13 +164,15 @@ export class NotionService {
    * Fetch database content directly
    */
   async getDatabaseContent(databaseId: string): Promise<any> {
-    const database = await this.notion.databases.retrieve({ database_id: databaseId });
+    const database = await this.notion.databases.retrieve({
+      database_id: databaseId,
+    });
     const entries = await this.queryDatabase(databaseId);
-    
+
     return {
       database,
       entries,
-      type: "database"
+      type: "database",
     };
   }
 
@@ -165,11 +182,11 @@ export class NotionService {
   async getPageContentDirect(pageId: string): Promise<any> {
     const page = await this.notion.pages.retrieve({ page_id: pageId });
     const blocks = await this.getPageBlocks(pageId);
-    
+
     return {
       page,
       blocks,
-      type: "page"
+      type: "page",
     };
   }
 
@@ -177,7 +194,9 @@ export class NotionService {
    * Fetch database metadata
    */
   async getDatabaseMetadata(databaseId: string): Promise<any> {
-    const database = await this.notion.databases.retrieve({ database_id: databaseId });
+    const database = await this.notion.databases.retrieve({
+      database_id: databaseId,
+    });
     return database;
   }
 
@@ -193,7 +212,7 @@ export class NotionService {
       const response = await this.notion.blocks.children.list({
         block_id: pageId,
         start_cursor: nextCursor,
-        page_size: 100
+        page_size: 100,
       });
 
       blocks.push(...response.results);
@@ -207,7 +226,11 @@ export class NotionService {
   /**
    * Query a database
    */
-  async queryDatabase(databaseId: string, filter?: any, sorts?: any[]): Promise<any[]> {
+  async queryDatabase(
+    databaseId: string,
+    filter?: any,
+    sorts?: any[]
+  ): Promise<any[]> {
     const results: any[] = [];
     let hasMore = true;
     let nextCursor: string | undefined;
@@ -218,7 +241,7 @@ export class NotionService {
         start_cursor: nextCursor,
         page_size: 100,
         filter,
-        sorts
+        sorts,
       });
 
       results.push(...response.results);
@@ -232,9 +255,15 @@ export class NotionService {
   /**
    * Create a new database with specified properties
    */
-  async createDatabase(title: string, properties: Record<string, any>, parentPageId?: string): Promise<any> {
+  async createDatabase(
+    title: string,
+    properties: Record<string, any>,
+    parentPageId?: string
+  ): Promise<any> {
     if (!parentPageId) {
-      throw new Error("Parent page ID is required to create a database. Notion doesn't support creating databases in workspace root.");
+      throw new Error(
+        "Parent page ID is required to create a database. Notion doesn't support creating databases in workspace root."
+      );
     }
 
     const response = await this.notion.databases.create({
@@ -259,7 +288,10 @@ export class NotionService {
   /**
    * Update database properties (add new columns)
    */
-  async updateDatabaseSchema(databaseId: string, properties: Record<string, any>): Promise<any> {
+  async updateDatabaseSchema(
+    databaseId: string,
+    properties: Record<string, any>
+  ): Promise<any> {
     const response = await this.notion.databases.update({
       database_id: databaseId,
       properties,
@@ -271,7 +303,10 @@ export class NotionService {
   /**
    * Create a new entry in a database
    */
-  async createDatabaseEntry(databaseId: string, properties: Record<string, any>): Promise<any> {
+  async createDatabaseEntry(
+    databaseId: string,
+    properties: Record<string, any>
+  ): Promise<any> {
     const response = await this.notion.pages.create({
       parent: {
         type: "database_id",
@@ -286,7 +321,10 @@ export class NotionService {
   /**
    * Update an existing database entry
    */
-  async updateDatabaseEntry(pageId: string, properties: Record<string, any>): Promise<any> {
+  async updateDatabaseEntry(
+    pageId: string,
+    properties: Record<string, any>
+  ): Promise<any> {
     const response = await this.notion.pages.update({
       page_id: pageId,
       properties,
@@ -298,7 +336,9 @@ export class NotionService {
   /**
    * Check if a database has specific properties
    */
-  async getDatabaseProperties(databaseId: string): Promise<Record<string, any>> {
+  async getDatabaseProperties(
+    databaseId: string
+  ): Promise<Record<string, any>> {
     const database = await this.notion.databases.retrieve({
       database_id: databaseId,
     });
@@ -316,7 +356,7 @@ export class NotionService {
         return titleProperty.title[0].plain_text || "Untitled";
       }
     }
-    
+
     if (item.properties?.Name) {
       const nameProperty = item.properties.Name;
       if (nameProperty.title && nameProperty.title.length > 0) {

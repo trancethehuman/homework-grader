@@ -1,4 +1,5 @@
 import { NotionService } from "./notion-service.js";
+import { NotionOAuthClient } from "./oauth-client.js";
 import { NotionSchemaMapper } from "./schema-mapper.js";
 import { GradingResult } from "../file-saver.js";
 
@@ -10,8 +11,8 @@ export interface DatabaseCreationOptions {
 export class GradingDatabaseService {
   private notionService: NotionService;
 
-  constructor(apiKey?: string) {
-    this.notionService = new NotionService(apiKey);
+  constructor(accessToken?: string) {
+    this.notionService = new NotionService(accessToken);
   }
 
   /**
@@ -44,23 +45,26 @@ export class GradingDatabaseService {
     let failed = 0;
 
     // Get the existing database properties
-    const databaseProperties = await this.notionService.getDatabaseProperties(databaseId);
+    const databaseProperties = await this.notionService.getDatabaseProperties(
+      databaseId
+    );
     const titlePropertyName = Object.keys(databaseProperties).find(
-      key => databaseProperties[key].type === "title"
+      (key) => databaseProperties[key].type === "title"
     );
     const availableProperties = new Set(Object.keys(databaseProperties));
 
     for (const result of results) {
       try {
         const isUpdate = !!result.pageId;
-        const allProperties = NotionSchemaMapper.transformGradingDataToNotionProperties(
-          result.gradingData,
-          result.repositoryName,
-          result.githubUrl,
-          titlePropertyName,
-          githubUrlColumnName,
-          isUpdate
-        );
+        const allProperties =
+          NotionSchemaMapper.transformGradingDataToNotionProperties(
+            result.gradingData,
+            result.repositoryName,
+            result.githubUrl,
+            titlePropertyName,
+            githubUrlColumnName,
+            isUpdate
+          );
 
         // Only include properties that actually exist in the database
         const filteredProperties: Record<string, any> = {};
@@ -72,15 +76,23 @@ export class GradingDatabaseService {
 
         if (isUpdate && result.pageId) {
           // Update existing row
-          await this.notionService.updateDatabaseEntry(result.pageId, filteredProperties);
+          await this.notionService.updateDatabaseEntry(
+            result.pageId,
+            filteredProperties
+          );
         } else {
           // Create new row
-          await this.notionService.createDatabaseEntry(databaseId, filteredProperties);
+          await this.notionService.createDatabaseEntry(
+            databaseId,
+            filteredProperties
+          );
         }
         success++;
       } catch (error: any) {
         failed++;
-        errors.push(`Failed to save ${result.repositoryName}: ${error.message}`);
+        errors.push(
+          `Failed to save ${result.repositoryName}: ${error.message}`
+        );
       }
     }
 
@@ -96,21 +108,24 @@ export class GradingDatabaseService {
     githubUrlColumnName?: string
   ): Promise<any> {
     // Get the existing database properties
-    const databaseProperties = await this.notionService.getDatabaseProperties(databaseId);
+    const databaseProperties = await this.notionService.getDatabaseProperties(
+      databaseId
+    );
     const titlePropertyName = Object.keys(databaseProperties).find(
-      key => databaseProperties[key].type === "title"
+      (key) => databaseProperties[key].type === "title"
     );
     const availableProperties = new Set(Object.keys(databaseProperties));
 
     const isUpdate = !!result.pageId;
-    const allProperties = NotionSchemaMapper.transformGradingDataToNotionProperties(
-      result.gradingData,
-      result.repositoryName,
-      result.githubUrl,
-      titlePropertyName,
-      githubUrlColumnName,
-      isUpdate
-    );
+    const allProperties =
+      NotionSchemaMapper.transformGradingDataToNotionProperties(
+        result.gradingData,
+        result.repositoryName,
+        result.githubUrl,
+        titlePropertyName,
+        githubUrlColumnName,
+        isUpdate
+      );
 
     // Only include properties that actually exist in the database
     const filteredProperties: Record<string, any> = {};
@@ -121,9 +136,15 @@ export class GradingDatabaseService {
     }
 
     if (isUpdate && result.pageId) {
-      return await this.notionService.updateDatabaseEntry(result.pageId, filteredProperties);
+      return await this.notionService.updateDatabaseEntry(
+        result.pageId,
+        filteredProperties
+      );
     } else {
-      return await this.notionService.createDatabaseEntry(databaseId, filteredProperties);
+      return await this.notionService.createDatabaseEntry(
+        databaseId,
+        filteredProperties
+      );
     }
   }
 
@@ -137,17 +158,22 @@ export class GradingDatabaseService {
   }> {
     try {
       const database = await this.notionService.getDatabaseMetadata(databaseId);
-      const hasGradingSchema = NotionSchemaMapper.hasGradingProperties(database.properties);
-      
+      const hasGradingSchema = NotionSchemaMapper.hasGradingProperties(
+        database.properties
+      );
+
       let missingProperties: string[] = [];
       if (!hasGradingSchema) {
-        const missing = NotionSchemaMapper.getMissingGradingProperties(database.properties);
+        const missing = NotionSchemaMapper.getMissingGradingProperties(
+          database.properties
+        );
         missingProperties = Object.keys(missing);
       }
 
-      const title = database.title && database.title.length > 0 
-        ? database.title[0].plain_text 
-        : "Untitled Database";
+      const title =
+        database.title && database.title.length > 0
+          ? database.title[0].plain_text
+          : "Untitled Database";
 
       return {
         title,
@@ -164,17 +190,25 @@ export class GradingDatabaseService {
     options: { skipGithubUrlColumn?: string } = {}
   ): Promise<{ databaseId: string; created: boolean; updated: boolean }> {
     try {
-      const existingProperties = await this.notionService.getDatabaseProperties(databaseId);
-      const missingProperties = NotionSchemaMapper.getMissingGradingProperties(existingProperties, {
-        skipGithubUrlColumn: !!options.skipGithubUrlColumn
-      });
-      
+      const existingProperties = await this.notionService.getDatabaseProperties(
+        databaseId
+      );
+      const missingProperties = NotionSchemaMapper.getMissingGradingProperties(
+        existingProperties,
+        {
+          skipGithubUrlColumn: !!options.skipGithubUrlColumn,
+        }
+      );
+
       if (Object.keys(missingProperties).length > 0) {
         // Update database with missing properties
-        await this.notionService.updateDatabaseSchema(databaseId, missingProperties);
+        await this.notionService.updateDatabaseSchema(
+          databaseId,
+          missingProperties
+        );
         return { databaseId, created: false, updated: true };
       }
-      
+
       // Database already has all required properties
       return { databaseId, created: false, updated: false };
     } catch (error: any) {
@@ -185,13 +219,17 @@ export class GradingDatabaseService {
   private async createNewGradingDatabase(
     options: DatabaseCreationOptions
   ): Promise<{ databaseId: string; created: boolean; updated: boolean }> {
-    const title = options.title || `Homework Grading Results - ${new Date().toISOString().split('T')[0]}`;
+    const title =
+      options.title ||
+      `Homework Grading Results - ${new Date().toISOString().split("T")[0]}`;
     const properties = NotionSchemaMapper.generateGradingDatabaseProperties();
 
     try {
       // If no parent page ID provided, we need to get one from the user or use a default approach
       if (!options.parentPageId) {
-        throw new Error("Creating a new database requires a parent page ID. Please select a page from your Notion workspace to create the database under.");
+        throw new Error(
+          "Creating a new database requires a parent page ID. Please select a page from your Notion workspace to create the database under."
+        );
       }
 
       const database = await this.notionService.createDatabase(
@@ -199,7 +237,7 @@ export class GradingDatabaseService {
         properties,
         options.parentPageId
       );
-      
+
       return { databaseId: database.id, created: true, updated: false };
     } catch (error: any) {
       throw new Error(`Failed to create grading database: ${error.message}`);

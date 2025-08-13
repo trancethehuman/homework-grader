@@ -1,14 +1,22 @@
 import React, { useState, useEffect } from "react";
 import { Text, Box, useInput } from "ink";
 import { NotionService } from "../../lib/notion/notion-service.js";
-import { NotionFormatter, FormattedBlock } from "../../lib/notion/notion-formatter.js";
+import { NotionOAuthClient } from "../../lib/notion/oauth-client.js";
+import {
+  NotionFormatter,
+  FormattedBlock,
+} from "../../lib/notion/notion-formatter.js";
 import { BackButton, useBackNavigation } from "../ui/back-button.js";
 
 interface NotionContentViewerProps {
   pageId: string;
   pageTitle: string;
   onComplete: (content?: any) => void;
-  onNavigate?: (pageId: string, pageTitle: string, contentType?: string) => void;
+  onNavigate?: (
+    pageId: string,
+    pageTitle: string,
+    contentType?: string
+  ) => void;
   onStartGrading?: (pageId: string, pageTitle: string) => void;
   onBack?: () => void;
   contentType?: string;
@@ -33,17 +41,16 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
   const [propertiesExpanded, setPropertiesExpanded] = useState(false);
   const itemsPerPage = 10;
 
-  const { handleBackInput } = useBackNavigation(
-    () => onBack?.(),
-    !!onBack
-  );
+  const { handleBackInput } = useBackNavigation(() => onBack?.(), !!onBack);
 
   useEffect(() => {
     const fetchContent = async () => {
       try {
         setIsLoading(true);
+        const oauth = new NotionOAuthClient();
+        await oauth.ensureAuthenticated();
         const notionService = new NotionService();
-        
+
         // Use the correct API based on content type
         let pageContent;
         if (contentType === "database") {
@@ -56,22 +63,26 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
         }
 
         setContent(pageContent);
-        
+
         // Find navigable items (child pages, databases, and database entries)
         const formatted = NotionFormatter.formatContent(pageContent);
-        const navItems = formatted.blocks.filter(block => 
-          block.type === "child_database" || block.type === "child_page" || block.type === "database_entry"
+        const navItems = formatted.blocks.filter(
+          (block) =>
+            block.type === "child_database" ||
+            block.type === "child_page" ||
+            block.type === "database_entry"
         );
         setNavigableItems(navItems);
-        
+
         // If there are navigable items, show content selection
         if (navItems.length > 0) {
           setShowingContent(true);
         }
-        
+
         setError(null);
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : "Failed to fetch content";
+        const errorMessage =
+          err instanceof Error ? err.message : "Failed to fetch content";
         setError(errorMessage);
         console.error(`Error fetching Notion content for ${pageTitle}:`, err);
       } finally {
@@ -92,11 +103,20 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
     }
 
     // Handle 'g' key to start grading directly (only for databases and only if onStartGrading is provided)
-    if (input === 'g' && onStartGrading && showingContent && navigableItems.length > 0) {
+    if (
+      input === "g" &&
+      onStartGrading &&
+      showingContent &&
+      navigableItems.length > 0
+    ) {
       const selectedItem = navigableItems[selectedIndex];
-      if (selectedItem && (selectedItem.type === "child_database" || selectedItem.type === "database_entry")) {
+      if (
+        selectedItem &&
+        (selectedItem.type === "child_database" ||
+          selectedItem.type === "database_entry")
+      ) {
         let childId, childTitle;
-        
+
         if (selectedItem.type === "database_entry") {
           // For database entries, use the entry ID directly
           childId = selectedItem.id;
@@ -105,17 +125,19 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
           // For child databases, find the matching block
           const originalBlocks = content.blocks || [];
           const matchingBlock = originalBlocks.find((block: any) => {
-            const blockTitle = block.child_database?.title || block.child_page?.title;
-            const itemTitle = selectedItem.content.replace(/^(📊|📄) /, '');
+            const blockTitle =
+              block.child_database?.title || block.child_page?.title;
+            const itemTitle = selectedItem.content.replace(/^(📊|📄) /, "");
             return blockTitle === itemTitle && block.type === "child_database";
           });
-          
+
           if (matchingBlock) {
             childId = matchingBlock.id;
-            childTitle = matchingBlock.child_database?.title || selectedItem.content;
+            childTitle =
+              matchingBlock.child_database?.title || selectedItem.content;
           }
         }
-        
+
         if (childId && childTitle) {
           onStartGrading(childId, childTitle);
           return;
@@ -126,9 +148,12 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
     if (showingContent && navigableItems.length > 0) {
       const totalPages = Math.ceil(navigableItems.length / itemsPerPage);
       const startIndex = currentPage * itemsPerPage;
-      const endIndex = Math.min(startIndex + itemsPerPage, navigableItems.length);
+      const endIndex = Math.min(
+        startIndex + itemsPerPage,
+        navigableItems.length
+      );
       const currentPageItems = navigableItems.slice(startIndex, endIndex);
-      
+
       if (key.upArrow) {
         setSelectedIndex((prev) => {
           const newIndex = Math.max(0, prev - 1);
@@ -154,7 +179,9 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
         setSelectedIndex(Math.max(0, (currentPage - 1) * itemsPerPage));
       } else if (key.rightArrow && currentPage < totalPages - 1) {
         setCurrentPage(currentPage + 1);
-        setSelectedIndex(Math.min(navigableItems.length - 1, (currentPage + 1) * itemsPerPage));
+        setSelectedIndex(
+          Math.min(navigableItems.length - 1, (currentPage + 1) * itemsPerPage)
+        );
       } else if (key.return) {
         const selectedItem = navigableItems[selectedIndex];
         if (selectedItem && onNavigate) {
@@ -167,17 +194,20 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
             // For child pages and databases, find the matching block
             const originalBlocks = content.blocks || [];
             const matchingBlock = originalBlocks.find((block: any) => {
-              const blockTitle = block.child_database?.title || block.child_page?.title;
-              const itemTitle = selectedItem.content.replace(/^(📊|📄) /, '');
-              return blockTitle === itemTitle && 
-                     (block.type === "child_database" || block.type === "child_page");
+              const blockTitle =
+                block.child_database?.title || block.child_page?.title;
+              const itemTitle = selectedItem.content.replace(/^(📊|📄) /, "");
+              return (
+                blockTitle === itemTitle &&
+                (block.type === "child_database" || block.type === "child_page")
+              );
             });
-            
+
             if (matchingBlock) {
               const childId = matchingBlock.id;
-              let childTitle = selectedItem.content.replace(/^(📊|📄) /, '');
+              let childTitle = selectedItem.content.replace(/^(📊|📄) /, "");
               let contentType = "page";
-              
+
               // Try to get the actual title from the block and determine type
               if (matchingBlock.type === "child_database") {
                 childTitle = matchingBlock.child_database?.title || childTitle;
@@ -186,21 +216,21 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
                 childTitle = matchingBlock.child_page?.title || childTitle;
                 contentType = "page";
               }
-              
+
               onNavigate(childId, childTitle, contentType);
             }
           }
         }
-      } else if (input === 'b' || key.escape) {
+      } else if (input === "b" || key.escape) {
         // Go back - complete the current view
         onComplete(content);
-      } else if (input === 'p') {
+      } else if (input === "p") {
         // Toggle properties expansion
         setPropertiesExpanded(!propertiesExpanded);
       }
     } else {
       // No navigable items, handle property expansion or complete
-      if (input === 'p') {
+      if (input === "p") {
         setPropertiesExpanded(!propertiesExpanded);
       } else {
         onComplete(content);
@@ -230,9 +260,7 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
         <Text></Text>
         <Text>{error}</Text>
         <Text></Text>
-        <Text dimColor>
-          Check the console for more details.
-        </Text>
+        <Text dimColor>Check the console for more details.</Text>
         <Text></Text>
         <Text dimColor>Press any key to continue...</Text>
       </Box>
@@ -269,29 +297,38 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
         <Text bold>Last edited:</Text> {formatted.lastEditedTime}
       </Text>
       <Text></Text>
-      
+
       <BackButton onBack={() => onBack?.()} isVisible={!!onBack} />
-      
+
       {formatted.properties.length > 0 && (
         <>
-          <Text color="cyan" bold>Properties:</Text>
+          <Text color="cyan" bold>
+            Properties:
+          </Text>
           {(() => {
-            const displayCount = propertiesExpanded ? formatted.properties.length : Math.min(10, formatted.properties.length);
-            const propertiesToShow = formatted.properties.slice(0, displayCount);
-            
+            const displayCount = propertiesExpanded
+              ? formatted.properties.length
+              : Math.min(10, formatted.properties.length);
+            const propertiesToShow = formatted.properties.slice(
+              0,
+              displayCount
+            );
+
             return (
               <>
                 {propertiesToShow.map((prop, index) => (
                   <Text key={index} dimColor>
-                    • {prop.name}: {prop.value} {prop.type !== 'rich_text' && `(${prop.type})`}
+                    • {prop.name}: {prop.value}{" "}
+                    {prop.type !== "rich_text" && `(${prop.type})`}
                   </Text>
                 ))}
                 {formatted.properties.length > 10 && (
                   <Text dimColor>
-                    {propertiesExpanded 
-                      ? `Press 'p' to collapse properties` 
-                      : `... and ${formatted.properties.length - 10} more properties (press 'p' to expand)`
-                    }
+                    {propertiesExpanded
+                      ? `Press 'p' to collapse properties`
+                      : `... and ${
+                          formatted.properties.length - 10
+                        } more properties (press 'p' to expand)`}
                   </Text>
                 )}
               </>
@@ -300,9 +337,7 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
           <Text></Text>
         </>
       )}
-      <Text color="yellow">
-        Content loaded successfully.
-      </Text>
+      <Text color="yellow">Content loaded successfully.</Text>
       <Text></Text>
 
       {showingContent && navigableItems.length > 0 && (
@@ -310,32 +345,46 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
           <Text color="cyan" bold>
             Navigate to child pages/databases:
           </Text>
-          <Text dimColor>Use ↑/↓ arrows to navigate, ←/→ to change pages, Enter to select, 'p' to expand/collapse properties{onStartGrading && ", 'g' to grade database"}, 'b' to go back</Text>
+          <Text dimColor>
+            Use ↑/↓ arrows to navigate, ←/→ to change pages, Enter to select,
+            'p' to expand/collapse properties
+            {onStartGrading && ", 'g' to grade database"}, 'b' to go back
+          </Text>
           <Text></Text>
-          
+
           {(() => {
             const totalPages = Math.ceil(navigableItems.length / itemsPerPage);
             const startIndex = currentPage * itemsPerPage;
-            const endIndex = Math.min(startIndex + itemsPerPage, navigableItems.length);
+            const endIndex = Math.min(
+              startIndex + itemsPerPage,
+              navigableItems.length
+            );
             const currentPageItems = navigableItems.slice(startIndex, endIndex);
-            
+
             return (
               <>
                 {totalPages > 1 && (
                   <Text dimColor>
-                    Page {currentPage + 1} of {totalPages} | Items {startIndex + 1}-{endIndex} of {navigableItems.length}
+                    Page {currentPage + 1} of {totalPages} | Items{" "}
+                    {startIndex + 1}-{endIndex} of {navigableItems.length}
                   </Text>
                 )}
                 <Text></Text>
-                
+
                 {currentPageItems.map((item, pageIndex) => {
                   const actualIndex = startIndex + pageIndex;
                   const isSelected = actualIndex === selectedIndex;
-                  const canGrade = onStartGrading && (item.type === "child_database" || item.type === "database_entry");
-                  
+                  const canGrade =
+                    onStartGrading &&
+                    (item.type === "child_database" ||
+                      item.type === "database_entry");
+
                   return (
                     <Box key={item.id} marginBottom={1}>
-                      <Text color={isSelected ? "blue" : "white"} bold={isSelected}>
+                      <Text
+                        color={isSelected ? "blue" : "white"}
+                        bold={isSelected}
+                      >
                         {isSelected ? "→ " : "  "}
                         {item.content}
                         {isSelected && canGrade && (
@@ -348,10 +397,12 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
               </>
             );
           })()}
-          
+
           <Text></Text>
           <Text dimColor>
-            Press Enter to navigate, ←/→ for pages, 'p' for properties{onStartGrading && ", 'g' to grade database"}, 'b' to go back, Ctrl+C to exit
+            Press Enter to navigate, ←/→ for pages, 'p' for properties
+            {onStartGrading && ", 'g' to grade database"}, 'b' to go back,
+            Ctrl+C to exit
           </Text>
         </>
       )}
