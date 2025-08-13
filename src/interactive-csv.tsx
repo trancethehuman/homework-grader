@@ -19,6 +19,7 @@ import {
 } from "./lib/notion/notion-mcp-client.js";
 import { NotionService } from "./lib/notion/notion-service.js";
 import { NotionOAuthClient } from "./lib/notion/oauth-client.js";
+import { NotionTokenStorage } from "./lib/notion/notion-token-storage.js";
 import { NotionPageSelector } from "./components/notion/notion-page-selector.js";
 import { NotionContentViewer } from "./components/notion/notion-content-viewer.js";
 import { GitHubColumnSelector } from "./components/notion/github-column-selector.js";
@@ -943,6 +944,14 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           })();
         }}
         onBack={() => setStep("data-source-select")}
+        onClear={() => {
+          const storage = new NotionTokenStorage();
+          storage.clearToken();
+        }}
+        hasAccess={(() => {
+          const storage = new NotionTokenStorage();
+          return storage.hasToken();
+        })()}
       />
     );
   }

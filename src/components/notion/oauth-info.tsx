@@ -4,17 +4,23 @@ import { Box, Text, useInput } from "ink";
 interface NotionOAuthInfoProps {
   onContinue: () => void;
   onBack: () => void;
+  onClear?: () => void;
+  hasAccess?: boolean;
 }
 
 export const NotionOAuthInfo: React.FC<NotionOAuthInfoProps> = ({
   onContinue,
   onBack,
+  onClear,
+  hasAccess,
 }) => {
   useInput((input, key) => {
     if (key.return) {
       onContinue();
     } else if (input === "b" || key.escape) {
       onBack();
+    } else if (input === "c") {
+      onClear?.();
     }
   });
 
@@ -24,6 +30,12 @@ export const NotionOAuthInfo: React.FC<NotionOAuthInfoProps> = ({
         Connect to Notion
       </Text>
       <Text></Text>
+      {hasAccess && (
+        <>
+          <Text color="green">Existing Notion access detected.</Text>
+          <Text></Text>
+        </>
+      )}
       <Text>
         To access your Notion pages and databases, we’ll open a browser window
         for a one-time authorization.
@@ -37,6 +49,7 @@ export const NotionOAuthInfo: React.FC<NotionOAuthInfoProps> = ({
       <Text color="green">
         Press Enter to open the Notion authorization page
       </Text>
+      <Text color="yellow">Press 'c' to clear saved Notion access</Text>
       <Text color="red">Press 'b' to go back</Text>
     </Box>
   );
