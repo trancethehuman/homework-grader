@@ -5,7 +5,7 @@ import {
 } from "./notion-token-storage.js";
 
 const DEFAULT_PROXY_URL =
-  process.env.NOTION_PROXY_URL || "http://localhost:8765";
+  process.env.NOTION_PROXY_URL || "https://notion-proxy-8xr3.onrender.com";
 
 export class NotionOAuthClient {
   private readonly proxyBaseUrl: string;

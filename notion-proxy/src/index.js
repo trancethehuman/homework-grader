@@ -16,6 +16,16 @@ const NOTION_CLIENT_SECRET = process.env.NOTION_CLIENT_SECRET;
 const REDIRECT_URI =
   process.env.REDIRECT_URI || "http://localhost:8765/callback";
 
+// Optional helper: when running locally while using a hosted authUrl, allow CORS from that origin
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+  }
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  next();
+});
+
 if (!NOTION_CLIENT_SECRET) {
   console.warn(
     "NOTION_CLIENT_SECRET is not set. Configure in Render environment variables."
