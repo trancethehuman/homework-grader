@@ -52,6 +52,25 @@ The CLI will guide you through:
 2. Choosing data source (Notion Database or CSV File) 
 3. Processing repositories and generating grades
 
+### Automatic Updates
+
+The CLI includes a built-in update checker that:
+- ✅ **Checks daily** for new versions (cached, non-intrusive)
+- ✅ **Shows friendly notifications** when updates are available
+- ✅ **Provides clear update instructions** 
+- ✅ **Never interrupts your workflow** - notifications appear at the end
+- ✅ **Fails silently** - won't break if update check fails
+
+Example notification:
+```
+📦 Update available!
+   Current: 1.0.0
+   Latest:  1.1.0
+
+   Run the following to update:
+   npm install -g homework-grader@latest
+```
+
 ## Features
 
 - **Ultra-Fast Processing**: Sandbox integration with 5-20x performance boost
@@ -140,6 +159,14 @@ node --version  # Should be >= 22.0.0
    - Try: Reinstalling with `npm install -g homework-grader --force`
 3. **Notion OAuth fails** - The proxy service may be cold starting
    - Try: Wait a moment and retry the authentication
+
+### Update Notifications
+If you prefer to disable update checking:
+```bash
+# Set environment variable to disable update checks
+export NO_UPDATE_NOTIFIER=true
+homework-grader
+```
 
 ## Development & Contributing
 

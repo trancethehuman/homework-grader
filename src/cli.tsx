@@ -8,9 +8,13 @@ import { SandboxService } from "./lib/sandbox/index.js";
 import { NUM_URLS_IN_PARALLEL } from "./consts/limits.js";
 import { AIProvider, DEFAULT_PROVIDER } from "./consts/ai-providers.js";
 import { saveRepositoryFiles } from "./lib/file-saver.js";
+import { updateChecker } from "./lib/update-checker.js";
 
 // Load environment variables from .env file
 dotenv.config();
+
+// Check for updates at startup (non-blocking)
+updateChecker.checkForUpdates();
 
 async function processGitHubUrlsWithGitHubAPI(
   urls: string[],
@@ -201,11 +205,15 @@ async function main() {
         process.env.E2B_API_KEY,
         DEFAULT_PROVIDER
       );
+      
+      // Show update notification at the end
+      updateChecker.showUpdateNotificationAtExit();
     } catch (error) {
       console.error(
         "Error:",
         error instanceof Error ? error.message : String(error)
       );
+      updateChecker.showUpdateNotificationAtExit();
       process.exit(1);
     }
   } else {
@@ -215,10 +223,13 @@ async function main() {
         onComplete={async (filePath, columnName, urls, githubToken, e2bApiKey, aiProvider) => {
           app.unmount();
           await processGitHubUrls(urls, columnName, githubToken, e2bApiKey, aiProvider);
+          // Show update notification at the end
+          updateChecker.showUpdateNotificationAtExit();
         }}
         onError={(error) => {
           app.unmount();
           console.error("Error:", error);
+          updateChecker.showUpdateNotificationAtExit();
           process.exit(1);
         }}
       />
