@@ -3,69 +3,22 @@ name: Deploy Notion Proxy to Render
 on:
   push:
     branches: [main]
+    paths:
+      - "notion-proxy/**"
+      - "render.yaml"
+      - ".github/workflows/render-deploy.yml"
   workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Install jq
-        run: sudo apt-get update && sudo apt-get install -y jq
-
-      - name: Deploy via Render (hook + API status)
+      - name: Trigger Render deploy hook
         env:
-          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
-          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
           RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
         run: |
-          set -euo pipefail
-
-          # Require hook + API for status polling
           if [ -z "${RENDER_DEPLOY_HOOK_URL:-}" ]; then
             echo "RENDER_DEPLOY_HOOK_URL secret is not set" >&2
             exit 1
           fi
-          if [ -z "${RENDER_API_KEY:-}" ] || [ -z "${RENDER_SERVICE_ID:-}" ]; then
-            echo "RENDER_API_KEY and/or RENDER_SERVICE_ID not set for status polling" >&2
-            exit 1
-          fi
-
-          echo "Triggering Render deploy hook"
-          HOOK_JSON=$(curl -fsSL -X POST "$RENDER_DEPLOY_HOOK_URL")
-          echo "$HOOK_JSON"
-          DEPLOY_ID=$(echo "$HOOK_JSON" | jq -r '.deploy.id // empty')
-          if [ -z "$DEPLOY_ID" ]; then
-            echo "Could not parse deploy id from hook response" >&2
-            exit 1
-          fi
-
-          echo "Polling deploy id $DEPLOY_ID"
-          for i in $(seq 1 240); do # ~20 minutes max
-            RESP=$(curl -sS -w "\n%{http_code}" \
-              -H "Authorization: Bearer $RENDER_API_KEY" \
-              "https://api.render.com/v1/deploys/$DEPLOY_ID") || true
-            HTTP=$(echo "$RESP" | tail -n1)
-            BODY=$(echo "$RESP" | head -n-1)
-            if [ "$HTTP" = "404" ] || [ -z "$BODY" ]; then
-              echo "Deploy not yet available (HTTP $HTTP), retrying..."
-              sleep 5
-              continue
-            fi
-            STATUS=$(echo "$BODY" | jq -r '.status // empty')
-            echo "Status: $STATUS"
-            case "$STATUS" in
-              live|succeeded)
-                echo "Deploy succeeded"
-                exit 0
-                ;;
-              failed|build_failed|canceled)
-                echo "Deploy failed: $BODY" >&2
-                exit 1
-                ;;
-              * )
-                sleep 5
-                ;;
-            esac
-          done
-          echo "Timed out waiting for Render deploy to finish" >&2
-          exit 1
+          curl -fsSL -X POST "$RENDER_DEPLOY_HOOK_URL"
