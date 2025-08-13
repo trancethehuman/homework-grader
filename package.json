@@ -1,13 +1,25 @@
 {
   "name": "homework-grader",
   "version": "1.0.0",
-  "description": "A homework grading system with CSV URL loading functionality",
+  "description": "A high-performance CLI for grading homework submissions from CSV files and Notion databases with ultra-fast GitHub repository analysis",
   "main": "dist/cli.js",
   "bin": {
     "homework-grader": "./dist/cli.js"
   },
   "type": "module",
   "packageManager": "pnpm@9.15.0",
+  "preferGlobal": true,
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/trancethehuman/homework-grader.git"
+  },
+  "bugs": {
+    "url": "https://github.com/trancethehuman/homework-grader/issues"
+  },
+  "homepage": "https://github.com/trancethehuman/homework-grader#readme",
   "files": [
     "dist/**/*",
     "README.md",
@@ -21,13 +33,21 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
-    "csv",
-    "url-loader",
     "homework",
     "grading",
-    "typescript"
+    "cli",
+    "github",
+    "csv",
+    "notion",
+    "typescript",
+    "repository-analysis",
+    "ai-grading",
+    "education",
+    "automation",
+    "sandbox",
+    "e2b"
   ],
-  "author": "",
+  "author": "Your Name <your.email@example.com>",
   "license": "MIT",
   "devDependencies": {
     "@types/ms": "^2.1.0",

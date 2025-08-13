@@ -1,14 +1,43 @@
 # Homework Grader
 
-A high-performance TypeScript CLI for processing homework submissions from CSV files with ultra-fast GitHub repository analysis.
+A high-performance TypeScript CLI for processing homework submissions from CSV files and Notion databases with ultra-fast GitHub repository analysis.
 
-## Quick Start
+## Installation
+
+### Global Installation (Recommended)
 
 ```bash
+npm install -g homework-grader
+```
+
+### Using npx (No Installation Required)
+
+```bash
+npx homework-grader
+```
+
+### Local Development
+
+```bash
+git clone https://github.com/trancethehuman/homework-grader.git
+cd homework-grader
 pnpm install
 pnpm build
 pnpm start
 ```
+
+## Quick Start
+
+After installation, simply run:
+
+```bash
+homework-grader
+```
+
+The CLI will guide you through:
+1. Setting up API keys (GitHub, E2B, AI providers)
+2. Choosing data source (Notion Database or CSV File) 
+3. Processing repositories and generating grades
 
 ## Features
 
@@ -64,6 +93,40 @@ GITHUB_API_ONLY=true  # Force GitHub API mode (skip sandbox)
 - Redirect URI must match in Notion settings and proxy: `https://<render>/callback` (prod) or `http://localhost:8765/callback` (local).
 - CLI stores the access token locally; it refreshes when possible and only prompts when needed.
 - Free Render plan may cold-start; hit `/health` first to warm up if OAuth feels slow.
+
+## Troubleshooting
+
+### Permission Errors
+If you encounter permission errors during global installation:
+```bash
+# On macOS/Linux - use sudo if needed
+sudo npm install -g homework-grader
+
+# Or use npx instead (no installation required)
+npx homework-grader
+```
+
+### Node.js Version
+Ensure you're using Node.js 22 or higher:
+```bash
+node --version  # Should be >= 22.0.0
+```
+
+### API Rate Limits
+- **GitHub**: Without a token, you're limited to 60 requests/hour
+- **Solution**: Provide a GitHub Personal Access Token when prompted
+
+### Sandbox Issues
+- **E2B**: If sandbox initialization fails, the CLI will automatically fall back to GitHub API
+- **Solution**: Ensure your E2B API key is valid at [E2B Dashboard](https://e2b.dev/)
+
+### Common Issues
+1. **"Command not found"** - The global installation may have failed or your PATH is incorrect
+   - Try: `npx homework-grader` instead
+2. **"Module not found"** - Dependencies may be missing 
+   - Try: Reinstalling with `npm install -g homework-grader --force`
+3. **Notion OAuth fails** - The proxy service may be cold starting
+   - Try: Wait a moment and retry the authentication
 
 ## License
 
