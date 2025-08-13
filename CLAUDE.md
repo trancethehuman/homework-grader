@@ -6,6 +6,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is a homework grading system repository with TypeScript URL loading functionality for processing homework submissions from CSV files and GitHub repositories. The project is licensed under MIT License.
 
+### OAuth/Proxy (short)
+
+- Notion auth uses a tiny Express proxy in `notion-proxy/` deployed to Render (free plan supported).
+- The proxy owns the Notion client secret and handles `/auth/start`, `/callback`, `/refresh`, and `/auth/status/:state`.
+- The CLI calls the proxy to start OAuth, opens a browser, and stores the returned access token locally.
+- Default proxy base points to the hosted instance; override with `NOTION_PROXY_URL` for local testing.
+
 ## Development Setup
 
 ### Package Manager
@@ -49,6 +56,11 @@ pnpm start
 pnpm run build          # Build first
 pnpm start              # Interactive mode
 pnpm start sample.csv   # Legacy mode with CSV file
+
+### Notion in the CLI (very short)
+
+- Selecting “Notion Database” shows a brief screen, detects existing access, and provides a shortcut to clear.
+- We refresh tokens when possible and prompt for OAuth only when needed.
 
 # Development workflow
 pnpm run dev            # Interactive mode (no build required)
@@ -97,7 +109,7 @@ This helps improve performance and reduces token consumption when processing lar
 ### Environment Variables
 
 - **GITHUB_TOKEN**: Personal access token for GitHub API (when using GitHub API mode)
-- **GITHUB_MAX_DEPTH**: Maximum directory depth for GitHub API processing (default: 5)  
+- **GITHUB_MAX_DEPTH**: Maximum directory depth for GitHub API processing (default: 5)
 - **GITHUB_API_ONLY**: Set to 'true' to force GitHub API mode instead of Vercel Sandbox
 - **AI provider variables**: Various API keys for different AI providers (OpenAI, Anthropic, Google, etc.)
 
@@ -106,6 +118,7 @@ This helps improve performance and reduces token consumption when processing lar
 The system now uses **Vercel Sandbox** as the primary repository processing method, delivering dramatically improved performance:
 
 #### **Performance Characteristics**
+
 - **5-20x faster** than GitHub API approach for typical repositories
 - **No rate limits** - processes repositories as fast as the sandbox can handle
 - **No depth restrictions** - analyzes complete repository structure
@@ -114,16 +127,18 @@ The system now uses **Vercel Sandbox** as the primary repository processing meth
 #### **File Reading Optimization Strategies**
 
 1. **Bulk Reading (≤100 files)**:
+
    ```bash
    # Single command processes all files with delimiters
-   bash -c 'echo "FILE_START:file1.js"; cat "file1.js"; echo "FILE_END:file1.js"; 
+   bash -c 'echo "FILE_START:file1.js"; cat "file1.js"; echo "FILE_END:file1.js";
             echo "FILE_START:file2.js"; cat "file2.js"; echo "FILE_END:file2.js"'
    ```
 
 2. **Parallel Batching (>100 files)**:
+
    ```typescript
    // Process multiple 20-file batches simultaneously
-   const batchPromises = batches.map(batch => this.readFilesBulk(batch));
+   const batchPromises = batches.map((batch) => this.readFilesBulk(batch));
    await Promise.all(batchPromises);
    ```
 
@@ -133,13 +148,15 @@ The system now uses **Vercel Sandbox** as the primary repository processing meth
    - Tertiary: Sequential file reads (GitHub API style)
 
 #### **Expected Performance Improvements**
+
 | Repository Size | GitHub API Time | Vercel Sandbox Time | Speed Improvement |
-|----------------|----------------|-------------------|------------------|
-| 10 files | 10-20 seconds | 1-2 seconds | **5-10x faster** |
-| 50 files | 50-100 seconds | 2-5 seconds | **10-20x faster** |
-| 100+ files | 2-5 minutes | 5-15 seconds | **10-20x faster** |
+| --------------- | --------------- | ------------------- | ----------------- |
+| 10 files        | 10-20 seconds   | 1-2 seconds         | **5-10x faster**  |
+| 50 files        | 50-100 seconds  | 2-5 seconds         | **10-20x faster** |
+| 100+ files      | 2-5 minutes     | 5-15 seconds        | **10-20x faster** |
 
 #### **Sandbox Infrastructure**
+
 - **Runtime**: Amazon Linux 2023 with Node.js 22 or Python 3.13
 - **Resources**: 4 vCPUs, 8GB memory (2GB per vCPU)
 - **Timeout**: 10 minutes default (up to 45 minutes maximum)
@@ -218,6 +235,7 @@ The codebase includes:
 ### Vercel Sandbox Components
 
 - **SandboxFileProcessor Class** (`src/lib/vercel-sandbox/sandbox-file-processor.ts`)
+
   - **High-Performance File Filtering**: Uses identical logic to GitHubService but optimized for local processing
   - **No Depth Restrictions**: Removed artificial depth limitations for complete analysis
   - **Efficient Pattern Matching**: Fast file path and extension filtering

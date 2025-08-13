@@ -40,8 +40,8 @@ GOOGLE_GENERATIVE_AI_API_KEY="your-google-ai-api-key"
 # NOTION_CLIENT_ID=234d872b-594c-80ec-9dac-00379870e655
 # NOTION_CLIENT_SECRET=******
 # REDIRECT_URI=https://<your-render-service>.onrender.com/callback
-# Locally, you can run the proxy on :8765 and keep REDIRECT_URI=http://localhost:8765/callback
-NOTION_PROXY_URL="http://localhost:8765"
+# Optional override (defaults to hosted proxy if omitted):
+# NOTION_PROXY_URL=https://<your-render-service>.onrender.com
 
 # Vercel Sandbox (required for ultra-fast processing)
 VERCEL_OIDC_TOKEN="your-vercel-oidc-token"
@@ -57,6 +57,14 @@ GITHUB_API_ONLY=true  # Force GitHub API mode (skip Vercel Sandbox)
 1. **AI Providers**: Get API keys from [OpenAI](https://platform.openai.com/api-keys), [Anthropic](https://console.anthropic.com/), or [Google AI](https://makersuite.google.com/app/apikey)
 2. **Notion**: Create integration at [Notion Developers](https://www.notion.so/my-integrations). Use OAuth via the bundled proxy instead of a Notion API key. The CLI will open a browser to connect your workspace.
 3. **Vercel Sandbox**: Get OIDC token from your Vercel project settings
+
+## Notion OAuth Architecture (short)
+
+- CLI calls a minimal proxy (`/notion-proxy`) to start OAuth; client secret lives only on the proxy.
+- Proxy routes: `/auth/start`, `/auth/status/:state`, `/callback`, `/refresh`.
+- Redirect URI must match in Notion settings and proxy: `https://<render>/callback` (prod) or `http://localhost:8765/callback` (local).
+- CLI stores the access token locally; it refreshes when possible and only prompts when needed.
+- Free Render plan may cold-start; hit `/health` first to warm up if OAuth feels slow.
 
 ## License
 
