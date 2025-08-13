@@ -912,8 +912,20 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
             if (source === "csv") {
               setStep("input");
             } else if (source === "notion") {
-              // Use the new Notion API integration instead of MCP
-              setStep("notion-api-page-select");
+              setStep("loading");
+              (async () => {
+                try {
+                  await notionOAuthClient.ensureAuthenticated();
+                  setStep("notion-api-page-select");
+                } catch (e: any) {
+                  setError(
+                    `Notion authentication failed: ${
+                      e instanceof Error ? e.message : String(e)
+                    }`
+                  );
+                  setStep("data-source-select");
+                }
+              })();
             }
           }}
         />
