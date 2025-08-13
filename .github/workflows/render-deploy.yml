@@ -31,28 +31,36 @@ jobs:
           fi
 
           echo "Triggering Render deploy hook"
-          curl -fsSL -X POST "$RENDER_DEPLOY_HOOK_URL"
+          HOOK_JSON=$(curl -fsSL -X POST "$RENDER_DEPLOY_HOOK_URL")
+          echo "$HOOK_JSON"
+          DEPLOY_ID=$(echo "$HOOK_JSON" | jq -r '.deploy.id // empty')
+          if [ -z "$DEPLOY_ID" ]; then
+            echo "Could not parse deploy id from hook response" >&2
+            exit 1
+          fi
 
-          echo "Polling latest deploy status for service $RENDER_SERVICE_ID"
-          # Wait for deploy to appear and complete
+          echo "Polling deploy id $DEPLOY_ID"
           for i in $(seq 1 240); do # ~20 minutes max
-            LIST_JSON=$(curl -fsSL -H "Authorization: Bearer $RENDER_API_KEY" \
-              "https://api.render.com/v1/services/$RENDER_SERVICE_ID/deploys?limit=1")
-            DEPLOY=$(echo "$LIST_JSON" | jq '.[0]')
-            ID=$(echo "$DEPLOY" | jq -r '.id')
-            STATUS=$(echo "$DEPLOY" | jq -r '.status')
-            echo "Latest deploy: $ID status=$STATUS"
+            RESP=$(curl -sS -w "\n%{http_code}" \
+              -H "Authorization: Bearer $RENDER_API_KEY" \
+              "https://api.render.com/v1/deploys/$DEPLOY_ID") || true
+            HTTP=$(echo "$RESP" | tail -n1)
+            BODY=$(echo "$RESP" | head -n-1)
+            if [ "$HTTP" = "404" ] || [ -z "$BODY" ]; then
+              echo "Deploy not yet available (HTTP $HTTP), retrying..."
+              sleep 5
+              continue
+            fi
+            STATUS=$(echo "$BODY" | jq -r '.status // empty')
+            echo "Status: $STATUS"
             case "$STATUS" in
               live|succeeded)
                 echo "Deploy succeeded"
                 exit 0
                 ;;
               failed|build_failed|canceled)
-                echo "Deploy failed: $DEPLOY" >&2
+                echo "Deploy failed: $BODY" >&2
                 exit 1
-                ;;
-              null|"" )
-                sleep 5
                 ;;
               * )
                 sleep 5
