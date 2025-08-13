@@ -34,12 +34,21 @@ jobs:
             fi
             echo "Deploy created: $DEPLOY_ID"
 
-            # Poll until completion
+            # Poll until completion (use service-scoped endpoint; 404-safe)
+            sleep 5
             while true; do
-              STATUS_JSON=$(curl -fsSL \
+              STATUS_JSON=$(curl -sS -w "\n%{http_code}" \
                 -H "Authorization: Bearer $RENDER_API_KEY" \
-                https://api.render.com/v1/deploys/$DEPLOY_ID)
-              STATUS=$(echo "$STATUS_JSON" | jq -r '.status')
+                https://api.render.com/v1/services/$RENDER_SERVICE_ID/deploys/$DEPLOY_ID)
+              HTTP_CODE=$(echo "$STATUS_JSON" | tail -n1)
+              BODY=$(echo "$STATUS_JSON" | head -n-1)
+              if [ "$HTTP_CODE" = "404" ]; then
+                # Fallback: list latest deploy
+                LIST_JSON=$(curl -fsSL -H "Authorization: Bearer $RENDER_API_KEY" \
+                  "https://api.render.com/v1/services/$RENDER_SERVICE_ID/deploys?limit=1")
+                BODY=$(echo "$LIST_JSON" | jq '.[0]')
+              fi
+              STATUS=$(echo "$BODY" | jq -r '.status')
               echo "Deploy status: $STATUS"
               case "$STATUS" in
                 live|succeeded)
@@ -47,7 +56,7 @@ jobs:
                   break
                   ;;
                 failed|build_failed|canceled)
-                  echo "Deploy failed: $STATUS_JSON" >&2
+                  echo "Deploy failed: $BODY" >&2
                   exit 1
                   ;;
                 *)
