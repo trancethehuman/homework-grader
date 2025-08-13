@@ -2,20 +2,65 @@ name: Deploy Notion Proxy to Render
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger Render deploy hook
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Deploy via Render API (with status)
         env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
           RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
         run: |
-          if [ -z "$RENDER_DEPLOY_HOOK_URL" ]; then
-            echo "RENDER_DEPLOY_HOOK_URL secret is not set" >&2
-            exit 1
+          set -euo pipefail
+
+          if [ -n "${RENDER_API_KEY:-}" ] && [ -n "${RENDER_SERVICE_ID:-}" ]; then
+            echo "Creating deploy on Render service $RENDER_SERVICE_ID"
+            DEPLOY_JSON=$(curl -fsSL -X POST \
+              -H "Authorization: Bearer $RENDER_API_KEY" \
+              -H "Content-Type: application/json" \
+              https://api.render.com/v1/services/$RENDER_SERVICE_ID/deploys \
+              -d '{}')
+            DEPLOY_ID=$(echo "$DEPLOY_JSON" | jq -r '.id')
+            if [ -z "$DEPLOY_ID" ] || [ "$DEPLOY_ID" = "null" ]; then
+              echo "Failed to create deploy: $DEPLOY_JSON" >&2
+              exit 1
+            fi
+            echo "Deploy created: $DEPLOY_ID"
+
+            # Poll until completion
+            while true; do
+              STATUS_JSON=$(curl -fsSL \
+                -H "Authorization: Bearer $RENDER_API_KEY" \
+                https://api.render.com/v1/deploys/$DEPLOY_ID)
+              STATUS=$(echo "$STATUS_JSON" | jq -r '.status')
+              echo "Deploy status: $STATUS"
+              case "$STATUS" in
+                live|succeeded)
+                  echo "Deploy succeeded"
+                  break
+                  ;;
+                failed|build_failed|canceled)
+                  echo "Deploy failed: $STATUS_JSON" >&2
+                  exit 1
+                  ;;
+                *)
+                  sleep 5
+                  ;;
+              esac
+            done
+          else
+            # Fallback to hook if API credentials not provided
+            if [ -z "${RENDER_DEPLOY_HOOK_URL:-}" ]; then
+              echo "Neither RENDER_API_KEY/RENDER_SERVICE_ID nor RENDER_DEPLOY_HOOK_URL is set" >&2
+              exit 1
+            fi
+            echo "Triggering Render deploy hook"
+            curl -fsSL -X POST "$RENDER_DEPLOY_HOOK_URL"
           fi
-          curl -fsSL -X POST "$RENDER_DEPLOY_HOOK_URL"
