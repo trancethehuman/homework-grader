@@ -31,6 +31,7 @@ import {
   DEFAULT_PROVIDER,
   AI_PROVIDERS,
 } from "./consts/ai-providers.js";
+import { SANDBOX_BATCH_SIZE } from "./consts/limits.js";
 import { PreferencesStorage } from "./lib/preferences-storage.js";
 import {
   GradingSaveOptions,
@@ -156,13 +157,13 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
   // Loading animation for Notion auth
   useEffect(() => {
     let interval: NodeJS.Timeout;
-    
+
     if (step === "notion-auth-loading") {
       interval = setInterval(() => {
         setLoadingIconIndex((prev) => (prev + 1) % 6);
       }, 2000);
     }
-    
+
     return () => {
       if (interval) {
         clearInterval(interval);
@@ -209,9 +210,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           githubService = new GitHubService(githubToken, undefined, maxDepth);
         } else {
           try {
-            const { SandboxService } = await import(
-              "./lib/sandbox/index.js"
-            );
+            const { SandboxService } = await import("./lib/sandbox/index.js");
             sandboxService = new SandboxService();
             await sandboxService.initialize();
             console.log(
@@ -227,81 +226,173 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         }
 
         try {
-          for (let i = 0; i < notionGitHubUrls.length; i++) {
-            const urlItem = notionGitHubUrls[i];
-            const url = urlItem.url;
-            const pageId = urlItem.pageId || undefined; // Convert empty string to undefined
+          if (sandboxService) {
+            // Use parallel processing for sandbox (single sandbox, multiple repos)
+            console.log(
+              `🚀 Processing ${notionGitHubUrls.length} repositories in parallel batches of ${SANDBOX_BATCH_SIZE}`
+            );
 
-            setProcessingResults((prev) => ({
-              ...prev,
-              processed: i,
-              currentUrl: url,
-            }));
-
-            try {
-              console.log(
-                `Processing repository ${i + 1}/${
-                  notionGitHubUrls.length
-                }: ${url}`
+            // Process URLs in batches for better performance and resource management
+            for (
+              let i = 0;
+              i < notionGitHubUrls.length;
+              i += SANDBOX_BATCH_SIZE
+            ) {
+              const batch = notionGitHubUrls.slice(i, i + SANDBOX_BATCH_SIZE);
+              const batchNumber = Math.floor(i / SANDBOX_BATCH_SIZE) + 1;
+              const totalBatches = Math.ceil(
+                notionGitHubUrls.length / SANDBOX_BATCH_SIZE
               );
 
-              // Use the appropriate service
-              let result: any;
-              let repoInfo: any;
+              console.log(
+                `\n📦 Processing batch ${batchNumber}/${totalBatches} (${batch.length} repositories)`
+              );
 
-              if (sandboxService) {
-                // Use sandbox
-                repoInfo = sandboxService.parseGitHubUrl(url);
-                if (repoInfo) {
-                  result = await sandboxService.processGitHubUrl(
+              // Process batch in parallel
+              const batchPromises = batch.map(async (urlItem, batchIndex) => {
+                const globalIndex = i + batchIndex;
+                const url = urlItem.url;
+                const pageId = urlItem.pageId || undefined;
+
+                // Update progress for this specific URL
+                setProcessingResults((prev) => ({
+                  ...prev,
+                  processed: globalIndex,
+                  currentUrl: url,
+                }));
+
+                try {
+                  console.log(
+                    `  Processing repository ${globalIndex + 1}/${
+                      notionGitHubUrls.length
+                    }: ${url}`
+                  );
+
+                  const repoInfo = sandboxService.parseGitHubUrl(url);
+                  if (!repoInfo) {
+                    throw new Error("Invalid GitHub URL format");
+                  }
+
+                  const result = await sandboxService.processGitHubUrl(
                     url,
                     selectedProvider || DEFAULT_PROVIDER
                   );
-                }
-              } else if (githubService) {
-                // Use GitHub API (either by choice or fallback)
-                repoInfo = githubService.parseGitHubUrl(url);
-                if (repoInfo) {
-                  result = await githubService.processGitHubUrl(
+
+                  const gradingResult = await saveRepositoryFiles(
+                    repoInfo,
+                    result,
                     url,
-                    selectedProvider || DEFAULT_PROVIDER
+                    selectedProvider || DEFAULT_PROVIDER,
+                    pageId
                   );
+
+                  if (gradingResult) {
+                    collectedGradingResults.push(gradingResult);
+                  }
+
+                  console.log(`  ✓ Successfully processed ${url}`);
+                  return { url, success: true };
+                } catch (error) {
+                  const errorMessage =
+                    error instanceof Error ? error.message : String(error);
+                  console.error(`  ✗ Failed to process ${url}:`, errorMessage);
+                  return { url, success: false, error: errorMessage };
                 }
+              });
+
+              // Wait for all promises in the batch to complete
+              const batchResults = await Promise.all(batchPromises);
+              results.push(...batchResults);
+
+              // Update progress after batch completion
+              setProcessingResults((prev) => ({
+                ...prev,
+                processed: Math.min(
+                  i + SANDBOX_BATCH_SIZE,
+                  notionGitHubUrls.length
+                ),
+                results: [...results],
+              }));
+
+              // Add delay between batches to be respectful to resources
+              if (i + SANDBOX_BATCH_SIZE < notionGitHubUrls.length) {
+                console.log(
+                  `  Completed batch ${batchNumber}. Brief pause before next batch...`
+                );
+                await new Promise((resolve) => setTimeout(resolve, 2000));
               }
+            }
+          } else {
+            // Fallback to sequential processing for GitHub API
+            console.log(
+              `⚡ Processing ${notionGitHubUrls.length} repositories sequentially (GitHub API mode)`
+            );
 
-              if (repoInfo && result) {
-                const gradingResult = await saveRepositoryFiles(
-                  repoInfo,
-                  result,
-                  url,
-                  selectedProvider || DEFAULT_PROVIDER,
-                  pageId
+            for (let i = 0; i < notionGitHubUrls.length; i++) {
+              const urlItem = notionGitHubUrls[i];
+              const url = urlItem.url;
+              const pageId = urlItem.pageId || undefined;
+
+              setProcessingResults((prev) => ({
+                ...prev,
+                processed: i,
+                currentUrl: url,
+              }));
+
+              try {
+                console.log(
+                  `Processing repository ${i + 1}/${
+                    notionGitHubUrls.length
+                  }: ${url}`
                 );
 
-                if (gradingResult) {
-                  collectedGradingResults.push(gradingResult);
+                let result: any;
+                let repoInfo: any;
+
+                if (githubService) {
+                  repoInfo = githubService.parseGitHubUrl(url);
+                  if (repoInfo) {
+                    result = await githubService.processGitHubUrl(
+                      url,
+                      selectedProvider || DEFAULT_PROVIDER
+                    );
+                  }
                 }
+
+                if (repoInfo && result) {
+                  const gradingResult = await saveRepositoryFiles(
+                    repoInfo,
+                    result,
+                    url,
+                    selectedProvider || DEFAULT_PROVIDER,
+                    pageId
+                  );
+
+                  if (gradingResult) {
+                    collectedGradingResults.push(gradingResult);
+                  }
+                }
+
+                results.push({ url, success: true });
+                console.log(`✓ Successfully processed ${url}`);
+              } catch (error) {
+                const errorMessage =
+                  error instanceof Error ? error.message : String(error);
+                results.push({ url, success: false, error: errorMessage });
+                console.error(`✗ Failed to process ${url}:`, errorMessage);
               }
 
-              results.push({ url, success: true });
-              console.log(`✓ Successfully processed ${url}`);
-            } catch (error) {
-              const errorMessage =
-                error instanceof Error ? error.message : String(error);
-              results.push({ url, success: false, error: errorMessage });
-              console.error(`✗ Failed to process ${url}:`, errorMessage);
-            }
+              // Update progress
+              setProcessingResults((prev) => ({
+                ...prev,
+                processed: i + 1,
+                results: [...results],
+              }));
 
-            // Update progress
-            setProcessingResults((prev) => ({
-              ...prev,
-              processed: i + 1,
-              results: [...results],
-            }));
-
-            // Add small delay between requests to avoid overwhelming APIs
-            if (i < notionGitHubUrls.length - 1) {
-              await new Promise((resolve) => setTimeout(resolve, 1000));
+              // Add delay between sequential requests
+              if (i < notionGitHubUrls.length - 1) {
+                await new Promise((resolve) => setTimeout(resolve, 1000));
+              }
             }
           }
 
@@ -401,7 +492,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
   useEffect(() => {
     const initializeE2BKey = async () => {
       if (step !== "e2b-api-key") return;
-      
+
       const savedKey = e2bTokenStorage.getToken();
       const envKey = process.env.E2B_API_KEY;
       const key = savedKey || envKey;
@@ -441,7 +532,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         // Check if user already has authentication
         const storage = new NotionTokenStorage();
         const hasExistingAuth = storage.hasToken();
-        
+
         if (hasExistingAuth) {
           // Try to use existing auth directly
           try {
@@ -457,7 +548,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           setStep("notion-oauth-info");
         }
       }, 1500); // Show loading animation for 1.5 seconds
-      
+
       return () => clearTimeout(timer);
     }
   }, [step, notionOAuthClient]);
@@ -1068,7 +1159,9 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         <Box marginTop={1}>
           <Text color="gray">Current key: </Text>
           <Text color={e2bApiKey ? "green" : "red"}>
-            {e2bApiKey ? "****************************" + e2bApiKey.slice(-4) : "None"}
+            {e2bApiKey
+              ? "****************************" + e2bApiKey.slice(-4)
+              : "None"}
           </Text>
         </Box>
         <Box marginTop={1}>
@@ -1078,14 +1171,13 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
 
         <Box marginTop={1}>
           <Text color="cyan">Enter E2B API key (or press Enter to skip):</Text>
-          <Text color="white">
-            &gt; {input.replace(/./g, "*")}█
-          </Text>
+          <Text color="white">&gt; {input.replace(/./g, "*")}█</Text>
         </Box>
 
         <Box marginTop={1}>
           <Text color="gray">
-            Commands: 'o' = open E2B dashboard | 'c' = clear key | 's' = skip | Enter = continue | Ctrl+C = exit
+            Commands: 'o' = open E2B dashboard | 'c' = clear key | 's' = skip |
+            Enter = continue | Ctrl+C = exit
           </Text>
         </Box>
 
@@ -1117,27 +1209,24 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
       "Preparing your workspace...",
       "Establishing secure connection...",
       "Verifying permissions...",
-      "Almost ready..."
+      "Almost ready...",
     ];
-    
+
     return (
       <Box flexDirection="column" alignItems="center">
         <Text bold color="blue">
           Notion Authentication
         </Text>
         <Box marginTop={1} alignItems="center">
-          <Text>
-            {loadingIcons[loadingIconIndex]}
-          </Text>
+          <Text>{loadingIcons[loadingIconIndex]}</Text>
         </Box>
         <Box marginTop={1}>
-          <Text color="cyan">
-            {loadingMessages[loadingIconIndex]}
-          </Text>
+          <Text color="cyan">{loadingMessages[loadingIconIndex]}</Text>
         </Box>
         <Box marginTop={2}>
           <Text color="gray">
-            This may take a moment while we connect to your Notion workspace...
+            Because of a cold start, this may take a moment while we connect to
+            your Notion workspace...
           </Text>
         </Box>
       </Box>

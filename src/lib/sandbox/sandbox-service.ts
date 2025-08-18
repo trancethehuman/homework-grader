@@ -83,6 +83,7 @@ export class SandboxService {
       throw new Error("Sandbox not initialized. Call initialize() first.");
     }
 
+    // Generate unique clone ID to prevent conflicts during concurrent operations
     const cloneId = uuidv4().substring(0, 8);
     const localPath = `/tmp/repos/${repositoryInfo.owner}-${repositoryInfo.repo}-${cloneId}`;
 
@@ -362,6 +363,11 @@ export class SandboxService {
     }
   }
 
+  /**
+   * Process a GitHub URL by cloning the repository and extracting content.
+   * This method is safe for concurrent use - multiple repositories can be processed
+   * in parallel as each gets a unique clone path with UUID suffix.
+   */
   async processGitHubUrl(url: string, aiProvider?: AIProvider): Promise<any> {
     const repositoryInfo = this.parseGitHubUrl(url);
     if (!repositoryInfo) {
