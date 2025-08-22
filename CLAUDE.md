@@ -225,6 +225,18 @@ The codebase includes:
   - **Identical Output Format**: 100% compatible with existing grading pipeline
   - **Secure API Key Management**: Local storage with format validation
 
+- **StagehandService Class** (`src/lib/stagehand/stagehand-service.ts`)
+
+  - **NEW**: Optional Stagehand/Browserbase testing integration
+  - **Browser Automation**: Uses Browserbase cloud browser infrastructure
+  - **Test Suite**: Enhanced navigation and comprehensive action tests targeting Maven Agent Bootcamp
+  - **Natural Language Actions**: Interact with web pages using natural language
+  - **Multi-Step Interactions**: Page navigation, scrolling, clicking, and hovering actions
+  - **Environment Configuration**: Uses BROWSERBASE_API_KEY and BROWSERBASE_PROJECT_ID
+  - **Keep-Alive Functionality**: Browser sessions remain active for 15 seconds after test completion
+  - **Error Handling**: Comprehensive error handling with graceful degradation
+  - **Resource Cleanup**: Automatic cleanup of browser sessions with countdown timer
+
 - **Interactive CSV Component** (`src/interactive-csv.tsx`)
 
   - React/Ink based interactive CLI interface
@@ -236,6 +248,9 @@ The codebase includes:
   - Automatic GitHub URL column suggestion
   - Arrow key navigation for column selection
   - Error handling with user-friendly messages
+  - **NEW**: Optional Stagehand/Browserbase testing after Notion connection
+  - **Non-intrusive Integration**: Test option appears only after successful Notion auth
+  - **Preserves All Existing Flows**: No changes to existing user workflows
 
 - **Token Storage Service** (`src/lib/token-storage.ts`)
   - Secure GitHub token storage with platform-appropriate locations
@@ -284,6 +299,12 @@ The codebase includes:
   - Organized by category for easy maintenance
   - Used by both GitHubService and SandboxService for consistent filtering
 
+- **Stagehand Test Configuration** (`src/consts/stagehand-test.ts`)
+  - **NEW**: Constants for Stagehand/Browserbase testing
+  - **STAGEHAND_TEST_URL**: Target website for all tests (Maven Agent Bootcamp)
+  - **BROWSER_SESSION_KEEP_ALIVE_MS**: 15-second delay before browser cleanup
+  - **COUNTDOWN_UPDATE_INTERVAL_MS**: 1-second interval for countdown display
+
 ### Data Files
 
 - `sample.csv` - Example CSV file with name, website, and description columns
@@ -294,6 +315,18 @@ The codebase includes:
 ### Examples
 
 - `src/example.ts` - Demonstrates TypeScript URLLoader usage
+
+### Test Components
+
+- **StagehandTest Component** (`src/components/stagehand-test.tsx`)
+  - **Interactive Test Interface**: Menu-driven test selection with arrow key navigation
+  - **Enhanced Test Scenarios**: Comprehensive navigation and multi-step action tests targeting Maven Agent Bootcamp
+  - **Configuration Validation**: Checks for required Browserbase credentials
+  - **Real-time Results**: Displays test results with timing information
+  - **Browser Session Management**: 15-second keep-alive with countdown timer
+  - **Early Termination**: Press 'c' to close browser session before countdown expires
+  - **Graceful Error Handling**: User-friendly error messages and fallbacks
+  - **Navigation Controls**: Back/quit options to return to main workflow
 
 ### Key Features
 
@@ -314,6 +347,7 @@ The codebase includes:
 - **Authentication Management**:
   - **GitHub**: Secure token storage, validation, browser integration for token generation
   - **E2B**: API key storage with format validation and secure local storage
+  - **Browserbase**: Optional API key and project ID for Stagehand testing
   - Platform-appropriate config directories (Windows/macOS/Linux)
   - Interactive credential setup with masked input display
   - Environment variable support for development
@@ -332,6 +366,16 @@ The codebase includes:
 - Development workflow updates
 - Any new conventions or patterns established
 - Never write in-line comments in the code
+
+### Documentation Reading Guidelines
+
+**DO NOT install dependencies or packages** when reading documentation websites or tutorials. When documentation mentions installing packages (npm install, pnpm install, etc.), assume the user has already installed the necessary dependencies for their project. Only install packages if:
+
+1. The user explicitly requests installation of specific packages
+2. You are adding new functionality that requires new dependencies not currently in the project
+3. The user is starting a completely new project from scratch
+
+This prevents unnecessary package installations when simply researching or understanding existing functionality.
 
 ## Build-First Workflow
 

@@ -39,6 +39,7 @@ import {
 } from "./components/grading-save-options.js";
 import { GradingResult } from "./lib/file-saver.js";
 import { GradingDatabaseService } from "./lib/notion/grading-database-service.js";
+import { StagehandTest } from "./components/stagehand-test.js";
 
 export interface CSVColumn {
   name: string;
@@ -79,6 +80,8 @@ type Step =
   | "notion-fetching"
   | "notion-property-select"
   | "notion-api-page-select"
+  | "stagehand-test"
+  | "notion-page-selector"
   | "notion-api-content-view"
   | "notion-oauth-info"
   | "notion-github-column-select"
@@ -1018,6 +1021,17 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           exit();
         }
       }
+    } else if (step === "notion-api-page-select") {
+      if (key.return) {
+        // Continue with Notion data processing - show the actual NotionPageSelector
+        setStep("notion-page-selector");
+      } else if (inputChar === "t") {
+        // Test Stagehand/Browserbase integration
+        setStep("stagehand-test");
+      } else if (inputChar === "b") {
+        // Go back to data source selection
+        setStep("data-source-select");
+      }
     }
 
     if (key.ctrl && inputChar === "c") {
@@ -1556,6 +1570,30 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
   if (step === "notion-api-page-select") {
     return (
       <Box flexDirection="column">
+        <Text color="green" bold>
+          ✓ Notion Connection Successful
+        </Text>
+        <Text></Text>
+        <Text>Choose what you'd like to do:</Text>
+        <Text></Text>
+        <Text color="cyan">• Press Enter to continue with Notion data processing</Text>
+        <Text color="yellow">• Press 't' to test Stagehand/Browserbase integration</Text>
+        <Text dimColor>• Press 'b' to go back to data source selection</Text>
+      </Box>
+    );
+  }
+
+  if (step === "stagehand-test") {
+    return (
+      <StagehandTest
+        onBack={() => setStep("notion-api-page-select")}
+      />
+    );
+  }
+
+  if (step === "notion-page-selector") {
+    return (
+      <Box flexDirection="column">
         <NotionPageSelector
           onSelect={(pageId, pageTitle) => {
             setNotionApiSelectedPageId(pageId);
@@ -1586,7 +1624,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
             setError(error);
             setStep("data-source-select");
           }}
-          onBack={() => setStep("data-source-select")}
+          onBack={() => setStep("notion-api-page-select")}
           // Pass cached data to avoid refetching
           cachedPages={cachedNotionPages}
           cachedDatabases={cachedNotionDatabases}
