@@ -29,15 +29,6 @@ jobs:
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
         
-      - name: Build project
-        run: pnpm run build
-        
-      - name: Run tests
-        run: |
-          # Verify the built CLI works
-          timeout 10s node dist/cli.js --help || true
-          echo "CLI smoke test passed"
-          
       - name: Auto-increment version
         id: version
         run: |
@@ -64,10 +55,30 @@ jobs:
             "
             
             echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+            echo "VERSION_BUMPED=true" >> $GITHUB_OUTPUT
           else
             echo "Version $CURRENT_VERSION is new, proceeding with current version"
             echo "version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+            echo "VERSION_BUMPED=false" >> $GITHUB_OUTPUT
           fi
+        
+      - name: Build project
+        run: pnpm run build
+        
+      - name: Run tests
+        run: |
+          # Verify the built CLI works
+          timeout 10s node dist/cli.js --help || true
+          echo "CLI smoke test passed"
+          
+      - name: Commit version bump
+        if: steps.version.outputs.VERSION_BUMPED == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add package.json
+          git commit -m "chore: bump version to ${{ steps.version.outputs.version }} [skip ci]"
+          git push origin main
           
       - name: Publish to NPM
         run: npm publish
