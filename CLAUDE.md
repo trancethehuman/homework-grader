@@ -131,6 +131,8 @@ This helps improve performance and reduces token consumption when processing lar
 - **GITHUB_MAX_DEPTH**: Maximum directory depth for GitHub API processing (default: 5)
 - **GITHUB_API_ONLY**: Set to 'true' to force GitHub API mode instead of E2B Sandbox
 - **E2B_API_KEY**: E2B API key for sandbox-based repository processing
+- **BROWSERBASE_API_KEY**: Browserbase API key for browser testing functionality
+- **BROWSERBASE_PROJECT_ID**: Browserbase project ID for browser testing
 - **AI provider variables**: Various API keys for different AI providers (OpenAI, Anthropic, Google, etc.)
 
 ### E2B Sandbox Performance Architecture
@@ -237,6 +239,28 @@ The codebase includes:
   - **Error Handling**: Comprehensive error handling with graceful degradation
   - **Resource Cleanup**: Automatic cleanup of browser sessions with countdown timer
 
+- **BrowserTestingService Class** (`src/lib/stagehand/browser-testing-service.ts`)
+
+  - **NEW**: Production browser testing service for deployed applications
+  - **Multi-Tab Support**: Tests up to 10 deployed URLs simultaneously using separate browser tabs
+  - **Automated Interactions**: Performs natural language actions (clicks, scrolls, form interactions)
+  - **Screenshot Capture**: Takes screenshots throughout testing process for visual verification
+  - **Real-time Progress**: Provides live updates during testing with files/second metrics
+  - **Comprehensive Results**: Captures test duration, actions performed, errors encountered
+  - **Smart URL Detection**: Prioritizes column names over URL patterns for better accuracy
+  - **Provider Support**: Works with Vercel, Netlify, Railway, Heroku, GitHub Pages, custom domains
+  - **Resource Management**: Automatic cleanup of browser sessions and tabs
+
+- **DeployedUrlDetector Class** (`src/lib/deployed-url-detector.ts`)
+
+  - **NEW**: Intelligent detection of deployed application URLs in datasets
+  - **Column Name Priority**: Heavily weights column names (deployed, app, demo, live, production)
+  - **Pattern Recognition**: Recognizes hosting provider patterns for confidence scoring
+  - **Custom Domain Support**: Handles custom domains that don't match hosting patterns
+  - **GitHub Exclusion**: Automatically excludes GitHub repository URLs from detection
+  - **Confidence Scoring**: Provides 0-100% confidence scores for URL column candidates
+  - **Sample Preview**: Shows sample URLs for verification before testing begins
+
 - **Interactive CSV Component** (`src/interactive-csv.tsx`)
 
   - React/Ink based interactive CLI interface
@@ -248,9 +272,12 @@ The codebase includes:
   - Automatic GitHub URL column suggestion
   - Arrow key navigation for column selection
   - Error handling with user-friendly messages
-  - **NEW**: Optional Stagehand/Browserbase testing after Notion connection
-  - **Non-intrusive Integration**: Test option appears only after successful Notion auth
-  - **Preserves All Existing Flows**: No changes to existing user workflows
+  - **NEW**: Integrated browser testing workflow after repository processing
+  - **Browser Testing Prompt**: Optional step to test deployed applications after grading
+  - **Deployed URL Detection**: Automatically detects columns containing deployed app URLs  
+  - **Multi-Tab Testing**: Tests up to 10 applications concurrently with real-time progress
+  - **Results Integration**: Saves browser test results alongside grading data
+  - **Non-intrusive Integration**: All existing workflows preserved, browser testing is optional
 
 - **Token Storage Service** (`src/lib/token-storage.ts`)
   - Secure GitHub token storage with platform-appropriate locations
@@ -328,6 +355,23 @@ The codebase includes:
   - **Graceful Error Handling**: User-friendly error messages and fallbacks
   - **Navigation Controls**: Back/quit options to return to main workflow
 
+- **DeployedUrlSelector Component** (`src/components/deployed-url-selector.tsx`)
+  - **NEW**: Smart selection interface for deployed application URL columns
+  - **Column Analysis**: Analyzes Notion database columns for deployed URL patterns
+  - **Confidence Display**: Shows confidence scores and sample URLs for each candidate
+  - **Auto-Selection**: Automatically selects high-confidence single candidates (80%+ confidence)
+  - **Provider Detection**: Identifies hosting providers (Vercel, Netlify, etc.) for context
+  - **Interactive Navigation**: Arrow key selection with preview and quick-start options
+
+- **BrowserTesting Component** (`src/components/browser-testing.tsx`)
+  - **NEW**: Real-time browser testing interface with progress tracking
+  - **Multi-Tab Progress**: Shows active tabs and testing status for up to 10 concurrent tests
+  - **Live Metrics**: Displays success/failure counts, duration, and action summaries
+  - **Configuration Validation**: Checks Browserbase credentials before testing
+  - **Early Termination**: Allows user to terminate testing early if needed
+  - **Results Display**: Shows recent test results with screenshots and action counts
+  - **Resource Management**: Handles browser session cleanup with user feedback
+
 ### Key Features
 
 - **TypeScript**: Full type safety and compilation
@@ -347,14 +391,22 @@ The codebase includes:
 - **Authentication Management**:
   - **GitHub**: Secure token storage, validation, browser integration for token generation
   - **E2B**: API key storage with format validation and secure local storage
-  - **Browserbase**: Optional API key and project ID for Stagehand testing
+  - **Browserbase**: API key and project ID for browser testing deployed applications
   - Platform-appropriate config directories (Windows/macOS/Linux)
   - Interactive credential setup with masked input display
   - Environment variable support for development
   - Rate limit awareness (GitHub: 60 vs 5,000 requests/hour, E2B: no limits)
+- **Browser Testing for Deployed Applications**:
+  - **Multi-Tab Testing**: Test up to 10 deployed URLs simultaneously
+  - **Smart URL Detection**: Prioritizes column names over URL patterns for accuracy
+  - **Automated Interactions**: Natural language actions (clicks, scrolls, forms)
+  - **Screenshot Capture**: Visual verification throughout testing process
+  - **Real-time Progress**: Live updates with success/failure metrics
+  - **Provider Support**: Vercel, Netlify, Railway, Heroku, GitHub Pages, custom domains
+  - **Results Integration**: Saves browser test data alongside grading results in files and Notion
 - **CSV Processing**: File validation, analysis, and URL extraction
 - **Error Handling**: Comprehensive error handling with automatic fallback mechanisms
-- **Resource Management**: Automatic sandbox cleanup and resource deallocation
+- **Resource Management**: Automatic sandbox and browser session cleanup
 - **File Management**: Automatic deduplication and validation
 
 ## Important Instructions

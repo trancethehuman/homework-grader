@@ -37,9 +37,12 @@ import {
   GradingSaveOptions,
   SaveOption,
 } from "./components/grading-save-options.js";
-import { GradingResult } from "./lib/file-saver.js";
+import { GradingResult, saveBrowserTestResults } from "./lib/file-saver.js";
 import { GradingDatabaseService } from "./lib/notion/grading-database-service.js";
 import { StagehandTest } from "./components/stagehand-test.js";
+import { DeployedUrlSelector } from "./components/deployed-url-selector.js";
+import { BrowserTesting } from "./components/browser-testing.js";
+import { BrowserTestResult } from "./lib/stagehand/browser-testing-service.js";
 
 export interface CSVColumn {
   name: string;
@@ -86,6 +89,9 @@ type Step =
   | "notion-oauth-info"
   | "notion-github-column-select"
   | "notion-processing"
+  | "browser-testing-prompt"
+  | "deployed-url-select"
+  | "browser-testing"
   | "grading-save-options"
   | "notion-saving"
   | "input"
@@ -146,6 +152,9 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
     results: Array<{ url: string; success: boolean; error?: string }>;
   }>({ processed: 0, total: 0, results: [] });
   const [gradingResults, setGradingResults] = useState<GradingResult[]>([]);
+  const [browserTestResults, setBrowserTestResults] = useState<BrowserTestResult[]>([]);
+  const [deployedUrls, setDeployedUrls] = useState<Array<{ url: string; pageId: string }>>([]);
+  const [selectedDeployedUrlColumn, setSelectedDeployedUrlColumn] = useState<string>("");
   const [originalDatabaseId, setOriginalDatabaseId] = useState<
     string | undefined
   >();
@@ -408,12 +417,12 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           );
           console.log(`✗ Failed: ${results.filter((r) => !r.success).length}`);
 
-          // Save grading results and move to save options
+          // Save grading results and move to browser testing prompt
           setGradingResults(collectedGradingResults);
 
-          // Show save options after a short delay
+          // Show browser testing prompt after a short delay
           setTimeout(() => {
-            setStep("grading-save-options");
+            setStep("browser-testing-prompt");
           }, 2000);
         } finally {
           // Cleanup sandbox if it was used
@@ -1032,6 +1041,14 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         // Go back to data source selection
         setStep("data-source-select");
       }
+    } else if (step === "browser-testing-prompt") {
+      if (inputChar === "y") {
+        // Start browser testing - analyze for deployed URLs
+        setStep("deployed-url-select");
+      } else if (inputChar === "n") {
+        // Skip browser testing and go directly to save options
+        setStep("grading-save-options");
+      }
     }
 
     if (key.ctrl && inputChar === "c") {
@@ -1068,7 +1085,8 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         const result = await service.saveGradingResults(
           databaseId,
           gradingResults,
-          selectedGitHubColumn
+          selectedGitHubColumn,
+          browserTestResults
         );
 
         if (result.failed > 0) {
@@ -1829,6 +1847,91 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           This may take a moment to create/update database schema and save
           entries.
         </Text>
+      </Box>
+    );
+  }
+
+  if (step === "browser-testing-prompt") {
+    return (
+      <Box flexDirection="column">
+        <Text color="blue" bold>
+          🌐 Browser Testing Available
+        </Text>
+        <Text></Text>
+        <Text>
+          Repository analysis complete! Would you like to test deployed applications?
+        </Text>
+        <Text></Text>
+        <Text color="green">
+          ✓ Processed {gradingResults.length} repositories
+        </Text>
+        <Text></Text>
+        <Text>
+          Browser testing can automatically interact with deployed web applications
+          to verify functionality and capture screenshots.
+        </Text>
+        <Text></Text>
+        <Text color="cyan">• Press 'y' to set up browser testing</Text>
+        <Text color="yellow">• Press 'n' to skip and save results</Text>
+        <Text></Text>
+      </Box>
+    );
+  }
+
+  if (step === "deployed-url-select") {
+    return (
+      <Box flexDirection="column">
+        <DeployedUrlSelector
+          notionContent={notionApiContent}
+          onSelect={(selectedProperty, deployedAppUrls) => {
+            setNotionSelectedProperty(selectedProperty);
+
+            // Convert string[] to the expected format if needed
+            const urlsWithIds: Array<{ url: string; pageId: string }> =
+              Array.isArray(deployedAppUrls) &&
+              deployedAppUrls.length > 0 &&
+              typeof deployedAppUrls[0] === "string"
+                ? (deployedAppUrls as string[]).map((url) => ({ url, pageId: "" }))
+                : (deployedAppUrls as Array<{ url: string; pageId: string }>);
+
+            setDeployedUrls(urlsWithIds);
+            setSelectedDeployedUrlColumn(
+              selectedProperty.name || selectedProperty.propertyName || ""
+            );
+            setStep("browser-testing");
+          }}
+          onError={(error) => {
+            setError(error);
+            setStep("browser-testing-prompt");
+          }}
+          onBack={() => setStep("browser-testing-prompt")}
+        />
+      </Box>
+    );
+  }
+
+  if (step === "browser-testing") {
+    return (
+      <Box flexDirection="column">
+        <BrowserTesting
+          deployedUrls={deployedUrls}
+          onComplete={(results) => {
+            setBrowserTestResults(results);
+            
+            // Save browser test results to files
+            if (results.length > 0) {
+              saveBrowserTestResults(results, selectedDeployedUrlColumn);
+            }
+            
+            console.log(`✓ Browser testing completed: ${results.length} URLs tested`);
+            setStep("grading-save-options");
+          }}
+          onError={(error) => {
+            setError(error);
+            setStep("deployed-url-select");
+          }}
+          onBack={() => setStep("deployed-url-select")}
+        />
       </Box>
     );
   }

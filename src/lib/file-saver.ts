@@ -19,6 +19,7 @@ export interface GradingResult {
   gradingData: any;
   usage: any;
   pageId?: string; // Notion page ID for updating existing rows
+  browserTestResults?: any[]; // Browser testing results if available
 }
 
 /**
@@ -105,4 +106,63 @@ export async function saveRepositoryFiles(
     writeFileSync(scoresFilePath, JSON.stringify(errorScores, null, 2));
     return null;
   }
+}
+
+/**
+ * Saves browser test results to files in the test-results directory
+ */
+export function saveBrowserTestResults(
+  results: any[],
+  column: string
+): void {
+  // Ensure test-results directory exists
+  try {
+    mkdirSync("test-results", { recursive: true });
+  } catch (error) {
+    // Directory might already exist
+  }
+
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const fileName = `browser-tests-${timestamp}.json`;
+  const filePath = join("test-results", fileName);
+
+  const browserTestData = {
+    timestamp: new Date().toISOString(),
+    column: column,
+    totalUrls: results.length,
+    successfulTests: results.filter(r => r.success).length,
+    failedTests: results.filter(r => !r.success).length,
+    results: results.map(result => ({
+      url: result.url,
+      success: result.success,
+      duration: result.duration,
+      actions: result.actions,
+      errors: result.errors,
+      pageId: result.pageId,
+      metadata: result.metadata,
+      // Note: screenshots are not saved to JSON due to size - they would be saved separately
+      screenshotCount: result.screenshots?.length || 0
+    }))
+  };
+
+  writeFileSync(filePath, JSON.stringify(browserTestData, null, 2));
+  console.log(`✓ Saved browser test results to ${filePath}`);
+
+  // Save screenshots separately if they exist
+  results.forEach((result, index) => {
+    if (result.screenshots && result.screenshots.length > 0) {
+      result.screenshots.forEach((screenshot: string, screenshotIndex: number) => {
+        const screenshotFileName = `browser-test-${index}-${screenshotIndex}-${timestamp}.png`;
+        const screenshotPath = join("test-results", screenshotFileName);
+        
+        try {
+          const buffer = Buffer.from(screenshot, 'base64');
+          writeFileSync(screenshotPath, buffer);
+          console.log(`  ✓ Saved screenshot: ${screenshotFileName}`);
+        } catch (error) {
+          console.warn(`  ⚠ Failed to save screenshot ${screenshotFileName}:`, error);
+        }
+      });
+    }
+  });
 }

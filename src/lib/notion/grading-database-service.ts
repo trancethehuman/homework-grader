@@ -38,7 +38,8 @@ export class GradingDatabaseService {
   async saveGradingResults(
     databaseId: string,
     results: GradingResult[],
-    githubUrlColumnName?: string
+    githubUrlColumnName?: string,
+    browserTestResults?: any[]
   ): Promise<{ success: number; failed: number; errors: string[] }> {
     const errors: string[] = [];
     let success = 0;
@@ -56,6 +57,13 @@ export class GradingDatabaseService {
     for (const result of results) {
       try {
         const isUpdate = !!result.pageId;
+        
+        // Find matching browser test result for this repository
+        const matchingBrowserTest = browserTestResults?.find(browserTest => 
+          browserTest.pageId === result.pageId || 
+          browserTest.url?.includes(result.repositoryName.replace('/', '-'))
+        );
+        
         const allProperties =
           NotionSchemaMapper.transformGradingDataToNotionProperties(
             result.gradingData,
@@ -63,7 +71,8 @@ export class GradingDatabaseService {
             result.githubUrl,
             titlePropertyName,
             githubUrlColumnName,
-            isUpdate
+            isUpdate,
+            matchingBrowserTest
           );
 
         // Only include properties that actually exist in the database
@@ -105,7 +114,8 @@ export class GradingDatabaseService {
   async saveGradingResult(
     databaseId: string,
     result: GradingResult,
-    githubUrlColumnName?: string
+    githubUrlColumnName?: string,
+    browserTestResult?: any
   ): Promise<any> {
     // Get the existing database properties
     const databaseProperties = await this.notionService.getDatabaseProperties(
@@ -124,7 +134,8 @@ export class GradingDatabaseService {
         result.githubUrl,
         titlePropertyName,
         githubUrlColumnName,
-        isUpdate
+        isUpdate,
+        browserTestResult
       );
 
     // Only include properties that actually exist in the database

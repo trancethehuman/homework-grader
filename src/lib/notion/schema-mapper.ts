@@ -111,6 +111,47 @@ export class NotionSchemaMapper {
       rich_text: {},
     };
 
+    // Browser testing properties
+    properties.browser_test_conducted = {
+      type: "checkbox",
+      checkbox: {},
+    };
+
+    properties.browser_test_deployed_url = {
+      type: "url",
+      url: {},
+    };
+
+    properties.browser_test_success = {
+      type: "checkbox",
+      checkbox: {},
+    };
+
+    properties.browser_test_duration_ms = {
+      type: "number",
+      number: {},
+    };
+
+    properties.browser_test_actions_count = {
+      type: "number",
+      number: {},
+    };
+
+    properties.browser_test_screenshots_count = {
+      type: "number",
+      number: {},
+    };
+
+    properties.browser_test_errors = {
+      type: "rich_text",
+      rich_text: {},
+    };
+
+    properties.browser_test_page_title = {
+      type: "rich_text",
+      rich_text: {},
+    };
+
     return properties;
   }
 
@@ -123,7 +164,8 @@ export class NotionSchemaMapper {
     githubUrl: string,
     titlePropertyName?: string,
     githubUrlColumnName?: string,
-    isUpdate: boolean = false
+    isUpdate: boolean = false,
+    browserTestResult?: any
   ): Record<string, any> {
     const properties: Record<string, any> = {};
     
@@ -281,6 +323,58 @@ export class NotionSchemaMapper {
       };
     }
 
+    // Browser testing data
+    if (browserTestResult) {
+      properties.browser_test_conducted = {
+        checkbox: true,
+      };
+
+      properties.browser_test_deployed_url = {
+        url: browserTestResult.url || "",
+      };
+
+      properties.browser_test_success = {
+        checkbox: browserTestResult.success || false,
+      };
+
+      properties.browser_test_duration_ms = {
+        number: browserTestResult.duration || 0,
+      };
+
+      properties.browser_test_actions_count = {
+        number: browserTestResult.actions?.length || 0,
+      };
+
+      properties.browser_test_screenshots_count = {
+        number: browserTestResult.screenshots?.length || 0,
+      };
+
+      properties.browser_test_errors = {
+        rich_text: [
+          {
+            text: {
+              content: (browserTestResult.errors || []).join("; "),
+            },
+          },
+        ],
+      };
+
+      properties.browser_test_page_title = {
+        rich_text: [
+          {
+            text: {
+              content: browserTestResult.metadata?.title || "",
+            },
+          },
+        ],
+      };
+    } else {
+      // No browser testing conducted
+      properties.browser_test_conducted = {
+        checkbox: false,
+      };
+    }
+
     return properties;
   }
 
@@ -306,6 +400,14 @@ export class NotionSchemaMapper {
       "complexity_and_features_features_summary",
       "structure_systematic",
       "structure_explanation",
+      "browser_test_conducted",
+      "browser_test_deployed_url",
+      "browser_test_success",
+      "browser_test_duration_ms",
+      "browser_test_actions_count",
+      "browser_test_screenshots_count",
+      "browser_test_errors",
+      "browser_test_page_title",
     ];
   }
 
