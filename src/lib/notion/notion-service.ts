@@ -26,9 +26,18 @@ export interface NotionDatabase {
   properties: Record<string, any>;
 }
 
+interface ValidationResult {
+  valid: boolean;
+  timestamp: number;
+  error?: string;
+}
+
 export class NotionService {
   private notion: Client;
   private storage: NotionTokenStorage;
+  private validationCache: ValidationResult | null = null;
+  private readonly validationCacheTtlMs: number = 5 * 60 * 1000; // 5 minutes
+  private validationInProgress: Promise<{ valid: boolean; error?: string }> | null = null;
 
   constructor(accessToken?: string) {
     this.storage = new NotionTokenStorage();
@@ -49,9 +58,47 @@ export class NotionService {
    * Validate the current token by making a lightweight API call
    */
   async validateToken(): Promise<{ valid: boolean; error?: string }> {
+    // Check if validation is already in progress
+    if (this.validationInProgress) {
+      console.log("🔄 Token validation already in progress, waiting...");
+      return await this.validationInProgress;
+    }
+
+    // Check cache first
+    const now = Date.now();
+    if (this.validationCache && (now - this.validationCache.timestamp) < this.validationCacheTtlMs) {
+      console.log(`📋 Using cached validation result (${Math.round((now - this.validationCache.timestamp) / 1000)}s old)`);
+      return {
+        valid: this.validationCache.valid,
+        error: this.validationCache.error
+      };
+    }
+
+    // Start validation
+    this.validationInProgress = this.performTokenValidation();
+
     try {
+      const result = await this.validationInProgress;
+
+      // Cache the result
+      this.validationCache = {
+        valid: result.valid,
+        timestamp: now,
+        error: result.error
+      };
+
+      return result;
+    } finally {
+      this.validationInProgress = null;
+    }
+  }
+
+  private async performTokenValidation(): Promise<{ valid: boolean; error?: string }> {
+    try {
+      console.log("🔍 Validating Notion token...");
       // Make a simple API call to test token validity
       await this.notion.users.me({});
+      console.log("✓ Token validation successful");
       return { valid: true };
     } catch (error: any) {
       const errorMessage = error.message || String(error);
@@ -60,9 +107,10 @@ export class NotionService {
       if (errorMessage.includes("API token is invalid") ||
           errorMessage.includes("unauthorized") ||
           error.code === "unauthorized") {
-        // Clear invalid token from storage
+        // Clear invalid token from storage and cache
         console.log("🧹 Clearing invalid token from storage");
         this.storage.clearToken();
+        this.validationCache = null; // Clear cache for invalid tokens
         return {
           valid: false,
           error: "Token is invalid or expired. Please re-authenticate with Notion."

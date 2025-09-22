@@ -3,8 +3,11 @@ export interface AIProvider {
   name: string;
   description: string;
   model: string;
+  contextWindowTokens?: number;
   getModelInstance: () => Promise<any>;
 }
+
+export const DEFAULT_CONTEXT_WINDOW_TOKENS = 128000;
 
 export const AI_PROVIDERS: AIProvider[] = [
   {
@@ -12,6 +15,7 @@ export const AI_PROVIDERS: AIProvider[] = [
     name: "Gemini 2.5 Flash Lite",
     description: "Google Gemini's fastest model",
     model: "gemini-2.5-flash-lite",
+    contextWindowTokens: 128000,
     getModelInstance: async () => {
       const { google } = await import("@ai-sdk/google");
       return google("gemini-2.5-flash-lite");
@@ -22,6 +26,7 @@ export const AI_PROVIDERS: AIProvider[] = [
     name: "OpenAI GPT-4.1",
     description: "OpenAI's latest GPT-4.1 model",
     model: "gpt-4.1",
+    contextWindowTokens: 2000000,
     getModelInstance: async () => {
       const { openai } = await import("@ai-sdk/openai");
       return openai("gpt-4.1");
@@ -32,6 +37,7 @@ export const AI_PROVIDERS: AIProvider[] = [
     name: "Claude Sonnet 4",
     description: "Anthropic's Claude Sonnet 4 model",
     model: "claude-sonnet-4-20250514",
+    contextWindowTokens: 200000,
     getModelInstance: async () => {
       const { anthropic } = await import("@ai-sdk/anthropic");
       return anthropic("claude-sonnet-4-20250514");

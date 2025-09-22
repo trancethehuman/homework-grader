@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
+import { readFileSync, writeFileSync, existsSync, mkdirSync, unlinkSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
 
@@ -50,7 +50,25 @@ export class NotionTokenStorage {
     if (!token || !token.access_token) {
       throw new Error("Invalid Notion token");
     }
+
+    // Validate token structure
+    if (typeof token.access_token !== 'string' || token.access_token.trim().length === 0) {
+      throw new Error("Invalid access token format");
+    }
+
     this.ensureConfigDir();
+
+    // Create backup of existing token before overwriting
+    if (existsSync(this.tokenFile)) {
+      try {
+        const backupFile = `${this.tokenFile}.backup`;
+        const existingData = readFileSync(this.tokenFile, "utf8");
+        writeFileSync(backupFile, existingData, { mode: 0o600 });
+      } catch (error) {
+        console.warn("Failed to create token backup:", error instanceof Error ? error.message : String(error));
+      }
+    }
+
     const data = JSON.stringify(token, null, 2);
     writeFileSync(this.tokenFile, data, { mode: 0o600 });
   }
@@ -61,17 +79,71 @@ export class NotionTokenStorage {
     }
     try {
       const data = readFileSync(this.tokenFile, "utf8");
-      return JSON.parse(data);
-    } catch {
+
+      // Check if file is empty or corrupted
+      if (!data || data.trim().length === 0) {
+        console.warn("Token file is empty, attempting recovery from backup");
+        return this.recoverFromBackup();
+      }
+
+      const token = JSON.parse(data);
+
+      // Validate token structure
+      if (!token || !token.access_token) {
+        console.warn("Token file contains invalid data, attempting recovery from backup");
+        return this.recoverFromBackup();
+      }
+
+      return token;
+    } catch (error) {
+      console.warn("Failed to parse token file, attempting recovery from backup:", error instanceof Error ? error.message : String(error));
+      return this.recoverFromBackup();
+    }
+  }
+
+  private recoverFromBackup(): NotionOAuthToken | null {
+    const backupFile = `${this.tokenFile}.backup`;
+    if (!existsSync(backupFile)) {
+      return null;
+    }
+
+    try {
+      const backupData = readFileSync(backupFile, "utf8");
+      if (!backupData || backupData.trim().length === 0) {
+        return null;
+      }
+
+      const token = JSON.parse(backupData);
+      if (!token || !token.access_token) {
+        return null;
+      }
+
+      console.log("🔄 Recovered token from backup, saving as primary");
+      this.saveToken(token);
+      return token;
+    } catch (error) {
+      console.warn("Failed to recover from backup:", error instanceof Error ? error.message : String(error));
       return null;
     }
   }
 
   clearToken(): void {
-    if (existsSync(this.tokenFile)) {
-      try {
-        writeFileSync(this.tokenFile, "", { mode: 0o600 });
-      } catch {}
+    const filesToClear = [this.tokenFile, `${this.tokenFile}.backup`];
+
+    for (const file of filesToClear) {
+      if (existsSync(file)) {
+        try {
+          unlinkSync(file);
+          console.log(`🗑️  Deleted token file: ${file}`);
+        } catch (error) {
+          console.warn(`Failed to delete ${file}:`, error instanceof Error ? error.message : String(error));
+          // Fallback to clearing content if deletion fails
+          try {
+            writeFileSync(file, "", { mode: 0o600 });
+            console.log(`📝 Cleared content of ${file}`);
+          } catch {}
+        }
+      }
     }
   }
 

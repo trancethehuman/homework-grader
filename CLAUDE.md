@@ -321,6 +321,18 @@ The codebase includes:
 
 ### Constants
 
+- **AI Provider Configuration** (`src/consts/ai-providers.ts`)
+
+  - **NEW**: Context window limits for optimal chunking
+  - **AIProvider Interface**: Enhanced with `contextWindowTokens` field for token limits
+  - **DEFAULT_CONTEXT_WINDOW_TOKENS**: 128,000 tokens default for unknown models
+  - **Model-Specific Limits**:
+    - Gemini 2.5 Flash Lite: 128,000 tokens
+    - OpenAI GPT-4.1: 2,000,000 tokens
+    - Claude Sonnet 4: 200,000 tokens
+  - **Context Window Optimization**: Prevents API failures from oversized repositories
+  - **Intelligent Chunking**: Automatic content splitting when limits exceeded
+
 - **Ignored Extensions** (`src/consts/ignored-extensions.ts`)
 
   - Comprehensive list of file extensions to ignore when processing repositories
@@ -392,6 +404,13 @@ The codebase includes:
   - **Smart optimization**: Adapts strategy based on repository size
   - **Robust error handling**: Multiple fallback mechanisms for reliability
   - **Identical output format**: 100% compatible with existing grading pipeline
+- **Context Window Optimization**:
+  - **Intelligent Chunking**: Automatically splits large repositories to prevent API failures
+  - **Model-Aware Limits**: Respects each AI model's token limits (Gemini: 128K, GPT-4.1: 2M, Claude: 200K)
+  - **Progressive Analysis**: Processes repository chunks sequentially with context carryover
+  - **Comprehensive Aggregation**: Synthesizes chunk feedback into final cohesive review
+  - **Seamless Fallback**: Transparent chunking when content exceeds context windows
+  - **Token Estimation**: Proactive content size validation before processing
 - **Authentication Management**:
   - **GitHub**: Secure token storage, validation, browser integration for token generation
   - **E2B**: API key storage with format validation and secure local storage

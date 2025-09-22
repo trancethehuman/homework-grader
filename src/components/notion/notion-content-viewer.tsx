@@ -47,10 +47,27 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
     const fetchContent = async () => {
       try {
         setIsLoading(true);
+        setError(null);
+
+        console.log(`🔍 Checking existing Notion authentication...`);
         const oauth = new NotionOAuthClient();
-        await oauth.refreshIfPossible();
+
+        // Try to refresh token first if possible
+        const refreshResult = await oauth.refreshIfPossible();
+        if (refreshResult) {
+          console.log("✓ Token refreshed successfully");
+        }
+
+        console.log("🔐 Ensuring authentication...");
         const token = await oauth.ensureAuthenticated();
         const notionService = new NotionService(token.access_token);
+
+        // Validate token before using it
+        const validation = await notionService.validateToken();
+        if (!validation.valid) {
+          throw new Error(validation.error || "Token validation failed");
+        }
+        console.log("✓ Notion authentication is valid");
 
         // Use the correct API based on content type
         let pageContent;
@@ -82,10 +99,34 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
 
         setError(null);
       } catch (err) {
-        const errorMessage =
-          err instanceof Error ? err.message : "Failed to fetch content";
+        let errorMessage = "Failed to fetch content";
+        let shouldRetry = false;
+
+        if (err instanceof Error) {
+          if (err.message.includes("Token is invalid or expired")) {
+            errorMessage = "Token is invalid or expired. Please re-authenticate with Notion.";
+          } else if (err.message.includes("refresh")) {
+            errorMessage = "Failed to refresh authentication. Please try again.";
+            shouldRetry = true;
+          } else if (err.message.includes("network") || err.message.includes("fetch")) {
+            errorMessage = "Network error. Please check your connection and try again.";
+            shouldRetry = true;
+          } else if (err.message.includes("rate limit")) {
+            errorMessage = "Rate limited by Notion. Please wait a moment and try again.";
+            shouldRetry = true;
+          } else if (err.message.includes("permission")) {
+            errorMessage = "Permission denied. Please ensure the integration has access to this content.";
+          } else {
+            errorMessage = err.message;
+          }
+        }
+
         setError(errorMessage);
         console.error(`Error fetching Notion content for ${pageTitle}:`, err);
+
+        if (shouldRetry) {
+          console.log("This error might be temporary - user should try again");
+        }
       } finally {
         setIsLoading(false);
       }

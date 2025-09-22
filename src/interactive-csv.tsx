@@ -171,6 +171,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
   const [skipGitHub, setSkipGitHub] = useState(false);
   const [loadingIconIndex, setLoadingIconIndex] = useState(0);
   const [processingMode, setProcessingMode] = useState<"code" | "browser" | "both" | null>(null);
+  const [selectedProcessingOption, setSelectedProcessingOption] = useState(0); // 0 = code only (default), 1 = browser only, 2 = both
   const { exit } = useApp();
 
   // Helper function to navigate to a new step and clear any existing errors
@@ -1071,18 +1072,24 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         }
       }
     } else if (step === "processing-choice") {
-      if (inputChar === "1") {
-        // Grade repository code - need to clone and process
-        setProcessingMode("code");
-        navigateToStep("notion-processing");
-      } else if (inputChar === "2") {
-        // Test deployed applications only - skip cloning, go directly to deployed URL selection
-        setProcessingMode("browser");
-        navigateToStep("deployed-url-select");
-      } else if (inputChar === "3") {
-        // Do both - clone and process first, then browser test
-        setProcessingMode("both");
-        navigateToStep("notion-processing");
+      if (key.upArrow) {
+        setSelectedProcessingOption((prev) => (prev > 0 ? prev - 1 : 2));
+      } else if (key.downArrow) {
+        setSelectedProcessingOption((prev) => (prev < 2 ? prev + 1 : 0));
+      } else if (key.return) {
+        if (selectedProcessingOption === 0) {
+          // Grade repository code - need to clone and process
+          setProcessingMode("code");
+          navigateToStep("notion-processing");
+        } else if (selectedProcessingOption === 1) {
+          // Test deployed applications only - skip cloning, go directly to deployed URL selection
+          setProcessingMode("browser");
+          navigateToStep("deployed-url-select");
+        } else if (selectedProcessingOption === 2) {
+          // Do both - clone and process first, then browser test
+          setProcessingMode("both");
+          navigateToStep("notion-processing");
+        }
       }
     } else if (step === "browser-testing-prompt") {
       if (inputChar === "y") {
@@ -1961,21 +1968,27 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           Found {notionGitHubUrls.length} GitHub repositories. What would you like to do?
         </Text>
         <Text></Text>
-        <Text color="cyan">Choose an option:</Text>
+        <Text color="cyan">Use ↑/↓ arrows to navigate, Enter to select:</Text>
         <Text></Text>
-        <Text color="blue">1. Grade repository code only</Text>
+        <Text color={selectedProcessingOption === 0 ? "blue" : "white"} bold={selectedProcessingOption === 0}>
+          {selectedProcessingOption === 0 ? "→ " : "  "}Grade repository code only {selectedProcessingOption === 0 ? "(recommended)" : ""}
+        </Text>
         <Text dimColor>   • Clone and analyze code quality, structure, best practices</Text>
         <Text dimColor>   • Generate grading reports and save results</Text>
         <Text></Text>
-        <Text color="magenta">2. Test deployed applications only</Text>
+        <Text color={selectedProcessingOption === 1 ? "magenta" : "white"} bold={selectedProcessingOption === 1}>
+          {selectedProcessingOption === 1 ? "→ " : "  "}Test deployed applications only
+        </Text>
         <Text dimColor>   • Skip cloning - directly test deployed web applications</Text>
         <Text dimColor>   • Capture screenshots and verify functionality</Text>
         <Text></Text>
-        <Text color="yellow">3. Do both (recommended)</Text>
+        <Text color={selectedProcessingOption === 2 ? "yellow" : "white"} bold={selectedProcessingOption === 2}>
+          {selectedProcessingOption === 2 ? "→ " : "  "}Do both
+        </Text>
         <Text dimColor>   • Clone and grade code THEN test deployed applications</Text>
         <Text dimColor>   • Comprehensive analysis with complete results</Text>
         <Text></Text>
-        <Text color="cyan">Press '1', '2', or '3' to select</Text>
+        <Text color="cyan">Use ↑/↓ arrows to navigate, Enter to select</Text>
       </Box>
     );
   }

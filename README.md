@@ -254,6 +254,19 @@ git config --global rebase.autostash true
 git config --global alias.up 'pull --rebase --autostash'
 ```
 
+Project-only setup (repo-local, not global):
+
+```bash
+git config pull.rebase true
+git config rebase.autostash true
+git config alias.up 'pull --rebase --autostash'
+# optional
+git config pull.ff only
+
+# verify local settings
+git config --local --list | grep -E 'pull.rebase|rebase.autostash|alias.up|pull.ff'
+```
+
 Everyday flow:
 
 ```bash
