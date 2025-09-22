@@ -72,6 +72,20 @@ export class NotionOAuthClient {
     return token;
   }
 
+  /**
+   * Force a new OAuth flow, clearing any existing tokens
+   */
+  async forceOAuth(): Promise<NotionOAuthToken> {
+    // Clear any existing token first
+    this.storage.clearToken();
+    console.log("🔄 Initiating new OAuth authentication...");
+
+    // Perform new OAuth
+    const token = await this.performOAuth();
+    this.storage.saveToken(token);
+    return token;
+  }
+
   private shouldProactivelyRefresh(token: NotionOAuthToken): boolean {
     if (!token.expires_at) {
       return false;

@@ -14,7 +14,8 @@ interface ContentChunk {
 
 interface ChunkFeedback {
   chunkIndex: number;
-  feedback: string;
+  repo_explained: string;
+  developer_feedback: string;
 }
 
 function estimateTokenCount(text: string): number {
@@ -80,7 +81,7 @@ async function processContentChunk(
   let prompt = chunk.content;
   if (previousFeedbacks.length > 0) {
     const previousContext = previousFeedbacks
-      .map(fb => `Previous analysis ${fb.chunkIndex}: ${fb.feedback.substring(0, 500)}...`)
+      .map(fb => `Previous analysis ${fb.chunkIndex}: ${fb.developer_feedback.substring(0, 500)}...`)
       .join('\n\n');
     prompt = `Previous analysis context:\n${previousContext}\n\n---\n\nCurrent content to analyze:\n${chunk.content}`;
   }
@@ -112,7 +113,8 @@ async function processContentChunk(
 
   return {
     chunkIndex: chunk.chunkIndex,
-    feedback: parsedResult.feedbacks
+    repo_explained: parsedResult.repo_explained,
+    developer_feedback: parsedResult.developer_feedback
   };
 }
 
@@ -123,9 +125,15 @@ async function aggregateChunkFeedbacks(
 ): Promise<any> {
   const modelInstance = await provider.getModelInstance();
 
+  const aggregatedRepoExplanations = chunkFeedbacks
+    .map(cf => `Chunk ${cf.chunkIndex}: ${cf.repo_explained}`)
+    .join(' ');
+
   const aggregatedFeedback = chunkFeedbacks
-    .map(cf => `## Chunk ${cf.chunkIndex} Analysis:\n${cf.feedback}`)
+    .map(cf => `## Chunk ${cf.chunkIndex} Developer Feedback:\n${cf.developer_feedback}`)
     .join('\n\n---\n\n');
+
+  const prompt = `Repository insights from chunks: ${aggregatedRepoExplanations}\n\nDeveloper feedback from chunks:\n${aggregatedFeedback}`;
 
   const contentSummary = `Repository processed in ${chunkFeedbacks.length} chunks due to size constraints.\n\nEstimated total tokens: ${estimateTokenCount(originalContent)}`;
 
@@ -134,7 +142,7 @@ async function aggregateChunkFeedbacks(
     schemaName: "Final Grading feedback",
     schemaDescription: "Comprehensive code homework feedback aggregated from chunks",
     system: PROMPT_GRADER_FINAL,
-    prompt: `${contentSummary}\n\n${aggregatedFeedback}`,
+    prompt: prompt,
     schema: GRADING_CATEGORIES,
   };
 

@@ -368,7 +368,7 @@ export class SandboxService {
    * This method is safe for concurrent use - multiple repositories can be processed
    * in parallel as each gets a unique clone path with UUID suffix.
    */
-  async processGitHubUrl(url: string, aiProvider?: AIProvider): Promise<any> {
+  async processGitHubUrl(url: string, aiProvider?: AIProvider, chunkingPreference: 'allow' | 'skip' = 'allow'): Promise<any> {
     const repositoryInfo = this.parseGitHubUrl(url);
     if (!repositoryInfo) {
       throw new Error(`Invalid GitHub URL: ${url}`);
@@ -393,7 +393,8 @@ export class SandboxService {
 
         const scoresPromise = getRepoScores(
           repositoryContent.formattedContent,
-          aiProvider
+          aiProvider,
+          chunkingPreference
         )
           .then((result) => {
             const gradingTime = Date.now() - gradingStartTime;

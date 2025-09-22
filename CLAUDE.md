@@ -12,6 +12,7 @@ This is a homework grading system repository with TypeScript URL loading functio
 - The proxy owns the Notion client secret and handles `/auth/start`, `/callback`, `/refresh`, and `/auth/status/:state`.
 - The CLI calls the proxy to start OAuth, opens a browser, and stores the returned access token locally.
 - Default proxy base points to the hosted instance; override with `NOTION_PROXY_URL` for local testing.
+- **Auto-reauth on Invalid Token**: When a Notion token becomes invalid/expired, the system automatically triggers OAuth flow instead of returning to the previous step, ensuring seamless re-authentication.
 
 ## Development Setup
 
@@ -80,6 +81,7 @@ pnpm start sample.csv   # Legacy mode with CSV file
 
 - Selecting "Notion Database" shows a brief screen, detects existing access, and provides a shortcut to clear.
 - We refresh tokens when possible and prompt for OAuth only when needed.
+- **Automatic Re-authentication**: If a Notion token is invalid or expired when accessing databases, the system automatically clears the invalid token and triggers the OAuth flow, eliminating the need for users to manually navigate back and re-authenticate.
 
 # Development workflow
 pnpm run dev            # Interactive mode (no build required)
@@ -286,6 +288,31 @@ The codebase includes:
   - File permission management (0o600 for token files)
   - Token validation and cleanup methods
 
+### Notion Data Conflict Protection
+
+- **ConflictDetector Class** (`src/lib/notion/conflict-detector.ts`)
+  - **NEW**: Intelligent detection of existing grading data before updates
+  - **Cell-Level Conflict Checking**: Checks if grading columns already contain data
+  - **Batch Conflict Processing**: Efficiently processes multiple repository updates
+  - **Field-Level Granularity**: Identifies specific fields with existing data
+  - **Property Value Extraction**: Handles all Notion property types (rich_text, select, etc.)
+  - **Override Decision Support**: Applies user choices for keep/replace/skip actions
+
+- **OverrideConfirmation Component** (`src/components/notion/override-confirmation.tsx`)
+  - **NEW**: Interactive UI for resolving data conflicts
+  - **Bulk Action Options**: Replace all, keep all, field-by-field review, or cancel
+  - **Detailed Conflict View**: Shows existing vs new values for each field
+  - **Repository-by-Repository Flow**: Guides users through each conflict systematically
+  - **Progress Tracking**: Displays conflict resolution progress
+  - **User-Friendly Interface**: Clear navigation with arrow keys and enter selection
+
+- **Enhanced GradingDatabaseService** (`src/lib/notion/grading-database-service.ts`)
+  - **NEW**: Conflict-aware Notion database operations
+  - **Pre-Save Conflict Detection**: Checks for existing data before updates
+  - **Conditional Override Processing**: Applies user decisions for partial updates
+  - **Legacy Support**: Maintains backward compatibility with existing save methods
+  - **Error Resilience**: Comprehensive error handling during conflict resolution
+
 ### CLI Interface
 
 - **Command Line Interface** (`src/cli.tsx`)
@@ -427,6 +454,14 @@ The codebase includes:
   - **Real-time Progress**: Live updates with success/failure metrics
   - **Provider Support**: Vercel, Netlify, Railway, Heroku, GitHub Pages, custom domains
   - **Results Integration**: Saves browser test data alongside grading results in files and Notion
+- **Data Conflict Protection for Notion Database**:
+  - **NEW**: Intelligent conflict detection before saving grading results
+  - **Cell-Level Checking**: Identifies existing data in grading columns that would be overwritten
+  - **User Choice Interface**: Interactive prompts for keep/replace/skip decisions
+  - **Bulk Actions**: Replace all, keep all, or field-by-field review options
+  - **Progress Tracking**: Clear indication of conflict resolution progress
+  - **Non-Destructive by Default**: Prevents accidental data loss
+  - **Legacy Compatibility**: Seamless integration with existing save workflows
 - **CSV Processing**: File validation, analysis, and URL extraction
 - **Error Handling**: Comprehensive error handling with automatic fallback mechanisms
 - **Resource Management**: Automatic sandbox and browser session cleanup

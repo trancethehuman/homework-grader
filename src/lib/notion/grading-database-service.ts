@@ -2,6 +2,7 @@ import { NotionService } from "./notion-service.js";
 import { NotionOAuthClient } from "./oauth-client.js";
 import { NotionSchemaMapper } from "./schema-mapper.js";
 import { GradingResult } from "../file-saver.js";
+import { ConflictDetector, ConflictDetectionResult, OverrideDecision } from "./conflict-detector.js";
 
 export interface DatabaseCreationOptions {
   title?: string;
@@ -10,9 +11,11 @@ export interface DatabaseCreationOptions {
 
 export class GradingDatabaseService {
   private notionService: NotionService;
+  private conflictDetector: ConflictDetector;
 
   constructor(accessToken?: string) {
     this.notionService = new NotionService(accessToken);
+    this.conflictDetector = new ConflictDetector(accessToken);
   }
 
   /**
@@ -21,7 +24,7 @@ export class GradingDatabaseService {
    */
   async ensureGradingDatabase(
     sourceDatabaseId?: string,
-    options: DatabaseCreationOptions & { skipGithubUrlColumn?: string } = {}
+    options: DatabaseCreationOptions & { skipGithubUrlColumn?: string; processingMode?: 'code' | 'browser' | 'both' } = {}
   ): Promise<{ databaseId: string; created: boolean; updated: boolean }> {
     if (sourceDatabaseId) {
       // Check existing database and update schema if needed
@@ -33,13 +36,169 @@ export class GradingDatabaseService {
   }
 
   /**
-   * Save grading results to database
+   * Check for conflicts before saving grading results
+   */
+  async checkForConflicts(
+    databaseId: string,
+    results: GradingResult[],
+    githubUrlColumnName?: string,
+    browserTestResults?: any[],
+    processingMode: 'code' | 'browser' | 'both' = 'both'
+  ): Promise<ConflictDetectionResult[]> {
+    // Get the existing database properties
+    const databaseProperties = await this.notionService.getDatabaseProperties(
+      databaseId
+    );
+    const titlePropertyName = Object.keys(databaseProperties).find(
+      (key) => databaseProperties[key].type === "title"
+    );
+    const availableProperties = new Set(Object.keys(databaseProperties));
+
+    // Prepare updates for conflict checking
+    const updatesForConflictCheck: Array<{
+      pageId: string;
+      properties: Record<string, any>;
+      repositoryName: string;
+    }> = [];
+
+    for (const result of results) {
+      if (result.pageId) { // Only check conflicts for updates, not new entries
+        // Find matching browser test result for this repository
+        const matchingBrowserTest = browserTestResults?.find(browserTest =>
+          browserTest.pageId === result.pageId ||
+          browserTest.url?.includes(result.repositoryName.replace('/', '-'))
+        );
+
+        const allProperties =
+          NotionSchemaMapper.transformGradingDataToNotionProperties(
+            result.gradingData,
+            result.repositoryName,
+            result.githubUrl,
+            titlePropertyName,
+            githubUrlColumnName,
+            true, // isUpdate
+            matchingBrowserTest,
+            result.error,
+            processingMode
+          );
+
+        // Only include properties that actually exist in the database
+        const filteredProperties: Record<string, any> = {};
+        for (const [key, value] of Object.entries(allProperties)) {
+          if (availableProperties.has(key)) {
+            filteredProperties[key] = value;
+          }
+        }
+
+        updatesForConflictCheck.push({
+          pageId: result.pageId,
+          properties: filteredProperties,
+          repositoryName: result.repositoryName
+        });
+      }
+    }
+
+    return await this.conflictDetector.checkBatchConflicts(updatesForConflictCheck);
+  }
+
+  /**
+   * Save grading results to database with conflict resolution
+   */
+  async saveGradingResultsWithConflictResolution(
+    databaseId: string,
+    results: GradingResult[],
+    overrideDecisions: Map<string, OverrideDecision[]>,
+    githubUrlColumnName?: string,
+    browserTestResults?: any[],
+    processingMode: 'code' | 'browser' | 'both' = 'both'
+  ): Promise<{ success: number; failed: number; errors: string[] }> {
+    const errors: string[] = [];
+    let success = 0;
+    let failed = 0;
+
+    // Get the existing database properties
+    const databaseProperties = await this.notionService.getDatabaseProperties(
+      databaseId
+    );
+    const titlePropertyName = Object.keys(databaseProperties).find(
+      (key) => databaseProperties[key].type === "title"
+    );
+    const availableProperties = new Set(Object.keys(databaseProperties));
+
+    for (const result of results) {
+      try {
+        const isUpdate = !!result.pageId;
+
+        // Find matching browser test result for this repository
+        const matchingBrowserTest = browserTestResults?.find(browserTest =>
+          browserTest.pageId === result.pageId ||
+          browserTest.url?.includes(result.repositoryName.replace('/', '-'))
+        );
+
+        const allProperties =
+          NotionSchemaMapper.transformGradingDataToNotionProperties(
+            result.gradingData,
+            result.repositoryName,
+            result.githubUrl,
+            titlePropertyName,
+            githubUrlColumnName,
+            isUpdate,
+            matchingBrowserTest,
+            result.error,
+            processingMode
+          );
+
+        // Only include properties that actually exist in the database
+        let filteredProperties: Record<string, any> = {};
+        for (const [key, value] of Object.entries(allProperties)) {
+          if (availableProperties.has(key)) {
+            filteredProperties[key] = value;
+          }
+        }
+
+        // Apply override decisions if this is an update with conflicts
+        if (isUpdate && result.pageId && overrideDecisions.has(result.pageId)) {
+          const decisions = overrideDecisions.get(result.pageId)!;
+          filteredProperties = this.conflictDetector.applyOverrideDecisions(
+            filteredProperties,
+            decisions
+          );
+        }
+
+        if (isUpdate && result.pageId) {
+          // Update existing row
+          await this.notionService.updateDatabaseEntry(
+            result.pageId,
+            filteredProperties
+          );
+        } else {
+          // Create new row
+          await this.notionService.createDatabaseEntry(
+            databaseId,
+            filteredProperties
+          );
+        }
+        success++;
+      } catch (error: any) {
+        failed++;
+        errors.push(
+          `Failed to save ${result.repositoryName}: ${error.message}`
+        );
+      }
+    }
+
+    return { success, failed, errors };
+  }
+
+  /**
+   * Save grading results to database (legacy method - no conflict checking)
    */
   async saveGradingResults(
     databaseId: string,
     results: GradingResult[],
     githubUrlColumnName?: string,
-    browserTestResults?: any[]
+    browserTestResults?: any[],
+    processingMode: 'code' | 'browser' | 'both' = 'both'
   ): Promise<{ success: number; failed: number; errors: string[] }> {
     const errors: string[] = [];
     let success = 0;
@@ -73,7 +232,8 @@ export class GradingDatabaseService {
             githubUrlColumnName,
             isUpdate,
             matchingBrowserTest,
-            result.error
+            result.error,
+            processingMode
           );
 
         // Only include properties that actually exist in the database
@@ -200,7 +360,7 @@ export class GradingDatabaseService {
 
   private async updateExistingDatabase(
     databaseId: string,
-    options: { skipGithubUrlColumn?: string } = {}
+    options: { skipGithubUrlColumn?: string; processingMode?: 'code' | 'browser' | 'both' } = {}
   ): Promise<{ databaseId: string; created: boolean; updated: boolean }> {
     try {
       const existingProperties = await this.notionService.getDatabaseProperties(
@@ -210,6 +370,7 @@ export class GradingDatabaseService {
         existingProperties,
         {
           skipGithubUrlColumn: !!options.skipGithubUrlColumn,
+          processingMode: options.processingMode || 'both'
         }
       );
 
@@ -230,12 +391,14 @@ export class GradingDatabaseService {
   }
 
   private async createNewGradingDatabase(
-    options: DatabaseCreationOptions
+    options: DatabaseCreationOptions & { processingMode?: 'code' | 'browser' | 'both' }
   ): Promise<{ databaseId: string; created: boolean; updated: boolean }> {
     const title =
       options.title ||
       `Homework Grading Results - ${new Date().toISOString().split("T")[0]}`;
-    const properties = NotionSchemaMapper.generateGradingDatabaseProperties();
+    const properties = NotionSchemaMapper.generateGradingDatabaseProperties(true, {
+      processingMode: options.processingMode || 'both'
+    });
 
     try {
       // If no parent page ID provided, we need to get one from the user or use a default approach

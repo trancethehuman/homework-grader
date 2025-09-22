@@ -15,13 +15,13 @@ export class NotionSchemaMapper {
    */
   static generateGradingDatabaseProperties(
     includeTitle: boolean = true,
-    options: { skipGithubUrlColumn?: boolean } = {}
+    options: { skipGithubUrlColumn?: boolean; processingMode?: 'code' | 'browser' | 'both' } = {}
   ): Record<string, NotionProperty> {
     const properties: Record<string, NotionProperty> = {};
 
     // Repository identification (Title column) - only add if requested
     if (includeTitle) {
-      properties.repository_name = {
+      properties["Repository Name"] = {
         type: "title",
         title: {},
       };
@@ -29,69 +29,83 @@ export class NotionSchemaMapper {
 
     // Repository metadata - only add if not skipped
     if (!options.skipGithubUrlColumn) {
-      properties.github_url = {
+      properties["GitHub URL"] = {
         type: "url",
         url: {},
       };
     }
 
-    properties.graded_at = {
+    // Always include graded_at timestamp
+    properties["Graded At"] = {
       type: "date",
       date: {},
     };
 
-    // Main feedback field - replaces all the individual fields
-    properties.feedbacks = {
-      type: "rich_text",
-      rich_text: {},
-    };
+    const processingMode = options.processingMode || 'both';
 
-    // Feedback errors field - contains error messages when grading fails
-    properties.feedback_errors = {
-      type: "rich_text",
-      rich_text: {},
-    };
+    // Include grading fields only for 'code' and 'both' modes
+    if (processingMode === 'code' || processingMode === 'both') {
+      // Repository summary field - short explanation of what the project is about
+      properties["Repository Summary"] = {
+        type: "rich_text",
+        rich_text: {},
+      };
 
-    // Browser testing properties (keep these for browser testing feature)
-    properties.browser_test_conducted = {
-      type: "checkbox",
-      checkbox: {},
-    };
+      // Developer feedback field - actionable bullet points for developers
+      properties["Developer Feedback"] = {
+        type: "rich_text",
+        rich_text: {},
+      };
 
-    properties.browser_test_deployed_url = {
-      type: "url",
-      url: {},
-    };
+      // Feedback errors field - contains error messages when grading fails
+      properties["Feedback Errors"] = {
+        type: "rich_text",
+        rich_text: {},
+      };
+    }
 
-    properties.browser_test_success = {
-      type: "checkbox",
-      checkbox: {},
-    };
+    // Include browser testing fields only for 'browser' and 'both' modes
+    if (processingMode === 'browser' || processingMode === 'both') {
+      properties["Browser Test Conducted"] = {
+        type: "checkbox",
+        checkbox: {},
+      };
 
-    properties.browser_test_duration_ms = {
-      type: "number",
-      number: {},
-    };
+      properties["Browser Test URL"] = {
+        type: "url",
+        url: {},
+      };
 
-    properties.browser_test_actions_count = {
-      type: "number",
-      number: {},
-    };
+      properties["Browser Test Success"] = {
+        type: "checkbox",
+        checkbox: {},
+      };
 
-    properties.browser_test_screenshots_count = {
-      type: "number",
-      number: {},
-    };
+      properties["Browser Test Duration (ms)"] = {
+        type: "number",
+        number: {},
+      };
 
-    properties.browser_test_errors = {
-      type: "rich_text",
-      rich_text: {},
-    };
+      properties["Browser Test Actions"] = {
+        type: "number",
+        number: {},
+      };
 
-    properties.browser_test_page_title = {
-      type: "rich_text",
-      rich_text: {},
-    };
+      properties["Browser Test Screenshots"] = {
+        type: "number",
+        number: {},
+      };
+
+      properties["Browser Test Errors"] = {
+        type: "rich_text",
+        rich_text: {},
+      };
+
+      properties["Browser Test Page Title"] = {
+        type: "rich_text",
+        rich_text: {},
+      };
+    }
 
     return properties;
   }
@@ -107,13 +121,14 @@ export class NotionSchemaMapper {
     githubUrlColumnName?: string,
     isUpdate: boolean = false,
     browserTestResult?: any,
-    error?: string
+    error?: string,
+    processingMode: 'code' | 'browser' | 'both' = 'both'
   ): Record<string, any> {
     const properties: Record<string, any> = {};
 
     // Set the title property only for new entries (don't overwrite for updates)
     if (!isUpdate) {
-      const titleProp = titlePropertyName || "repository_name";
+      const titleProp = titlePropertyName || "Repository Name";
       properties[titleProp] = {
         title: [
           {
@@ -125,8 +140,8 @@ export class NotionSchemaMapper {
       };
     }
 
-    // Use the existing GitHub URL column name or default to github_url
-    const githubUrlProp = githubUrlColumnName || "github_url";
+    // Use the existing GitHub URL column name or default to "GitHub URL"
+    const githubUrlProp = githubUrlColumnName || "GitHub URL";
     // Only set GitHub URL for new entries (existing rows already have it)
     if (!isUpdate) {
       properties[githubUrlProp] = {
@@ -134,84 +149,101 @@ export class NotionSchemaMapper {
       };
     }
 
-    properties.graded_at = {
+    // Always include graded_at timestamp
+    properties["Graded At"] = {
       date: {
         start: new Date().toISOString(),
       },
     };
 
-    // Main feedback field - now contains all grading feedback as a single text
-    properties.feedbacks = {
-      rich_text: [
-        {
-          text: {
-            content: gradingData?.feedbacks || "",
-          },
-        },
-      ],
-    };
-
-    // Feedback errors field - contains error messages when grading fails
-    properties.feedback_errors = {
-      rich_text: [
-        {
-          text: {
-            content: error || "", // Use error parameter if provided, otherwise empty
-          },
-        },
-      ],
-    };
-
-    // Browser testing data (keep separate for functionality)
-    if (browserTestResult) {
-      properties.browser_test_conducted = {
-        checkbox: true,
-      };
-
-      properties.browser_test_deployed_url = {
-        url: browserTestResult.url || "",
-      };
-
-      properties.browser_test_success = {
-        checkbox: browserTestResult.success || false,
-      };
-
-      properties.browser_test_duration_ms = {
-        number: browserTestResult.duration || 0,
-      };
-
-      properties.browser_test_actions_count = {
-        number: browserTestResult.actions?.length || 0,
-      };
-
-      properties.browser_test_screenshots_count = {
-        number: browserTestResult.screenshots?.length || 0,
-      };
-
-      properties.browser_test_errors = {
+    // Include grading fields only for 'code' and 'both' modes
+    if (processingMode === 'code' || processingMode === 'both') {
+      // Repository summary field - short explanation of what the project is about
+      properties["Repository Summary"] = {
         rich_text: [
           {
             text: {
-              content: (browserTestResult.errors || []).join("; "),
+              content: gradingData?.repo_explained || "",
             },
           },
         ],
       };
 
-      properties.browser_test_page_title = {
+      // Developer feedback field - actionable bullet points for developers
+      properties["Developer Feedback"] = {
         rich_text: [
           {
             text: {
-              content: browserTestResult.metadata?.title || "",
+              content: gradingData?.developer_feedback || "",
             },
           },
         ],
       };
-    } else {
-      // No browser testing conducted
-      properties.browser_test_conducted = {
-        checkbox: false,
+
+      // Feedback errors field - contains error messages when grading fails
+      properties["Feedback Errors"] = {
+        rich_text: [
+          {
+            text: {
+              content: error || "", // Use error parameter if provided, otherwise empty
+            },
+          },
+        ],
       };
+    }
+
+    // Include browser testing fields only for 'browser' and 'both' modes
+    if (processingMode === 'browser' || processingMode === 'both') {
+      if (browserTestResult) {
+        properties["Browser Test Conducted"] = {
+          checkbox: true,
+        };
+
+        properties["Browser Test URL"] = {
+          url: browserTestResult.url || "",
+        };
+
+        properties["Browser Test Success"] = {
+          checkbox: browserTestResult.success || false,
+        };
+
+        properties["Browser Test Duration (ms)"] = {
+          number: browserTestResult.duration || 0,
+        };
+
+        properties["Browser Test Actions"] = {
+          number: browserTestResult.actions?.length || 0,
+        };
+
+        properties["Browser Test Screenshots"] = {
+          number: browserTestResult.screenshots?.length || 0,
+        };
+
+        properties["Browser Test Errors"] = {
+          rich_text: [
+            {
+              text: {
+                content: (browserTestResult.errors || []).join("; "),
+              },
+            },
+          ],
+        };
+
+        properties["Browser Test Page Title"] = {
+          rich_text: [
+            {
+              text: {
+                content: browserTestResult.metadata?.title || "",
+              },
+            },
+          ],
+        };
+      } else {
+        // No browser testing conducted but in browser/both mode
+        properties["Browser Test Conducted"] = {
+          checkbox: false,
+        };
+      }
     }
 
     return properties;
@@ -222,19 +254,20 @@ export class NotionSchemaMapper {
    */
   static getGradingPropertyNames(): string[] {
     return [
-      "repository_name",
-      "github_url",
-      "graded_at",
-      "feedbacks", // Simplified to single feedback field
-      "feedback_errors", // Error messages when grading fails
-      "browser_test_conducted",
-      "browser_test_deployed_url",
-      "browser_test_success",
-      "browser_test_duration_ms",
-      "browser_test_actions_count",
-      "browser_test_screenshots_count",
-      "browser_test_errors",
-      "browser_test_page_title",
+      "Repository Name",
+      "GitHub URL",
+      "Graded At",
+      "Repository Summary", // Short explanation of what the project is about
+      "Developer Feedback", // Actionable bullet points for developers
+      "Feedback Errors", // Error messages when grading fails
+      "Browser Test Conducted",
+      "Browser Test URL",
+      "Browser Test Success",
+      "Browser Test Duration (ms)",
+      "Browser Test Actions",
+      "Browser Test Screenshots",
+      "Browser Test Errors",
+      "Browser Test Page Title",
     ];
   }
 
@@ -252,15 +285,16 @@ export class NotionSchemaMapper {
    * Get missing grading properties from database schema
    */
   static getMissingGradingProperties(
-    databaseProperties: Record<string, any>, 
-    options: { skipGithubUrlColumn?: boolean } = {}
+    databaseProperties: Record<string, any>,
+    options: { skipGithubUrlColumn?: boolean; processingMode?: 'code' | 'browser' | 'both' } = {}
   ): Record<string, NotionProperty> {
     // Check if database already has a title property
     const hasExistingTitle = Object.values(databaseProperties).some((prop: any) => prop.type === "title");
     
     // Generate required properties, excluding title if one already exists, and optionally skip github_url
     const requiredProperties = this.generateGradingDatabaseProperties(!hasExistingTitle, {
-      skipGithubUrlColumn: options.skipGithubUrlColumn
+      skipGithubUrlColumn: options.skipGithubUrlColumn,
+      processingMode: options.processingMode || 'both'
     });
     const existingProperties = Object.keys(databaseProperties);
     const missingProperties: Record<string, NotionProperty> = {};

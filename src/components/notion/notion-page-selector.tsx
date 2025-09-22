@@ -7,12 +7,14 @@ import {
 } from "../../lib/notion/notion-service.js";
 import { SearchInput } from "../ui/search-input.js";
 import { NotionOAuthClient } from "../../lib/notion/oauth-client.js";
+import { NotionTokenStorage } from "../../lib/notion/notion-token-storage.js";
 import { BackButton, useBackNavigation } from "../ui/back-button.js";
 
 interface NotionPageSelectorProps {
   onSelect: (pageId: string, pageTitle: string) => void;
   onStartGrading?: (pageId: string, pageTitle: string) => void;
   onError: (error: string) => void;
+  onAuthenticationRequired?: () => void;
   onBack?: () => void;
   // Optional pre-loaded data to avoid refetching
   cachedPages?: NotionPage[];
@@ -25,6 +27,7 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
   onSelect,
   onStartGrading,
   onError,
+  onAuthenticationRequired,
   onBack,
   cachedPages,
   cachedDatabases,
@@ -101,6 +104,25 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
         const errorMessage =
           err instanceof Error ? err.message : "Failed to load Notion data";
         setError(errorMessage);
+
+        // Check if this is an authentication error
+        if (err instanceof Error && (
+          err.message.includes("Token validation failed") ||
+          err.message.includes("API token is invalid") ||
+          err.message.includes("Unauthorized") ||
+          err.message.includes("401") ||
+          err.message.includes("403") ||
+          err.message.includes("expired")
+        )) {
+          // Clear the invalid token and trigger re-authentication
+          if (onAuthenticationRequired) {
+            const tokenStorage = new NotionTokenStorage();
+            tokenStorage.clearToken();
+            onAuthenticationRequired();
+            return;
+          }
+        }
+
         onError(errorMessage);
       } finally {
         setIsLoading(false);

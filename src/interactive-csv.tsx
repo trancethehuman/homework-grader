@@ -46,6 +46,8 @@ import { BrowserTesting } from "./components/browser-testing.js";
 import { BrowserTestResult } from "./lib/stagehand/browser-testing-service.js";
 import { BrowserTestMode } from "./components/browser-test-mode.js";
 import { ComputerUseModelSelector } from "./components/computer-use-model-selector.js";
+import { OverrideConfirmation } from "./components/notion/override-confirmation.js";
+import { ConflictDetectionResult, OverrideDecision } from "./lib/notion/conflict-detector.js";
 
 export interface CSVColumn {
   name: string;
@@ -77,6 +79,7 @@ type Step =
   | "e2b-api-key"
   | "validating-e2b-key"
   | "provider-select"
+  | "chunking-preference"
   | "computer-use-model-select"
   | "browser-test-mode"
   | "data-source-select"
@@ -97,6 +100,8 @@ type Step =
   | "deployed-url-select"
   | "browser-testing"
   | "grading-save-options"
+  | "notion-conflict-check"
+  | "notion-override-confirmation"
   | "notion-saving"
   | "input"
   | "analyzing"
@@ -161,6 +166,8 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
   const [browserTestResults, setBrowserTestResults] = useState<BrowserTestResult[]>([]);
   const [deployedUrls, setDeployedUrls] = useState<Array<{ url: string; pageId: string }>>([]);
   const [selectedDeployedUrlColumn, setSelectedDeployedUrlColumn] = useState<string>("");
+  const [conflicts, setConflicts] = useState<ConflictDetectionResult[]>([]);
+  const [overrideDecisions, setOverrideDecisions] = useState<Map<string, OverrideDecision[]>>(new Map());
   const [originalDatabaseId, setOriginalDatabaseId] = useState<
     string | undefined
   >();
@@ -172,6 +179,8 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
   const [loadingIconIndex, setLoadingIconIndex] = useState(0);
   const [processingMode, setProcessingMode] = useState<"code" | "browser" | "both" | null>(null);
   const [selectedProcessingOption, setSelectedProcessingOption] = useState(0); // 0 = code only (default), 1 = browser only, 2 = both
+  const [chunkingPreference, setChunkingPreference] = useState<'allow' | 'skip'>('skip');
+  const [selectedChunkingOption, setSelectedChunkingOption] = useState(1); // 0 = allow, 1 = skip (default)
   const { exit } = useApp();
 
   // Helper function to navigate to a new step and clear any existing errors
@@ -301,7 +310,8 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
 
                   const result = await sandboxService.processGitHubUrl(
                     url,
-                    selectedProvider || DEFAULT_PROVIDER
+                    selectedProvider || DEFAULT_PROVIDER,
+                    chunkingPreference
                   );
 
                   const gradingResult = await saveRepositoryFiles(
@@ -379,7 +389,8 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
                   if (repoInfo) {
                     result = await githubService.processGitHubUrl(
                       url,
-                      selectedProvider || DEFAULT_PROVIDER
+                      selectedProvider || DEFAULT_PROVIDER,
+                      chunkingPreference
                     );
                   }
                 }
@@ -470,7 +481,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
       const envToken = process.env.GITHUB_TOKEN;
       const token = savedToken || envToken;
 
-      // Load saved provider preference
+      // Load saved provider preference and chunking preference
       try {
         const preferences = await preferencesStorage.loadPreferences();
         if (preferences.selectedProvider) {
@@ -481,8 +492,13 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
             setSelectedProvider(provider);
           }
         }
+
+        // Load saved chunking preference, default to 'skip' if not set
+        const savedChunkingPreference = preferences.gradingConfig?.chunkingPreference || 'skip';
+        setChunkingPreference(savedChunkingPreference);
+        setSelectedChunkingOption(savedChunkingPreference === 'skip' ? 1 : 0);
       } catch (error) {
-        // Error loading saved provider is handled gracefully
+        // Error loading saved preferences is handled gracefully
       }
 
       if (token) {
@@ -655,6 +671,53 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
       handleNotionAuth();
     }
   }, [step, notionClient]);
+
+  // Handle Notion saving with conflict resolution
+  useEffect(() => {
+    const performNotionSave = async () => {
+      if (step === "notion-saving") {
+        try {
+          const service = new GradingDatabaseService();
+
+          // Determine processing mode based on what was performed
+          const hasBrowserTests = browserTestResults && browserTestResults.length > 0;
+          const hasCodeGrading = gradingResults && gradingResults.length > 0;
+          const processingMode: 'code' | 'browser' | 'both' =
+            hasBrowserTests && hasCodeGrading ? 'both' :
+            hasBrowserTests ? 'browser' : 'code';
+
+          // Save all grading results with conflict resolution
+          const result = await service.saveGradingResultsWithConflictResolution(
+            originalDatabaseId!,
+            gradingResults,
+            overrideDecisions,
+            selectedGitHubColumn,
+            browserTestResults,
+            processingMode
+          );
+
+          if (result.failed > 0) {
+            setError(
+              `Saved ${result.success} entries, failed ${
+                result.failed
+              }. Errors: ${result.errors.join(", ")}`
+            );
+          } else {
+            console.log(
+              `✓ Successfully saved ${result.success} grading results to Notion database`
+            );
+          }
+
+          navigateToStep("complete");
+        } catch (error: any) {
+          setError(`Failed to save to Notion: ${error.message}`);
+          navigateToStep("grading-save-options");
+        }
+      }
+    };
+
+    performNotionSave();
+  }, [step, gradingResults, browserTestResults, overrideDecisions, originalDatabaseId, selectedGitHubColumn]);
 
   const validateAndAnalyzeCSV = async (
     filePath: string
@@ -1071,6 +1134,29 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           exit();
         }
       }
+    } else if (step === "chunking-preference") {
+      if (key.upArrow) {
+        setSelectedChunkingOption((prev) => (prev > 0 ? prev - 1 : 1));
+      } else if (key.downArrow) {
+        setSelectedChunkingOption((prev) => (prev < 1 ? prev + 1 : 0));
+      } else if (key.return) {
+        // Save the preference
+        const preference = selectedChunkingOption === 0 ? 'allow' : 'skip';
+        setChunkingPreference(preference);
+
+        // Save to preferences storage
+        const prefs = await preferencesStorage.loadPreferences();
+        await preferencesStorage.savePreferences({
+          ...prefs,
+          gradingConfig: {
+            ...prefs?.gradingConfig,
+            chunkingPreference: preference,
+          },
+        });
+
+        // Navigate to next step
+        navigateToStep("data-source-select");
+      }
     } else if (step === "processing-choice") {
       if (key.upArrow) {
         setSelectedProcessingOption((prev) => (prev > 0 ? prev - 1 : 2));
@@ -1121,37 +1207,42 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           return;
         }
 
-        navigateToStep("notion-saving");
+        // Check for conflicts first
+        navigateToStep("notion-conflict-check");
 
-        // Save to Notion database
         const service = new GradingDatabaseService();
+
+        // Determine processing mode based on what was performed
+        const hasBrowserTests = browserTestResults && browserTestResults.length > 0;
+        const hasCodeGrading = gradingResults && gradingResults.length > 0;
+        const processingMode: 'code' | 'browser' | 'both' =
+          hasBrowserTests && hasCodeGrading ? 'both' :
+          hasBrowserTests ? 'browser' : 'code';
 
         // Ensure database has grading schema, but skip github_url column if we already have one
         await service.ensureGradingDatabase(databaseId, {
           skipGithubUrlColumn: selectedGitHubColumn,
+          processingMode,
         });
 
-        // Save all grading results
-        const result = await service.saveGradingResults(
+        // Check for conflicts before saving
+        const conflictResults = await service.checkForConflicts(
           databaseId,
           gradingResults,
           selectedGitHubColumn,
-          browserTestResults
+          browserTestResults,
+          processingMode
         );
 
-        if (result.failed > 0) {
-          setError(
-            `Saved ${result.success} entries, failed ${
-              result.failed
-            }. Errors: ${result.errors.join(", ")}`
-          );
-        } else {
-          console.log(
-            `✓ Successfully saved ${result.success} grading results to Notion database`
-          );
-        }
+        setConflicts(conflictResults);
 
-        navigateToStep("complete");
+        // If there are conflicts, show override confirmation
+        if (conflictResults.some(c => c.hasConflicts)) {
+          navigateToStep("notion-override-confirmation");
+        } else {
+          // No conflicts, proceed directly to saving
+          navigateToStep("notion-saving");
+        }
       }
     } catch (error: any) {
       setError(`Failed to save to Notion: ${error.message}`);
@@ -1325,12 +1416,50 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         <ProviderSelector
           onSelect={(provider) => {
             setSelectedProvider(provider);
-            navigateToStep("data-source-select");
+            navigateToStep("chunking-preference");
           }}
           onTestMode={() => {
             navigateToStep("computer-use-model-select");
           }}
         />
+      </Box>
+    );
+  }
+
+  if (step === "chunking-preference") {
+    return (
+      <Box flexDirection="column">
+        <Text color="blue" bold>
+          🔄 Large Codebase Handling
+        </Text>
+        <Text></Text>
+        <Text>
+          How should we handle repositories that exceed the AI model's context window?
+        </Text>
+        <Text></Text>
+        <Text dimColor>
+          Context window limits: Gemini (128K), GPT-4 (2M), Claude (200K tokens)
+        </Text>
+        <Text></Text>
+        <Text color="cyan">Use ↑/↓ arrows to navigate, Enter to select:</Text>
+        <Text></Text>
+        <Text color={selectedChunkingOption === 0 ? "green" : "white"} bold={selectedChunkingOption === 0}>
+          {selectedChunkingOption === 0 ? "→ " : "  "}Process with chunking
+        </Text>
+        <Text dimColor>   • Split large repos into chunks for parallel processing</Text>
+        <Text dimColor>   • May take longer but processes entire codebase</Text>
+        <Text dimColor>   • Aggregates feedback from all chunks</Text>
+        <Text></Text>
+        <Text color={selectedChunkingOption === 1 ? "yellow" : "white"} bold={selectedChunkingOption === 1}>
+          {selectedChunkingOption === 1 ? "→ " : "  "}Skip large repositories {selectedChunkingOption === 1 ? "(recommended)" : ""}
+        </Text>
+        <Text dimColor>   • Skip repositories that exceed context limits</Text>
+        <Text dimColor>   • Faster processing for batches with large repos</Text>
+        <Text dimColor>   • Large repos will be marked as skipped</Text>
+        <Text></Text>
+        <Text dimColor>
+          This preference will be saved for future sessions
+        </Text>
       </Box>
     );
   }
@@ -1744,6 +1873,12 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
               );
             }
           }}
+          onAuthenticationRequired={() => {
+            // Clear error and navigate to OAuth info page to trigger re-authentication
+            setError(null);
+            console.log("🔄 Authentication required, triggering OAuth flow...");
+            navigateToStep("notion-oauth-info");
+          }}
           onError={(error) => {
             setError(error);
             navigateToStep("data-source-select");
@@ -1935,6 +2070,38 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         originalDatabaseId={originalDatabaseId}
         onOptionSelected={handleSaveOptionSelected}
         onError={setError}
+      />
+    );
+  }
+
+  if (step === "notion-conflict-check") {
+    return (
+      <Box flexDirection="column">
+        <Text color="yellow" bold>
+          Checking for Data Conflicts...
+        </Text>
+        <Text></Text>
+        <Text>
+          Checking {gradingResults.length} grading results for existing data in Notion database...
+        </Text>
+        <Text dimColor>
+          This will help prevent accidentally overwriting existing grading data.
+        </Text>
+      </Box>
+    );
+  }
+
+  if (step === "notion-override-confirmation") {
+    return (
+      <OverrideConfirmation
+        conflicts={conflicts}
+        onDecision={(decisions) => {
+          setOverrideDecisions(decisions);
+          navigateToStep("notion-saving");
+        }}
+        onCancel={() => {
+          navigateToStep("grading-save-options");
+        }}
       />
     );
   }

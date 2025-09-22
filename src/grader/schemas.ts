@@ -17,10 +17,15 @@ export const GRADING_CATEGORIES_GEMINI = z.object({
 
 export const GRADING_CATEGORIES = z
   .object({
-    feedbacks: z
+    repo_explained: z
       .string()
       .describe(
-        "Comprehensive feedback covering all aspects of the project including: project purpose and goals, execution environment, code traceability, confusing parts, fulfillment assessment, complexity and features, file structure, code quality, best practices, documentation, testing, and any technology-specific recommendations (e.g., Python UV vs requirements.txt usage). Provide detailed, constructive feedback in markdown format."
+        "A very short summary (max 300 characters) of what this repository/project is about. This should be a concise explanation for the grader's understanding, focusing on the main purpose, technology stack, and type of application (e.g., 'React e-commerce app with Node.js backend', 'Python data analysis tool for CSV processing', etc.)."
+      ),
+    developer_feedback: z
+      .string()
+      .describe(
+        "Actionable bullet-point feedback for the developer to implement or be aware of. Use format like 'You're doing X, which is Y' or 'You shouldn't use Z, use A instead'. Focus on specific, implementable suggestions about code quality, best practices, architecture, and improvements. Keep under 1,500 characters total."
       ),
   })
   .strict();

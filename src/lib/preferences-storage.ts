@@ -13,6 +13,9 @@ interface Preferences {
   githubConfig?: {
     maxDepth?: number;
   };
+  gradingConfig?: {
+    chunkingPreference?: 'allow' | 'skip';
+  };
   version: string;
 }
 
