@@ -14,8 +14,8 @@ export async function getRepoScores(
 
   const generateObjectOptions: any = {
     model: modelInstance,
-    schemaName: "Grading rubric",
-    schemaDescription: "Code homework grading rubric",
+    schemaName: "Grading feedback",
+    schemaDescription: "Comprehensive code homework feedback",
     system: PROMPT_GRADER,
     prompt: repoContent,
     schema: GRADING_CATEGORIES,
@@ -29,14 +29,14 @@ export async function getRepoScores(
     };
   }
 
-  // Implement retry logic with self-repair for broken JSON
+  // Implement retry logic for generating comprehensive feedback
   const maxRetries = 2;
   let lastError: Error | null = null;
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       const result = await generateObject(generateObjectOptions);
-      
+
       // Validate the result has the expected structure
       if (!result.object || typeof result.object !== 'object') {
         throw new Error('Generated object is null or invalid');
@@ -53,35 +53,33 @@ export async function getRepoScores(
     } catch (error) {
       lastError = error as Error;
       console.warn(`⚠️  Grading attempt ${attempt} failed:`, error instanceof Error ? error.message : String(error));
-      
+
       if (attempt < maxRetries) {
         console.log(`🔄 Retrying grading (attempt ${attempt + 1}/${maxRetries})...`);
-        
+
         // Adapt the retry strategy based on the error type
         const errorMsg = error instanceof Error ? error.message : String(error);
-        
+
         if (errorMsg.includes('Schema validation failed')) {
           // Schema validation error - provide more specific guidance
-          generateObjectOptions.system = PROMPT_GRADER + 
+          generateObjectOptions.system = PROMPT_GRADER +
             "\n\nIMPORTANT: The previous attempt failed schema validation. Please ensure:\n" +
-            "- All required fields are present: project_purpose, execution_environment, logic_tracing, confusing_parts, fulfillment, complexity_and_features, structure\n" +
-            "- Each object has the correct sub-fields with proper data types (strings and booleans as specified)\n" +
-            "- Boolean fields should be true/false, not 'true'/'false' strings\n" +
-            "- Provide meaningful string descriptions, not empty strings";
+            "- Your response contains a single 'feedbacks' field with comprehensive markdown-formatted feedback\n" +
+            "- The feedback should be detailed, well-structured, and cover all the specified areas\n" +
+            "- Use proper markdown formatting with headers, bullet points, and code examples where appropriate";
         } else if (errorMsg.includes('JSON') || errorMsg.includes('parse')) {
           // JSON parsing error - focus on format
-          generateObjectOptions.system = PROMPT_GRADER + 
+          generateObjectOptions.system = PROMPT_GRADER +
             "\n\nIMPORTANT: The previous attempt had JSON formatting issues. Please ensure:\n" +
             "- Valid JSON syntax with proper brackets, quotes, and commas\n" +
-            "- No trailing commas\n" +
-            "- All strings are properly quoted\n" +
-            "- All boolean values are true/false (not quoted)";
+            "- The feedbacks field contains a properly escaped string\n" +
+            "- All special characters in the markdown are properly escaped for JSON";
         } else {
           // Generic error - general improvement guidance
-          generateObjectOptions.system = PROMPT_GRADER + 
-            "\n\nIMPORTANT: The previous attempt failed. Please ensure your response strictly follows the provided schema with valid JSON formatting and all required fields.";
+          generateObjectOptions.system = PROMPT_GRADER +
+            "\n\nIMPORTANT: The previous attempt failed. Please ensure your response strictly follows the provided schema with a single 'feedbacks' field containing comprehensive, well-formatted feedback.";
         }
-        
+
         // Add a small delay between retries
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
