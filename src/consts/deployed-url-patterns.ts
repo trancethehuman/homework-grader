@@ -54,4 +54,15 @@ export const BROWSER_TESTING_CONFIG = {
   TEST_DURATION_MS: 30000, // 30 seconds per URL
   SCREENSHOT_INTERVAL_MS: 5000, // Screenshot every 5 seconds
   ACTION_DELAY_MS: 2000, // 2 seconds between actions
+  NAVIGATION_TIMEOUT_MS: 15000, // 15 seconds for page load
+  ACTION_TIMEOUT_MS: 10000, // 10 seconds for individual actions
+  MAX_RETRIES: 2, // Maximum retry attempts for failed navigation
+  RETRY_DELAY_MS: 2000, // Delay between retries
+  SESSION_STABILIZATION_MS: 3000, // Wait after session initialization
+  TAB_CREATION_DELAY_MS: 1000, // Wait after creating tabs
+  // Computer Use Agent requirements
+  BROWSER_WIDTH: 1280, // Required viewport width for Computer Use
+  BROWSER_HEIGHT: 720, // Required viewport height for Computer Use
+  FONT_LOAD_DELAY_MS: 5000, // Wait for fonts and assets to load
+  AGENT_MAX_STEPS: 5, // Reduced steps for faster execution
 };

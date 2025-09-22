@@ -30,6 +30,8 @@ import {
   AIProvider,
   DEFAULT_PROVIDER,
   AI_PROVIDERS,
+  ComputerUseModel,
+  DEFAULT_COMPUTER_USE_MODEL,
 } from "./consts/ai-providers.js";
 import { SANDBOX_BATCH_SIZE } from "./consts/limits.js";
 import { PreferencesStorage } from "./lib/preferences-storage.js";
@@ -39,10 +41,11 @@ import {
 } from "./components/grading-save-options.js";
 import { GradingResult, saveBrowserTestResults } from "./lib/file-saver.js";
 import { GradingDatabaseService } from "./lib/notion/grading-database-service.js";
-import { StagehandTest } from "./components/stagehand-test.js";
 import { DeployedUrlSelector } from "./components/deployed-url-selector.js";
 import { BrowserTesting } from "./components/browser-testing.js";
 import { BrowserTestResult } from "./lib/stagehand/browser-testing-service.js";
+import { BrowserTestMode } from "./components/browser-test-mode.js";
+import { ComputerUseModelSelector } from "./components/computer-use-model-selector.js";
 
 export interface CSVColumn {
   name: string;
@@ -71,10 +74,11 @@ interface InteractiveCSVProps {
 
 type Step =
   | "github-token"
-  | "validating-token"
   | "e2b-api-key"
   | "validating-e2b-key"
   | "provider-select"
+  | "computer-use-model-select"
+  | "browser-test-mode"
   | "data-source-select"
   | "notion-auth"
   | "notion-auth-loading"
@@ -82,14 +86,14 @@ type Step =
   | "notion-url-input"
   | "notion-fetching"
   | "notion-property-select"
-  | "notion-api-page-select"
-  | "stagehand-test"
   | "notion-page-selector"
   | "notion-api-content-view"
   | "notion-oauth-info"
   | "notion-github-column-select"
   | "notion-processing"
+  | "processing-choice"
   | "browser-testing-prompt"
+  | "browser-computer-use-model-select"
   | "deployed-url-select"
   | "browser-testing"
   | "grading-save-options"
@@ -112,6 +116,8 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
   const [selectedProvider, setSelectedProvider] = useState<AIProvider | null>(
     null
   );
+  const [selectedComputerUseModel, setSelectedComputerUseModel] = useState<ComputerUseModel | null>(null);
+  const [selectedBrowserComputerUseModel, setSelectedBrowserComputerUseModel] = useState<ComputerUseModel | null>(null);
   const [selectedDataSource, setSelectedDataSource] =
     useState<DataSource | null>(null);
   const [notionClient] = useState(new NotionMCPClient());
@@ -164,7 +170,14 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
   const [e2bKeyValid, setE2BKeyValid] = useState<boolean | null>(null);
   const [skipGitHub, setSkipGitHub] = useState(false);
   const [loadingIconIndex, setLoadingIconIndex] = useState(0);
+  const [processingMode, setProcessingMode] = useState<"code" | "browser" | "both" | null>(null);
   const { exit } = useApp();
+
+  // Helper function to navigate to a new step and clear any existing errors
+  const navigateToStep = (newStep: Step) => {
+    setError(null); // Clear any existing error messages
+    setStep(newStep);
+  };
 
   // Loading animation for Notion auth
   useEffect(() => {
@@ -185,7 +198,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
 
   // Process GitHub URLs when entering notion-processing step
   useEffect(() => {
-    if (step === "notion-processing" && notionGitHubUrls.length > 0) {
+    if (step === "notion-processing" && notionGitHubUrls.length > 0 && processingMode !== "browser") {
       const processGitHubUrls = async () => {
         setProcessingResults({
           processed: 0,
@@ -417,12 +430,18 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           );
           console.log(`✗ Failed: ${results.filter((r) => !r.success).length}`);
 
-          // Save grading results and move to browser testing prompt
+          // Save grading results
           setGradingResults(collectedGradingResults);
 
-          // Show browser testing prompt after a short delay
+          // Determine next step based on processing mode
           setTimeout(() => {
-            setStep("browser-testing-prompt");
+            if (processingMode === "both") {
+              // User chose both - go directly to deployed URL selection
+              navigateToStep("deployed-url-select");
+            } else {
+              // User chose code only - go to save options
+              navigateToStep("grading-save-options");
+            }
           }, 2000);
         } finally {
           // Cleanup sandbox if it was used
@@ -440,10 +459,10 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
             error instanceof Error ? error.message : String(error)
           }`
         );
-        setStep("notion-github-column-select");
+        navigateToStep("notion-github-column-select");
       });
     }
-  }, [step, notionGitHubUrls, githubToken, selectedProvider]);
+  }, [step, notionGitHubUrls, githubToken, selectedProvider, processingMode]);
 
   // Initialize and validate token from storage or environment
   useEffect(() => {
@@ -464,13 +483,12 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           }
         }
       } catch (error) {
-        console.error("Error loading saved provider:", error);
+        // Error loading saved provider is handled gracefully
       }
 
       if (token) {
         setGithubToken(token);
         setValidatingToken(true);
-        setStep("validating-token");
 
         try {
           // For token validation, we don't need depth limit configuration
@@ -479,21 +497,21 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
 
           if (validation.valid) {
             setTokenValid(true);
-            setStep("e2b-api-key");
+            navigateToStep("e2b-api-key");
           } else {
             setTokenValid(false);
-            setStep("github-token");
-            console.error("Token validation failed:", validation.error);
+            navigateToStep("github-token");
+            // Token validation error is already captured in validation.error
           }
         } catch (error) {
           setTokenValid(false);
-          setStep("github-token");
-          console.error("Token validation error:", error);
+          navigateToStep("github-token");
+          // Token validation error is already handled in the catch block
         } finally {
           setValidatingToken(false);
         }
       } else {
-        setStep("github-token");
+        navigateToStep("github-token");
       }
     };
 
@@ -512,22 +530,22 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
       if (key) {
         setE2bApiKey(key);
         setValidatingE2BKey(true);
-        setStep("validating-e2b-key");
+        navigateToStep("validating-e2b-key");
 
         try {
           // Validate E2B API key format
           if (e2bTokenStorage.validateKeyFormat(key)) {
             setE2BKeyValid(true);
-            setStep("provider-select");
+            navigateToStep("provider-select");
           } else {
             setE2BKeyValid(false);
-            setStep("e2b-api-key");
-            console.error("E2B API key format is invalid");
+            navigateToStep("e2b-api-key");
+            // E2B API key format validation error is handled in the UI
           }
         } catch (error) {
           setE2BKeyValid(false);
-          setStep("e2b-api-key");
-          console.error("E2B API key validation error:", error);
+          navigateToStep("e2b-api-key");
+          // E2B API key validation error is handled in the catch block
         } finally {
           setValidatingE2BKey(false);
         }
@@ -550,14 +568,14 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           try {
             await notionOAuthClient.refreshIfPossible();
             await notionOAuthClient.ensureAuthenticated();
-            setStep("notion-api-page-select");
+            navigateToStep("notion-page-selector");
           } catch (e: any) {
             // Auth failed, show OAuth info page
-            setStep("notion-oauth-info");
+            navigateToStep("notion-oauth-info");
           }
         } else {
           // No existing auth, show OAuth info page
-          setStep("notion-oauth-info");
+          navigateToStep("notion-oauth-info");
         }
       }, 1500); // Show loading animation for 1.5 seconds
 
@@ -580,7 +598,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           );
 
           // Move to URL input step
-          setStep("notion-url-input");
+          navigateToStep("notion-url-input");
         } catch (error) {
           console.error("Notion authentication failed:", error);
 
@@ -590,7 +608,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
             try {
               const authUrl = await notionClient.initiateOAuth();
               setOauthUrl(authUrl);
-              setStep("notion-oauth-prompt");
+              navigateToStep("notion-oauth-prompt");
             } catch (oauthError) {
               setError(
                 `Failed to generate OAuth URL: ${
@@ -599,7 +617,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
                     : String(oauthError)
                 }`
               );
-              setStep("data-source-select");
+              navigateToStep("data-source-select");
             }
           } else {
             setError(
@@ -607,7 +625,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
                 error instanceof Error ? error.message : String(error)
               }`
             );
-            setStep("data-source-select");
+            navigateToStep("data-source-select");
           }
         }
       };
@@ -733,7 +751,6 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         const newToken = input.trim() || githubToken;
         if (newToken) {
           setValidatingToken(true);
-          setStep("validating-token");
 
           // Validate the token
           (async () => {
@@ -751,21 +768,21 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
                       tokenStorage.getConfigDir()
                     );
                   } catch (err) {
-                    console.error("Error saving token:", err);
+                    // Token saving error is handled gracefully
                   }
                 }
                 setGithubToken(newToken);
                 setTokenValid(true);
-                setStep("e2b-api-key");
+                navigateToStep("e2b-api-key");
               } else {
                 setTokenValid(false);
-                setStep("github-token");
-                console.error("Token validation failed:", validation.error);
+                navigateToStep("github-token");
+                // Token validation error is already captured in validation.error
               }
             } catch (error) {
               setTokenValid(false);
-              setStep("github-token");
-              console.error("Token validation error:", error);
+              navigateToStep("github-token");
+              // Token validation error is already handled in the catch block
             } finally {
               setValidatingToken(false);
             }
@@ -773,7 +790,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         } else {
           // Skip GitHub authentication
           setSkipGitHub(true);
-          setStep("e2b-api-key");
+          navigateToStep("e2b-api-key");
         }
         setInput("");
       } else if (key.backspace || key.delete) {
@@ -794,7 +811,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
       } else if (inputChar === "s" && !input) {
         // Skip GitHub authentication
         setSkipGitHub(true);
-        setStep("e2b-api-key");
+        navigateToStep("e2b-api-key");
       } else if (
         inputChar &&
         !key.ctrl &&
@@ -809,7 +826,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         const newKey = input.trim() || e2bApiKey;
         if (newKey) {
           setValidatingE2BKey(true);
-          setStep("validating-e2b-key");
+          navigateToStep("validating-e2b-key");
 
           // Validate the E2B API key
           (async () => {
@@ -823,28 +840,28 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
                       e2bTokenStorage.getConfigDir()
                     );
                   } catch (err) {
-                    console.error("Error saving E2B API key:", err);
+                    // E2B API key saving error is handled gracefully
                   }
                 }
                 setE2bApiKey(newKey);
                 setE2BKeyValid(true);
-                setStep("provider-select");
+                navigateToStep("provider-select");
               } else {
                 setE2BKeyValid(false);
-                setStep("e2b-api-key");
-                console.error("E2B API key format is invalid");
+                navigateToStep("e2b-api-key");
+                // E2B API key format validation error is handled in the UI
               }
             } catch (error) {
               setE2BKeyValid(false);
-              setStep("e2b-api-key");
-              console.error("E2B API key validation error:", error);
+              navigateToStep("e2b-api-key");
+              // E2B API key validation error is handled in the catch block
             } finally {
               setValidatingE2BKey(false);
             }
           })();
         } else {
           // Skip E2B, proceed to provider selection
-          setStep("provider-select");
+          navigateToStep("provider-select");
         }
         setInput("");
       } else if (key.backspace || key.delete) {
@@ -862,7 +879,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         console.log("✓ E2B API key cleared from storage");
       } else if (inputChar === "s" && !input) {
         // Skip E2B API key
-        setStep("provider-select");
+        navigateToStep("provider-select");
       } else if (
         inputChar &&
         !key.ctrl &&
@@ -881,16 +898,16 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         console.log("OAuth URL copied to console:", oauthUrl);
       } else if (inputChar === "r") {
         // Retry authentication after OAuth with loading animation
-        setStep("notion-auth-loading");
+        navigateToStep("notion-auth-loading");
       } else if (inputChar === "b") {
         // Go back to data source selection
-        setStep("data-source-select");
+        navigateToStep("data-source-select");
       }
     } else if (step === "notion-url-input") {
       if (key.return) {
         if (input.trim()) {
           setNotionDatabaseUrl(input.trim());
-          setStep("notion-fetching");
+          navigateToStep("notion-fetching");
 
           // Fetch database info from URL
           (async () => {
@@ -903,10 +920,10 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
                 const properties = Object.keys(database.properties);
                 setNotionProperties(properties);
                 setSelectedNotionProperty(0);
-                setStep("notion-property-select");
+                navigateToStep("notion-property-select");
               } else {
                 setError("Could not fetch database from URL");
-                setStep("notion-url-input");
+                navigateToStep("notion-url-input");
               }
             } catch (error) {
               setError(
@@ -914,7 +931,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
                   error instanceof Error ? error.message : String(error)
                 }`
               );
-              setStep("notion-url-input");
+              navigateToStep("notion-url-input");
             }
           })();
         }
@@ -938,7 +955,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           Math.min(notionProperties.length - 1, prev + 1)
         );
       } else if (key.return) {
-        setStep("loading");
+        navigateToStep("loading");
         try {
           // Here we would query the database and extract GitHub URLs
           // For now, pass empty array and let the parent handle it
@@ -951,7 +968,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
             e2bApiKey,
             selectedProvider || DEFAULT_PROVIDER
           );
-          setStep("complete");
+          navigateToStep("complete");
         } catch (err) {
           setError(err instanceof Error ? err.message : String(err));
           onError(err instanceof Error ? err.message : String(err));
@@ -962,7 +979,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
       if (key.return) {
         if (input.trim()) {
           setCsvPath(input.trim());
-          setStep("analyzing");
+          navigateToStep("analyzing");
           try {
             const analysisResult = await validateAndAnalyzeCSV(input.trim());
             setAnalysis(analysisResult);
@@ -974,10 +991,10 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
                 : 0
             );
             setError(null); // Clear any previous errors
-            setStep("select");
+            navigateToStep("select");
           } catch (err) {
             setError(err instanceof Error ? err.message : String(err));
-            setStep("input"); // Return to input step to let user try again
+            navigateToStep("input"); // Return to input step to let user try again
             setInput(""); // Clear the input field
           }
         }
@@ -988,7 +1005,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         setTokenValid(null);
         setSkipGitHub(false);
         setInput("");
-        setStep("github-token");
+        navigateToStep("github-token");
         console.log("✓ Token cleared from storage - returning to token setup");
       } else if (key.backspace || key.delete) {
         setInput((prev) => prev.slice(0, -1));
@@ -1009,7 +1026,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           Math.min(analysis.columns.length - 1, prev + 1)
         );
       } else if (key.return) {
-        setStep("loading");
+        navigateToStep("loading");
         try {
           const urls = await loadGitHubUrlsFromColumn(
             csvPath,
@@ -1023,31 +1040,34 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
             e2bApiKey,
             selectedProvider || DEFAULT_PROVIDER
           );
-          setStep("complete");
+          navigateToStep("complete");
         } catch (err) {
           setError(err instanceof Error ? err.message : String(err));
           onError(err instanceof Error ? err.message : String(err));
           exit();
         }
       }
-    } else if (step === "notion-api-page-select") {
-      if (key.return) {
-        // Continue with Notion data processing - show the actual NotionPageSelector
-        setStep("notion-page-selector");
-      } else if (inputChar === "t") {
-        // Test Stagehand/Browserbase integration
-        setStep("stagehand-test");
-      } else if (inputChar === "b") {
-        // Go back to data source selection
-        setStep("data-source-select");
+    } else if (step === "processing-choice") {
+      if (inputChar === "1") {
+        // Grade repository code - need to clone and process
+        setProcessingMode("code");
+        navigateToStep("notion-processing");
+      } else if (inputChar === "2") {
+        // Test deployed applications only - skip cloning, go directly to deployed URL selection
+        setProcessingMode("browser");
+        navigateToStep("deployed-url-select");
+      } else if (inputChar === "3") {
+        // Do both - clone and process first, then browser test
+        setProcessingMode("both");
+        navigateToStep("notion-processing");
       }
     } else if (step === "browser-testing-prompt") {
       if (inputChar === "y") {
-        // Start browser testing - analyze for deployed URLs
-        setStep("deployed-url-select");
+        // Start browser testing - first select computer use model
+        navigateToStep("browser-computer-use-model-select");
       } else if (inputChar === "n") {
         // Skip browser testing and go directly to save options
-        setStep("grading-save-options");
+        navigateToStep("grading-save-options");
       }
     }
 
@@ -1064,14 +1084,14 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
     try {
       if (option === "file" || option === "skip") {
         // Files are already saved, just complete
-        setStep("complete");
+        navigateToStep("complete");
       } else if (option === "original-database" || option === "new-database") {
         if (!databaseId) {
           setError("Database ID is required for Notion saving");
           return;
         }
 
-        setStep("notion-saving");
+        navigateToStep("notion-saving");
 
         // Save to Notion database
         const service = new GradingDatabaseService();
@@ -1101,11 +1121,11 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           );
         }
 
-        setStep("complete");
+        navigateToStep("complete");
       }
     } catch (error: any) {
       setError(`Failed to save to Notion: ${error.message}`);
-      setStep("grading-save-options");
+      navigateToStep("grading-save-options");
     }
   };
 
@@ -1159,14 +1179,6 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
     );
   }
 
-  if (step === "validating-token") {
-    return (
-      <Box flexDirection="column">
-        <Text color="yellow">Validating GitHub token...</Text>
-        <Text>Please wait while we verify your token...</Text>
-      </Box>
-    );
-  }
 
   if (step === "e2b-api-key") {
     return (
@@ -1267,10 +1279,67 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
 
   if (step === "provider-select") {
     return (
-      <ProviderSelector
-        onSelect={(provider) => {
-          setSelectedProvider(provider);
-          setStep("data-source-select");
+      <Box flexDirection="column">
+        <Text color="blue" bold>
+          🤖 Select AI Provider or Test Mode
+        </Text>
+        <Text></Text>
+        <Text>Choose your preferred AI provider for grading, or test browser automation:</Text>
+        <Text></Text>
+        <Text color="yellow" bold>
+          🧪 Press 't' for Browser Test Mode (Debug 3 URLs)
+        </Text>
+        <Text dimColor>   Test browser automation with 3 sample URLs for debugging</Text>
+        <Text></Text>
+        <Text>Or select an AI provider:</Text>
+        <Text></Text>
+        <ProviderSelector
+          onSelect={(provider) => {
+            setSelectedProvider(provider);
+            navigateToStep("data-source-select");
+          }}
+          onTestMode={() => {
+            navigateToStep("computer-use-model-select");
+          }}
+        />
+      </Box>
+    );
+  }
+
+  if (step === "computer-use-model-select") {
+    return (
+      <ComputerUseModelSelector
+        onModelSelected={(model) => {
+          setSelectedComputerUseModel(model);
+          navigateToStep("browser-test-mode");
+        }}
+        onBack={() => {
+          navigateToStep("provider-select");
+        }}
+      />
+    );
+  }
+
+  if (step === "browser-computer-use-model-select") {
+    return (
+      <ComputerUseModelSelector
+        onModelSelected={(model) => {
+          setSelectedBrowserComputerUseModel(model);
+          navigateToStep("deployed-url-select");
+        }}
+        onBack={() => {
+          navigateToStep("browser-testing-prompt");
+        }}
+      />
+    );
+  }
+
+  if (step === "browser-test-mode") {
+    return (
+      <BrowserTestMode
+        selectedModel={selectedComputerUseModel}
+        onBack={() => {
+          navigateToStep("computer-use-model-select");
         }}
       />
     );
@@ -1295,9 +1364,9 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
             setCachedNotionDatabases([]);
 
             if (source === "csv") {
-              setStep("input");
+              navigateToStep("input");
             } else if (source === "notion") {
-              setStep("notion-auth-loading");
+              navigateToStep("notion-auth-loading");
             }
           }}
         />
@@ -1309,23 +1378,23 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
     return (
       <NotionOAuthInfo
         onContinue={() => {
-          setStep("loading");
+          navigateToStep("loading");
           (async () => {
             try {
               await notionOAuthClient.refreshIfPossible();
               await notionOAuthClient.ensureAuthenticated();
-              setStep("notion-api-page-select");
+              navigateToStep("notion-page-selector");
             } catch (e: any) {
               setError(
                 `Notion authentication failed: ${
                   e instanceof Error ? e.message : String(e)
                 }`
               );
-              setStep("data-source-select");
+              navigateToStep("data-source-select");
             }
           })();
         }}
-        onBack={() => setStep("data-source-select")}
+        onBack={() => navigateToStep("data-source-select")}
         onClear={() => {
           const storage = new NotionTokenStorage();
           storage.clearToken();
@@ -1585,29 +1654,6 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
     );
   }
 
-  if (step === "notion-api-page-select") {
-    return (
-      <Box flexDirection="column">
-        <Text color="green" bold>
-          ✓ Notion Connection Successful
-        </Text>
-        <Text></Text>
-        <Text>Choose what you'd like to do:</Text>
-        <Text></Text>
-        <Text color="cyan">• Press Enter to continue with Notion data processing</Text>
-        <Text color="yellow">• Press 't' to test Stagehand/Browserbase integration</Text>
-        <Text dimColor>• Press 'b' to go back to data source selection</Text>
-      </Box>
-    );
-  }
-
-  if (step === "stagehand-test") {
-    return (
-      <StagehandTest
-        onBack={() => setStep("notion-api-page-select")}
-      />
-    );
-  }
 
   if (step === "notion-page-selector") {
     return (
@@ -1616,7 +1662,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           onSelect={(pageId, pageTitle) => {
             setNotionApiSelectedPageId(pageId);
             setNotionApiSelectedPageTitle(pageTitle);
-            setStep("notion-api-content-view");
+            navigateToStep("notion-api-content-view");
           }}
           onStartGrading={async (pageId, pageTitle) => {
             // Start grading directly without viewing content first
@@ -1629,7 +1675,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
               const notionService = new NotionService(token.access_token);
               const content = await notionService.getPageContent(pageId);
               setNotionApiContent(content);
-              setStep("notion-github-column-select");
+              navigateToStep("notion-github-column-select");
             } catch (error) {
               setError(
                 `Failed to fetch content for grading: ${
@@ -1640,9 +1686,9 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           }}
           onError={(error) => {
             setError(error);
-            setStep("data-source-select");
+            navigateToStep("data-source-select");
           }}
-          onBack={() => setStep("notion-api-page-select")}
+          onBack={() => navigateToStep("data-source-select")}
           // Pass cached data to avoid refetching
           cachedPages={cachedNotionPages}
           cachedDatabases={cachedNotionDatabases}
@@ -1665,7 +1711,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           contentType={notionApiContentType}
           onComplete={(content) => {
             setNotionApiContent(content);
-            setStep("notion-github-column-select");
+            navigateToStep("notion-github-column-select");
           }}
           onNavigate={(pageId, pageTitle, contentType) => {
             // Navigate to a new page/database
@@ -1686,7 +1732,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
               // For databases, we need to get database content (entries), not page content
               const content = await notionService.getDatabaseContent(pageId);
               setNotionApiContent(content);
-              setStep("notion-github-column-select");
+              navigateToStep("notion-github-column-select");
             } catch (error) {
               setError(
                 `Failed to fetch content for grading: ${
@@ -1695,7 +1741,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
               );
             }
           }}
-          onBack={() => setStep("notion-api-page-select")}
+          onBack={() => navigateToStep("data-source-select")}
         />
       </Box>
     );
@@ -1721,13 +1767,13 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
             setSelectedGitHubColumn(
               selectedProperty.name || selectedProperty.propertyName || ""
             );
-            setStep("notion-processing");
+            navigateToStep("processing-choice");
           }}
           onError={(error) => {
             setError(error);
-            setStep("notion-api-content-view");
+            navigateToStep("notion-api-content-view");
           }}
-          onBack={() => setStep("notion-api-content-view")}
+          onBack={() => navigateToStep("notion-api-content-view")}
         />
       </Box>
     );
@@ -1814,7 +1860,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
 
         {!isComplete && (
           <BackButton
-            onBack={() => setStep("notion-github-column-select")}
+            onBack={() => navigateToStep("notion-github-column-select")}
             isVisible={true}
           />
         )}
@@ -1847,6 +1893,36 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           This may take a moment to create/update database schema and save
           entries.
         </Text>
+      </Box>
+    );
+  }
+
+  if (step === "processing-choice") {
+    return (
+      <Box flexDirection="column">
+        <Text color="blue" bold>
+          🎯 Choose Processing Type
+        </Text>
+        <Text></Text>
+        <Text>
+          Found {notionGitHubUrls.length} GitHub repositories. What would you like to do?
+        </Text>
+        <Text></Text>
+        <Text color="cyan">Choose an option:</Text>
+        <Text></Text>
+        <Text color="blue">1. Grade repository code only</Text>
+        <Text dimColor>   • Clone and analyze code quality, structure, best practices</Text>
+        <Text dimColor>   • Generate grading reports and save results</Text>
+        <Text></Text>
+        <Text color="magenta">2. Test deployed applications only</Text>
+        <Text dimColor>   • Skip cloning - directly test deployed web applications</Text>
+        <Text dimColor>   • Capture screenshots and verify functionality</Text>
+        <Text></Text>
+        <Text color="yellow">3. Do both (recommended)</Text>
+        <Text dimColor>   • Clone and grade code THEN test deployed applications</Text>
+        <Text dimColor>   • Comprehensive analysis with complete results</Text>
+        <Text></Text>
+        <Text color="cyan">Press '1', '2', or '3' to select</Text>
       </Box>
     );
   }
@@ -1898,13 +1974,25 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
             setSelectedDeployedUrlColumn(
               selectedProperty.name || selectedProperty.propertyName || ""
             );
-            setStep("browser-testing");
+            navigateToStep("browser-testing");
           }}
           onError={(error) => {
             setError(error);
-            setStep("browser-testing-prompt");
+            // Go back based on how user got here
+            if (processingMode === "browser") {
+              navigateToStep("processing-choice");
+            } else {
+              navigateToStep("browser-testing-prompt");
+            }
           }}
-          onBack={() => setStep("browser-testing-prompt")}
+          onBack={() => {
+            // Go back based on how user got here  
+            if (processingMode === "browser") {
+              navigateToStep("processing-choice");
+            } else {
+              navigateToStep("browser-testing-prompt");
+            }
+          }}
         />
       </Box>
     );
@@ -1915,6 +2003,8 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
       <Box flexDirection="column">
         <BrowserTesting
           deployedUrls={deployedUrls}
+          aiProvider={selectedProvider || undefined}
+          selectedModel={selectedBrowserComputerUseModel}
           onComplete={(results) => {
             setBrowserTestResults(results);
             
@@ -1924,13 +2014,13 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
             }
             
             console.log(`✓ Browser testing completed: ${results.length} URLs tested`);
-            setStep("grading-save-options");
+            navigateToStep("grading-save-options");
           }}
           onError={(error) => {
             setError(error);
-            setStep("deployed-url-select");
+            navigateToStep("deployed-url-select");
           }}
-          onBack={() => setStep("deployed-url-select")}
+          onBack={() => navigateToStep("deployed-url-select")}
         />
       </Box>
     );

@@ -5,10 +5,12 @@ import { PreferencesStorage } from "../lib/preferences-storage.js";
 
 interface ProviderSelectorProps {
   onSelect: (provider: AIProvider) => void;
+  onTestMode?: () => void;
 }
 
 export const ProviderSelector: React.FC<ProviderSelectorProps> = ({
   onSelect,
+  onTestMode,
 }) => {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [preferencesStorage] = useState(new PreferencesStorage());
@@ -50,6 +52,8 @@ export const ProviderSelector: React.FC<ProviderSelectorProps> = ({
       });
       
       onSelect(selectedProvider);
+    } else if (input === 't' && onTestMode) {
+      onTestMode();
     }
   });
 
@@ -83,7 +87,7 @@ export const ProviderSelector: React.FC<ProviderSelectorProps> = ({
       </Box>
       <Box marginTop={1}>
         <Text color="yellow">
-          Use ↑/↓ arrows to navigate, Enter to select
+          Use ↑/↓ arrows to navigate, Enter to select, 't' for Browser Test Mode
         </Text>
       </Box>
     </Box>

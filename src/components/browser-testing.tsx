@@ -3,12 +3,15 @@ import { Text, Box, useInput } from "ink";
 import { BrowserTestingService, BrowserTestResult, BrowserTestingProgress } from "../lib/stagehand/browser-testing-service.js";
 import { BROWSER_TESTING_CONFIG } from "../consts/deployed-url-patterns.js";
 import { BackButton } from "./ui/back-button.js";
+import { AIProvider, ComputerUseModel } from "../consts/ai-providers.js";
 
 interface BrowserTestingProps {
   deployedUrls: Array<{ url: string; pageId?: string }>;
   onComplete: (results: BrowserTestResult[]) => void;
   onBack?: () => void;
   onError: (error: string) => void;
+  aiProvider?: AIProvider;
+  selectedModel?: ComputerUseModel | null;
 }
 
 export const BrowserTesting: React.FC<BrowserTestingProps> = ({
@@ -16,8 +19,10 @@ export const BrowserTesting: React.FC<BrowserTestingProps> = ({
   onComplete,
   onBack,
   onError,
+  aiProvider,
+  selectedModel,
 }) => {
-  const [browserService] = useState(new BrowserTestingService());
+  const [browserService] = useState(new BrowserTestingService(undefined, undefined, aiProvider, selectedModel || undefined));
   const [isInitializing, setIsInitializing] = useState(true);
   const [isConfigured, setIsConfigured] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
@@ -53,6 +58,13 @@ export const BrowserTesting: React.FC<BrowserTestingProps> = ({
 
     initialize();
   }, [browserService, onError]);
+
+  // Auto-start testing when ready
+  useEffect(() => {
+    if (!isInitializing && isConfigured && !isTesting && deployedUrls.length > 0) {
+      startTesting();
+    }
+  }, [isInitializing, isConfigured, isTesting, deployedUrls.length]);
 
   const startTesting = async () => {
     if (!isConfigured) {
@@ -104,8 +116,6 @@ export const BrowserTesting: React.FC<BrowserTestingProps> = ({
   useInput(async (input, key) => {
     if (input === 'c' && canTerminate) {
       await terminateTesting();
-    } else if (key.return && !isInitializing && !isTesting && isConfigured) {
-      await startTesting();
     } else if (input === 's' && !isInitializing && !isTesting) {
       // Skip browser testing
       onBack?.();
@@ -155,11 +165,11 @@ export const BrowserTesting: React.FC<BrowserTestingProps> = ({
     return (
       <Box flexDirection="column">
         <Text color="blue" bold>
-          🌐 Browser Testing Ready
+          🌐 Browser Testing Starting...
         </Text>
         <Text></Text>
         <Text>
-          Ready to test {deployedUrls.length} deployed application{deployedUrls.length > 1 ? 's' : ''}:
+          Starting tests for {deployedUrls.length} deployed application{deployedUrls.length > 1 ? 's' : ''}:
         </Text>
         <Text></Text>
         
@@ -176,8 +186,7 @@ export const BrowserTesting: React.FC<BrowserTestingProps> = ({
         <Text dimColor>• Test duration per URL: {BROWSER_TESTING_CONFIG.TEST_DURATION_MS / 1000} seconds</Text>
         <Text dimColor>• Actions per URL: up to 5 automated interactions</Text>
         <Text></Text>
-        <Text color="green">Press Enter to start browser testing</Text>
-        <Text color="cyan">Press 's' to skip browser testing</Text>
+        <Text color="cyan">Browser testing will start automatically...</Text>
         <Text></Text>
         <BackButton onBack={() => onBack?.()} isVisible={!!onBack} />
       </Box>

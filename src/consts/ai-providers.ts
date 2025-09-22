@@ -40,3 +40,44 @@ export const AI_PROVIDERS: AIProvider[] = [
 ];
 
 export const DEFAULT_PROVIDER = AI_PROVIDERS[0];
+
+export interface ComputerUseModel {
+  id: string;
+  name: string;
+  provider: string;
+  model: string;
+  description: string;
+}
+
+export const COMPUTER_USE_MODELS: ComputerUseModel[] = [
+  {
+    id: "openai-computer-use",
+    name: "OpenAI Computer Use Preview",
+    provider: "openai",
+    model: "computer-use-preview",
+    description: "OpenAI's latest computer use model"
+  },
+  {
+    id: "openai-computer-use-2025",
+    name: "OpenAI Computer Use Preview 2025",
+    provider: "openai", 
+    model: "computer-use-preview-2025-03-11",
+    description: "OpenAI's enhanced computer use model"
+  },
+  {
+    id: "claude-sonnet-latest",
+    name: "Claude 3.7 Sonnet Latest",
+    provider: "anthropic",
+    model: "claude-3-7-sonnet-latest", 
+    description: "Anthropic's latest Sonnet model"
+  },
+  {
+    id: "claude-sonnet-4",
+    name: "Claude Sonnet 4",
+    provider: "anthropic",
+    model: "claude-sonnet-4-20250514",
+    description: "Anthropic's Sonnet 4 model"
+  }
+];
+
+export const DEFAULT_COMPUTER_USE_MODEL = COMPUTER_USE_MODELS[0];
