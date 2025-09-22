@@ -28,12 +28,13 @@ export interface NotionDatabase {
 
 export class NotionService {
   private notion: Client;
+  private storage: NotionTokenStorage;
 
   constructor(accessToken?: string) {
+    this.storage = new NotionTokenStorage();
     let token = accessToken;
     if (!token) {
-      const storage = new NotionTokenStorage();
-      const saved = storage.getToken();
+      const saved = this.storage.getToken();
       token = saved?.access_token;
     }
     if (!token) {
@@ -45,9 +46,48 @@ export class NotionService {
   }
 
   /**
+   * Validate the current token by making a lightweight API call
+   */
+  async validateToken(): Promise<{ valid: boolean; error?: string }> {
+    try {
+      // Make a simple API call to test token validity
+      await this.notion.users.me({});
+      return { valid: true };
+    } catch (error: any) {
+      const errorMessage = error.message || String(error);
+      console.log("❌ Token validation failed:", errorMessage);
+
+      if (errorMessage.includes("API token is invalid") ||
+          errorMessage.includes("unauthorized") ||
+          error.code === "unauthorized") {
+        // Clear invalid token from storage
+        console.log("🧹 Clearing invalid token from storage");
+        this.storage.clearToken();
+        return {
+          valid: false,
+          error: "Token is invalid or expired. Please re-authenticate with Notion."
+        };
+      }
+
+      return { valid: false, error: errorMessage };
+    }
+  }
+
+  /**
+   * Ensure we have a valid token before making API calls
+   */
+  private async ensureValidToken(): Promise<void> {
+    const validation = await this.validateToken();
+    if (!validation.valid) {
+      throw new Error(validation.error || "Token validation failed");
+    }
+  }
+
+  /**
    * Fetch all pages accessible to the integration
    */
   async getAllPages(): Promise<NotionPage[]> {
+    await this.ensureValidToken();
     const pages: NotionPage[] = [];
     let hasMore = true;
     let nextCursor: string | undefined;
@@ -86,6 +126,7 @@ export class NotionService {
    * Fetch all databases accessible to the integration
    */
   async getAllDatabases(): Promise<NotionDatabase[]> {
+    await this.ensureValidToken();
     const databases: NotionDatabase[] = [];
     let hasMore = true;
     let nextCursor: string | undefined;
@@ -129,6 +170,7 @@ export class NotionService {
    * Fetch content of a specific page or database
    */
   async getPageContent(pageId: string): Promise<any> {
+    await this.ensureValidToken();
     try {
       // First try to get it as a page
       const page = await this.notion.pages.retrieve({ page_id: pageId });

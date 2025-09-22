@@ -77,6 +77,26 @@ export class NotionTokenStorage {
 
   hasToken(): boolean {
     const token = this.getToken();
-    return !!(token && token.access_token);
+    return !!(token && token.access_token && !this.isTokenExpired(token));
+  }
+
+  isTokenExpired(token?: NotionOAuthToken): boolean {
+    if (!token) {
+      const storedToken = this.getToken();
+      if (!storedToken) return true;
+      token = storedToken;
+    }
+    if (!token || !token.expires_at) {
+      // If no expiration info, assume it's still valid
+      return false;
+    }
+    // Check if token expires within the next 5 minutes (300 seconds buffer)
+    const bufferTime = 5 * 60 * 1000; // 5 minutes in milliseconds
+    return Date.now() >= (token.expires_at - bufferTime);
+  }
+
+  hasValidToken(): boolean {
+    const token = this.getToken();
+    return !!(token && token.access_token && !this.isTokenExpired(token));
   }
 }

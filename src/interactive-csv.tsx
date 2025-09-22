@@ -566,11 +566,34 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         if (hasExistingAuth) {
           // Try to use existing auth directly
           try {
+            console.log("🔍 Checking existing Notion authentication...");
             await notionOAuthClient.refreshIfPossible();
-            await notionOAuthClient.ensureAuthenticated();
-            navigateToStep("notion-page-selector");
+            const token = await notionOAuthClient.ensureAuthenticated();
+
+            // Validate the token with a test API call
+            const { NotionService } = await import("./lib/notion/notion-service.js");
+            const service = new NotionService(token.access_token);
+            const validation = await service.validateToken();
+
+            if (validation.valid) {
+              console.log("✓ Notion authentication is valid");
+              navigateToStep("notion-page-selector");
+            } else {
+              console.log("❌ Notion token validation failed:", validation.error);
+              setError(`Notion authentication expired: ${validation.error || "Please re-authenticate"}`);
+              navigateToStep("notion-oauth-info");
+            }
           } catch (e: any) {
-            // Auth failed, show OAuth info page
+            console.log("❌ Notion authentication error:", e.message || String(e));
+            let errorMessage = "Authentication failed";
+            if (e.message?.includes("API token is invalid")) {
+              errorMessage = "Your Notion access has expired. Please re-authenticate.";
+            } else if (e.message?.includes("unauthorized")) {
+              errorMessage = "Notion access is no longer valid. Please re-authenticate.";
+            } else if (e.message) {
+              errorMessage = e.message;
+            }
+            setError(errorMessage);
             navigateToStep("notion-oauth-info");
           }
         } else {
@@ -748,8 +771,9 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
   useInput(async (inputChar, key) => {
     if (step === "github-token") {
       if (key.return) {
-        const newToken = input.trim() || githubToken;
+        const newToken = input.trim();
         if (newToken) {
+          // User entered a new token, validate it
           setValidatingToken(true);
 
           // Validate the token
@@ -760,16 +784,14 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
               const validation = await githubService.validateToken();
 
               if (validation.valid) {
-                if (newToken !== githubToken) {
-                  try {
-                    tokenStorage.saveToken(newToken);
-                    console.log(
-                      "✓ Token saved securely to:",
-                      tokenStorage.getConfigDir()
-                    );
-                  } catch (err) {
-                    // Token saving error is handled gracefully
-                  }
+                try {
+                  tokenStorage.saveToken(newToken);
+                  console.log(
+                    "✓ Token saved securely to:",
+                    tokenStorage.getConfigDir()
+                  );
+                } catch (err) {
+                  // Token saving error is handled gracefully
                 }
                 setGithubToken(newToken);
                 setTokenValid(true);
@@ -787,8 +809,11 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
               setValidatingToken(false);
             }
           })();
+        } else if (githubToken && tokenValid === true) {
+          // User pressed Enter with no input but has a valid existing token, use it
+          navigateToStep("e2b-api-key");
         } else {
-          // Skip GitHub authentication
+          // User pressed Enter with no input and no valid token, skip GitHub authentication
           setSkipGitHub(true);
           navigateToStep("e2b-api-key");
         }
@@ -1134,22 +1159,22 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
     return (
       <Box flexDirection="column">
         <Text color="blue" bold>
-          GitHub Authentication Setup
+          GitHub API Rate Limits (Optional)
+        </Text>
+        <Text></Text>
+        <Text color="green" bold>
+          ✓ Press Enter to skip GitHub setup and continue
         </Text>
         <Text></Text>
         <Text>
-          To avoid rate limiting (60 requests/hour), please enter your GitHub
-          Personal Access Token:
+          The app works without a token (60 requests/hour). Optionally provide a token for higher limits (5,000 requests/hour):
         </Text>
-        <Text dimColor>
-          • Press 'o' to open GitHub token generation page in browser
-        </Text>
+        <Text></Text>
+        <Text color="cyan">• Press Enter to skip and continue with 60 requests/hour</Text>
+        <Text color="yellow">• Press 's' to skip GitHub authentication</Text>
+        <Text dimColor>• Press 'o' to open GitHub token generation page in browser</Text>
         <Text dimColor>• Generate a token with 'public_repo' scope</Text>
         <Text dimColor>• Press 'c' to clear stored token and start fresh</Text>
-        <Text dimColor>• Press 's' to skip GitHub authentication</Text>
-        <Text dimColor>
-          • Or press Enter to continue without authentication
-        </Text>
         <Text></Text>
         <Text>
           Current token:{" "}
@@ -1165,15 +1190,14 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         </Text>
         <Text dimColor>Stored in: {tokenStorage.getConfigDir()}</Text>
         <Text></Text>
-        <Text>Enter GitHub token (or press Enter to skip):</Text>
+        <Text>Enter GitHub token [OPTIONAL - Press Enter to skip]:</Text>
         <Box>
           <Text color="green">{"> "}</Text>
           <Text>{input.replace(/./g, "*")}</Text>
           <Text color="gray">█</Text>
         </Box>
-        <Text dimColor>
-          Commands: 'o' = open GitHub | 'c' = clear token | 's' = skip | Enter =
-          continue | Ctrl+C = exit
+        <Text color="green">
+          Commands: Enter = skip and continue | 's' = skip | 'o' = open GitHub | 'c' = clear token | Ctrl+C = exit
         </Text>
       </Box>
     );
@@ -1376,34 +1400,65 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
 
   if (step === "notion-oauth-info") {
     return (
-      <NotionOAuthInfo
-        onContinue={() => {
-          navigateToStep("loading");
-          (async () => {
-            try {
-              await notionOAuthClient.refreshIfPossible();
-              await notionOAuthClient.ensureAuthenticated();
-              navigateToStep("notion-page-selector");
-            } catch (e: any) {
-              setError(
-                `Notion authentication failed: ${
-                  e instanceof Error ? e.message : String(e)
-                }`
-              );
-              navigateToStep("data-source-select");
-            }
-          })();
-        }}
-        onBack={() => navigateToStep("data-source-select")}
-        onClear={() => {
-          const storage = new NotionTokenStorage();
-          storage.clearToken();
-        }}
-        hasAccess={(() => {
-          const storage = new NotionTokenStorage();
-          return storage.hasToken();
-        })()}
-      />
+      <Box flexDirection="column">
+        {error && (
+          <>
+            <Text color="red">❌ {error}</Text>
+            <Text></Text>
+          </>
+        )}
+        <NotionOAuthInfo
+          onContinue={() => {
+            setError(null); // Clear previous errors
+            navigateToStep("loading");
+            (async () => {
+              try {
+                console.log("🔄 Starting fresh Notion authentication...");
+                await notionOAuthClient.refreshIfPossible();
+                const token = await notionOAuthClient.ensureAuthenticated();
+
+                // Validate the new token
+                const { NotionService } = await import("./lib/notion/notion-service.js");
+                const service = new NotionService(token.access_token);
+                const validation = await service.validateToken();
+
+                if (validation.valid) {
+                  console.log("✓ New Notion authentication successful");
+                  navigateToStep("notion-page-selector");
+                } else {
+                  throw new Error(validation.error || "Token validation failed after authentication");
+                }
+              } catch (e: any) {
+                console.log("❌ Notion authentication failed:", e.message || String(e));
+                let errorMessage = "Authentication failed";
+                if (e.message?.includes("API token is invalid")) {
+                  errorMessage = "The authentication process failed. Please try again.";
+                } else if (e.message?.includes("unauthorized")) {
+                  errorMessage = "Access was denied. Please ensure you grant the necessary permissions.";
+                } else if (e.message) {
+                  errorMessage = e.message;
+                }
+                setError(errorMessage);
+                navigateToStep("notion-oauth-info");
+              }
+            })();
+          }}
+          onBack={() => {
+            setError(null);
+            navigateToStep("data-source-select");
+          }}
+          onClear={() => {
+            const storage = new NotionTokenStorage();
+            storage.clearToken();
+            setError(null);
+            console.log("🧹 Notion access cleared");
+          }}
+          hasAccess={(() => {
+            const storage = new NotionTokenStorage();
+            return storage.hasValidToken();
+          })()}
+        />
+      </Box>
     );
   }
 
