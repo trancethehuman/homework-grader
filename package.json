@@ -47,8 +47,8 @@
     "sandbox",
     "e2b"
   ],
-  "author": "Your Name <your.email@example.com>",
-  "license": "MIT",
+  "author": "Hai Nghiem <hai@catswithbats.com>",
+  "license": "GNU",
   "devDependencies": {
     "@types/ms": "^2.1.0",
     "@types/node": "^24.0.10",

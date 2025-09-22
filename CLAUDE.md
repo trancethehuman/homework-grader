@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a homework grading system repository with TypeScript URL loading functionality for processing homework submissions from CSV files and GitHub repositories. The project is licensed under MIT License.
+This is a homework grading system repository with TypeScript URL loading functionality for processing homework submissions from CSV files and GitHub repositories. The project is licensed under GNU License.
 
 ### OAuth/Proxy (short)
 
@@ -274,7 +274,7 @@ The codebase includes:
   - Error handling with user-friendly messages
   - **NEW**: Integrated browser testing workflow after repository processing
   - **Browser Testing Prompt**: Optional step to test deployed applications after grading
-  - **Deployed URL Detection**: Automatically detects columns containing deployed app URLs  
+  - **Deployed URL Detection**: Automatically detects columns containing deployed app URLs
   - **Multi-Tab Testing**: Tests up to 10 applications concurrently with real-time progress
   - **Results Integration**: Saves browser test results alongside grading data
   - **Non-intrusive Integration**: All existing workflows preserved, browser testing is optional
@@ -307,6 +307,7 @@ The codebase includes:
   - **Optimized Find Commands**: Builds efficient find command arguments
 
 - **Sandbox Types** (`src/lib/sandbox/sandbox-types.ts`)
+
   - **TypeScript Interfaces**: Complete type safety for all sandbox operations
   - **Repository Information**: Structured data for cloned repositories
   - **File Content Types**: Optimized structures for bulk file processing
@@ -314,13 +315,14 @@ The codebase includes:
 
 - **E2B Token Storage** (`src/lib/e2b-token-storage.ts`)
   - **Secure API Key Storage**: Platform-appropriate config directories
-  - **Format Validation**: Validates E2B API key format (e2b_[32-char hex])
+  - **Format Validation**: Validates E2B API key format (e2b\_[32-char hex])
   - **Cross-platform Support**: Works on Windows, macOS, and Linux
   - **Token Management**: Save, retrieve, and clear API keys securely
 
 ### Constants
 
 - **Ignored Extensions** (`src/consts/ignored-extensions.ts`)
+
   - Comprehensive list of file extensions to ignore when processing repositories
   - Includes images, videos, audio, archives, documents, executables, fonts, binaries, compiled files, and vector databases
   - Organized by category for easy maintenance
@@ -346,6 +348,7 @@ The codebase includes:
 ### Test Components
 
 - **StagehandTest Component** (`src/components/stagehand-test.tsx`)
+
   - **Interactive Test Interface**: Menu-driven test selection with arrow key navigation
   - **Enhanced Test Scenarios**: Comprehensive navigation and multi-step action tests targeting Maven Agent Bootcamp
   - **Configuration Validation**: Checks for required Browserbase credentials
@@ -356,6 +359,7 @@ The codebase includes:
   - **Navigation Controls**: Back/quit options to return to main workflow
 
 - **DeployedUrlSelector Component** (`src/components/deployed-url-selector.tsx`)
+
   - **NEW**: Smart selection interface for deployed application URL columns
   - **Column Analysis**: Analyzes Notion database columns for deployed URL patterns
   - **Confidence Display**: Shows confidence scores and sample URLs for each candidate

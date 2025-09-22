@@ -48,20 +48,23 @@ homework-grader
 ```
 
 The CLI will guide you through:
+
 1. Setting up API keys (GitHub, E2B, AI providers)
-2. Choosing data source (Notion Database or CSV File) 
+2. Choosing data source (Notion Database or CSV File)
 3. Processing repositories and generating grades
 
 ### Automatic Updates
 
 The CLI includes a built-in update checker that:
+
 - ✅ **Checks daily** for new versions (cached, non-intrusive)
 - ✅ **Shows friendly notifications** when updates are available
-- ✅ **Provides clear update instructions** 
+- ✅ **Provides clear update instructions**
 - ✅ **Never interrupts your workflow** - notifications appear at the end
 - ✅ **Fails silently** - won't break if update check fails
 
 Example notification:
+
 ```
 📦 Update available!
    Current: 1.0.0
@@ -129,7 +132,9 @@ GITHUB_API_ONLY=true  # Force GitHub API mode (skip sandbox)
 ## Troubleshooting
 
 ### Permission Errors
+
 If you encounter permission errors during global installation:
+
 ```bash
 # On macOS/Linux - use sudo if needed
 sudo npm install -g homework-grader
@@ -139,29 +144,36 @@ npx homework-grader
 ```
 
 ### Node.js Version
+
 Ensure you're using Node.js 22 or higher:
+
 ```bash
 node --version  # Should be >= 22.0.0
 ```
 
 ### API Rate Limits
+
 - **GitHub**: Without a token, you're limited to 60 requests/hour
 - **Solution**: Provide a GitHub Personal Access Token when prompted
 
 ### Sandbox Issues
+
 - **E2B**: If sandbox initialization fails, the CLI will automatically fall back to GitHub API
 - **Solution**: Ensure your E2B API key is valid at [E2B Dashboard](https://e2b.dev/)
 
 ### Common Issues
+
 1. **"Command not found"** - The global installation may have failed or your PATH is incorrect
    - Try: `npx homework-grader` instead
-2. **"Module not found"** - Dependencies may be missing 
+2. **"Module not found"** - Dependencies may be missing
    - Try: Reinstalling with `npm install -g homework-grader --force`
 3. **Notion OAuth fails** - The proxy service may be cold starting
    - Try: Wait a moment and retry the authentication
 
 ### Update Notifications
+
 If you prefer to disable update checking:
+
 ```bash
 # Set environment variable to disable update checks
 export NO_UPDATE_NOTIFIER=true
@@ -175,6 +187,7 @@ homework-grader
 This package uses **fully automated publishing** - no manual steps required!
 
 **Every push to `main` branch automatically:**
+
 1. ✅ **Builds and tests** the package
 2. ✅ **Auto-increments version** if needed (patch version bump)
 3. ✅ **Publishes to NPM** as `homework-grader`
@@ -198,6 +211,7 @@ git push origin main
 ```
 
 #### Version Management
+
 - **First publish**: Uses version from `package.json` (currently 1.0.0)
 - **Subsequent pushes**: Auto-increments patch version (1.0.0 → 1.0.1 → 1.0.2...)
 - **Manual control**: Update `package.json` version manually for major/minor releases
@@ -207,19 +221,22 @@ git push origin main
 For automated publishing, add `NPM_TOKEN` to repository secrets:
 
 1. **Get NPM Token**:
+
    - Go to [npmjs.com](https://www.npmjs.com) → Profile → Access Tokens
    - Generate "Automation" token for `homework-grader`
    - Copy the token (starts with `npm_...`)
 
 2. **Add to GitHub**:
+
    - Go to repository → Settings → Secrets and variables → Actions
    - Add secret: `NPM_TOKEN` with your token value
 
 3. **Release Process**:
+
    ```bash
    # Update version and create git tag
    npm version patch  # or minor/major
-   
+
    # Push to trigger automated release
    git push --follow-tags
    ```
@@ -235,4 +252,4 @@ For automated publishing, add `NPM_TOKEN` to repository secrets:
 
 ## License
 
-MIT
+GNU
