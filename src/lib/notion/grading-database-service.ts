@@ -72,7 +72,8 @@ export class GradingDatabaseService {
             titlePropertyName,
             githubUrlColumnName,
             isUpdate,
-            matchingBrowserTest
+            matchingBrowserTest,
+            result.error
           );
 
         // Only include properties that actually exist in the database
@@ -135,7 +136,8 @@ export class GradingDatabaseService {
         titlePropertyName,
         githubUrlColumnName,
         isUpdate,
-        browserTestResult
+        browserTestResult,
+        result.error
       );
 
     // Only include properties that actually exist in the database

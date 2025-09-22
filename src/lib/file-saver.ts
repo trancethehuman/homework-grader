@@ -20,6 +20,7 @@ export interface GradingResult {
   usage: any;
   pageId?: string; // Notion page ID for updating existing rows
   browserTestResults?: any[]; // Browser testing results if available
+  error?: string; // Error message if grading failed
 }
 
 /**
@@ -31,7 +32,7 @@ export async function saveRepositoryFiles(
   url: string,
   provider?: AIProvider,
   pageId?: string
-): Promise<GradingResult | null> {
+): Promise<GradingResult> {
   // Ensure test-results directory exists
   try {
     mkdirSync("test-results", { recursive: true });
@@ -104,7 +105,16 @@ export async function saveRepositoryFiles(
       repository: `${repoInfo.owner}/${repoInfo.repo}`,
     };
     writeFileSync(scoresFilePath, JSON.stringify(errorScores, null, 2));
-    return null;
+
+    // Return GradingResult with error information for Notion integration
+    return {
+      repositoryName: `${repoInfo.owner}/${repoInfo.repo}`,
+      githubUrl: url,
+      gradingData: null, // No grading data since it failed
+      usage: null, // No usage data since grading failed
+      pageId,
+      error: errorMessage,
+    };
   }
 }
 

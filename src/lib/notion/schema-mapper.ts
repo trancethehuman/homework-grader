@@ -46,6 +46,12 @@ export class NotionSchemaMapper {
       rich_text: {},
     };
 
+    // Feedback errors field - contains error messages when grading fails
+    properties.feedback_errors = {
+      type: "rich_text",
+      rich_text: {},
+    };
+
     // Browser testing properties (keep these for browser testing feature)
     properties.browser_test_conducted = {
       type: "checkbox",
@@ -100,7 +106,8 @@ export class NotionSchemaMapper {
     titlePropertyName?: string,
     githubUrlColumnName?: string,
     isUpdate: boolean = false,
-    browserTestResult?: any
+    browserTestResult?: any,
+    error?: string
   ): Record<string, any> {
     const properties: Record<string, any> = {};
 
@@ -138,7 +145,18 @@ export class NotionSchemaMapper {
       rich_text: [
         {
           text: {
-            content: gradingData.feedbacks || "",
+            content: gradingData?.feedbacks || "",
+          },
+        },
+      ],
+    };
+
+    // Feedback errors field - contains error messages when grading fails
+    properties.feedback_errors = {
+      rich_text: [
+        {
+          text: {
+            content: error || "", // Use error parameter if provided, otherwise empty
           },
         },
       ],
@@ -208,6 +226,7 @@ export class NotionSchemaMapper {
       "github_url",
       "graded_at",
       "feedbacks", // Simplified to single feedback field
+      "feedback_errors", // Error messages when grading fails
       "browser_test_conducted",
       "browser_test_deployed_url",
       "browser_test_success",

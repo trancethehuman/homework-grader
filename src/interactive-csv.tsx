@@ -311,9 +311,8 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
                     pageId
                   );
 
-                  if (gradingResult) {
-                    collectedGradingResults.push(gradingResult);
-                  }
+                  // Always collect grading results, even if they contain errors
+                  collectedGradingResults.push(gradingResult);
 
                   console.log(`  ✓ Successfully processed ${url}`);
                   return { url, success: true };
@@ -393,9 +392,8 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
                     pageId
                   );
 
-                  if (gradingResult) {
-                    collectedGradingResults.push(gradingResult);
-                  }
+                  // Always collect grading results, even if they contain errors
+                  collectedGradingResults.push(gradingResult);
                 }
 
                 results.push({ url, success: true });

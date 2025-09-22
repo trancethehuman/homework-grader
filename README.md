@@ -241,6 +241,29 @@ For automated publishing, add `NPM_TOKEN` to repository secrets:
    git push --follow-tags
    ```
 
+### Git workflow with CI version bumps
+
+This repository auto-publishes on pushes to `main`. If the current `package.json` version already exists on NPM, CI will bump the patch version and push a bot commit back to `main`. As a result, your local branch can become behind immediately after you push.
+
+Recommended setup (one-time):
+
+```bash
+git config --global pull.rebase true
+git config --global rebase.autostash true
+# optional convenience
+git config --global alias.up 'pull --rebase --autostash'
+```
+
+Everyday flow:
+
+```bash
+# before pushing more changes after a prior push
+git up    # or: git pull --rebase
+git push
+```
+
+If you prefer to avoid CI pushing to `main`, switch to a tag-based release flow (create a tag locally with `npm version` and push tags) or a PR-based version bump workflow.
+
 ### CI/CD Pipeline
 
 - ✅ **Multi-version testing** on Node.js 22 & 23
