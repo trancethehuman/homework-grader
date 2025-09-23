@@ -30,8 +30,8 @@ importers:
         specifier: ^1.15.1
         version: 1.15.1
       '@notionhq/client':
-        specifier: ^4.0.1
-        version: 4.0.1
+        specifier: ^5.1.0
+        version: 5.1.0
       '@octokit/rest':
         specifier: ^22.0.0
         version: 22.0.0
@@ -292,8 +292,8 @@ packages:
     resolution: {integrity: sha512-W/XlN9c528yYn+9MQkVjxiTPgPxoxt+oczfjHBDsJx0+59+O7B75Zhsp0B16Xbwbz8ANISDajh6+V7nIcPMc5w==}
     engines: {node: '>=18'}
 
-  '@notionhq/client@4.0.1':
-    resolution: {integrity: sha512-SdILqiiThECLR2KDUOvl4JqRaJWBwDYaEw/f0qu+G6rKN/QUCkaJ84vN5MgBw1yKsMAsKxBlDazs3Jw6vv2ikA==}
+  '@notionhq/client@5.1.0':
+    resolution: {integrity: sha512-YYVjXYk1XwKQ4XIh+iGjaaXOGHxaDgB3UaGnDMyrZ3X9UiYQsZpzPIvTuhvp97os8a5W5kTQFsyq77+I+COOVQ==}
     engines: {node: '>=18'}
 
   '@octokit/auth-token@6.0.0':
@@ -1853,7 +1853,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@notionhq/client@4.0.1': {}
+  '@notionhq/client@5.1.0': {}
 
   '@octokit/auth-token@6.0.0': {}
 

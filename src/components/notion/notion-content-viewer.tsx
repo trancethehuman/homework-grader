@@ -7,6 +7,7 @@ import {
   FormattedBlock,
 } from "../../lib/notion/notion-formatter.js";
 import { BackButton, useBackNavigation } from "../ui/back-button.js";
+import { DebugLogger } from "../../lib/debug-logger.js";
 
 interface NotionContentViewerProps {
   pageId: string;
@@ -49,16 +50,11 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
         setIsLoading(true);
         setError(null);
 
-        console.log(`🔍 Checking existing Notion authentication...`);
+        DebugLogger.debugAuth(`🔍 Checking existing Notion authentication...`);
         const oauth = new NotionOAuthClient();
 
-        // Try to refresh token first if possible
-        const refreshResult = await oauth.refreshIfPossible();
-        if (refreshResult) {
-          console.log("✓ Token refreshed successfully");
-        }
-
-        console.log("🔐 Ensuring authentication...");
+        // ensureAuthenticated handles refresh internally if needed
+        DebugLogger.debugAuth("🔐 Ensuring authentication...");
         const token = await oauth.ensureAuthenticated();
         const notionService = new NotionService(token.access_token);
 
@@ -67,7 +63,7 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
         if (!validation.valid) {
           throw new Error(validation.error || "Token validation failed");
         }
-        console.log("✓ Notion authentication is valid");
+        DebugLogger.debugAuth("✓ Notion authentication is valid");
 
         // Use the correct API based on content type
         let pageContent;
@@ -144,12 +140,20 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
       return;
     }
 
-    // Handle 'g' key to start grading directly (only for databases and only if onStartGrading is provided)
+    // Handle 'g' key to start grading the entire database (when viewing a database)
+    if (input === "g" && onStartGrading && contentType === "database") {
+      // Grade the entire database, not individual entries
+      onStartGrading(pageId, pageTitle);
+      return;
+    }
+
+    // Handle 'g' key to start grading individual database entries/child databases (legacy behavior)
     if (
       input === "g" &&
       onStartGrading &&
       showingContent &&
-      navigableItems.length > 0
+      navigableItems.length > 0 &&
+      contentType !== "database" // Only for non-database content to avoid double handling
     ) {
       const selectedItem = navigableItems[selectedIndex];
       if (
@@ -271,9 +275,12 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
         setPropertiesExpanded(!propertiesExpanded);
       }
     } else {
-      // No navigable items, handle property expansion or complete
+      // No navigable items, handle property expansion, grading, or complete
       if (input === "p") {
         setPropertiesExpanded(!propertiesExpanded);
+      } else if (input === "g" && onStartGrading && contentType === "database") {
+        // Grade the entire database when no navigable items are shown
+        onStartGrading(pageId, pageTitle);
       } else {
         onComplete(content);
       }
@@ -390,7 +397,8 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
           <Text dimColor>
             Use ↑/↓ arrows to navigate, ←/→ to change pages, Enter to select,
             'p' to expand/collapse properties
-            {onStartGrading && ", 'g' to grade database"}, 'b' to go back
+            {onStartGrading && contentType === "database" && ", 'g' to grade entire database"}
+            {onStartGrading && contentType !== "database" && ", 'g' to grade selected item"}, 'b' to go back
           </Text>
           <Text></Text>
 
@@ -443,7 +451,8 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
           <Text></Text>
           <Text dimColor>
             Press Enter to navigate, ←/→ for pages, 'p' for properties
-            {onStartGrading && ", 'g' to grade database"}, 'b' to go back,
+            {onStartGrading && contentType === "database" && ", 'g' to grade entire database"}
+            {onStartGrading && contentType !== "database" && ", 'g' to grade selected item"}, 'b' to go back,
             Ctrl+C to exit
           </Text>
         </>
@@ -451,7 +460,8 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
 
       {(!showingContent || navigableItems.length === 0) && (
         <Text dimColor>
-          Press 'p' to expand/collapse properties, any other key to continue...
+          Press 'p' to expand/collapse properties
+          {onStartGrading && contentType === "database" && ", 'g' to grade entire database"}, any other key to continue...
         </Text>
       )}
     </Box>

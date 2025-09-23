@@ -26,12 +26,22 @@ export class GradingDatabaseService {
     sourceDatabaseId?: string,
     options: DatabaseCreationOptions & { skipGithubUrlColumn?: string; processingMode?: 'code' | 'browser' | 'both' } = {}
   ): Promise<{ databaseId: string; created: boolean; updated: boolean }> {
-    if (sourceDatabaseId) {
-      // Check existing database and update schema if needed
-      return await this.updateExistingDatabase(sourceDatabaseId, options);
-    } else {
-      // Create new database
-      return await this.createNewGradingDatabase(options);
+    console.log(`🏗️ Ensuring grading database exists...`);
+    console.log(`📊 Processing mode: ${options.processingMode || 'both'}`);
+
+    try {
+      if (sourceDatabaseId) {
+        console.log(`🔧 Using existing database: ${sourceDatabaseId}`);
+        // Check existing database and update schema if needed
+        return await this.updateExistingDatabase(sourceDatabaseId, options);
+      } else {
+        console.log(`🆕 Creating new grading database`);
+        // Create new database
+        return await this.createNewGradingDatabase(options);
+      }
+    } catch (error: any) {
+      console.log(`❌ Failed to ensure grading database: ${error.message}`);
+      throw error; // Re-throw to preserve the original error
     }
   }
 
@@ -200,73 +210,131 @@ export class GradingDatabaseService {
     browserTestResults?: any[],
     processingMode: 'code' | 'browser' | 'both' = 'both'
   ): Promise<{ success: number; failed: number; errors: string[] }> {
+    console.log(`💾 Starting to save ${results.length} grading results to database ${databaseId}`);
+    console.log(`🔧 Processing mode: ${processingMode}`);
+
     const errors: string[] = [];
     let success = 0;
     let failed = 0;
 
-    // Get the existing database properties
-    const databaseProperties = await this.notionService.getDatabaseProperties(
-      databaseId
-    );
-    const titlePropertyName = Object.keys(databaseProperties).find(
-      (key) => databaseProperties[key].type === "title"
-    );
-    const availableProperties = new Set(Object.keys(databaseProperties));
+    try {
+      // Validate database has required columns before attempting saves
+      await this.validateDatabaseForSaving(databaseId, processingMode);
 
-    for (const result of results) {
-      try {
-        const isUpdate = !!result.pageId;
-        
-        // Find matching browser test result for this repository
-        const matchingBrowserTest = browserTestResults?.find(browserTest => 
-          browserTest.pageId === result.pageId || 
-          browserTest.url?.includes(result.repositoryName.replace('/', '-'))
-        );
-        
-        const allProperties =
-          NotionSchemaMapper.transformGradingDataToNotionProperties(
-            result.gradingData,
-            result.repositoryName,
-            result.githubUrl,
-            titlePropertyName,
-            githubUrlColumnName,
-            isUpdate,
-            matchingBrowserTest,
-            result.error,
-            processingMode
+      // Get the existing database properties (refresh after validation)
+      const databaseProperties = await this.notionService.getDatabaseProperties(
+        databaseId
+      );
+      const titlePropertyName = Object.keys(databaseProperties).find(
+        (key) => databaseProperties[key].type === "title"
+      );
+      const availableProperties = new Set(Object.keys(databaseProperties));
+
+      console.log(`📋 Available database properties: ${Array.from(availableProperties).join(', ')}`);
+
+      for (const result of results) {
+        try {
+          const isUpdate = !!result.pageId;
+          console.log(`💾 Processing ${result.repositoryName} (${isUpdate ? 'update' : 'create'})`);
+
+          // Find matching browser test result for this repository
+          const matchingBrowserTest = browserTestResults?.find(browserTest =>
+            browserTest.pageId === result.pageId ||
+            browserTest.url?.includes(result.repositoryName.replace('/', '-'))
           );
 
-        // Only include properties that actually exist in the database
-        const filteredProperties: Record<string, any> = {};
-        for (const [key, value] of Object.entries(allProperties)) {
-          if (availableProperties.has(key)) {
-            filteredProperties[key] = value;
+          const allProperties =
+            NotionSchemaMapper.transformGradingDataToNotionProperties(
+              result.gradingData,
+              result.repositoryName,
+              result.githubUrl,
+              titlePropertyName,
+              githubUrlColumnName,
+              isUpdate,
+              matchingBrowserTest,
+              result.error,
+              processingMode
+            );
+
+          console.log(`📝 Generated ${Object.keys(allProperties).length} properties for ${result.repositoryName}`);
+
+          // Only include properties that actually exist in the database
+          const filteredProperties: Record<string, any> = {};
+          const missingProperties: string[] = [];
+
+          for (const [key, value] of Object.entries(allProperties)) {
+            if (availableProperties.has(key)) {
+              filteredProperties[key] = value;
+            } else {
+              missingProperties.push(key);
+            }
           }
-        }
 
-        if (isUpdate && result.pageId) {
-          // Update existing row
-          await this.notionService.updateDatabaseEntry(
-            result.pageId,
-            filteredProperties
-          );
-        } else {
-          // Create new row
-          await this.notionService.createDatabaseEntry(
-            databaseId,
-            filteredProperties
-          );
+          if (missingProperties.length > 0) {
+            console.log(`⚠️ Some properties are missing from database and will be skipped: ${missingProperties.join(', ')}`);
+          }
+
+          console.log(`📝 Using ${Object.keys(filteredProperties).length} properties for ${result.repositoryName}`);
+
+          if (isUpdate && result.pageId) {
+            // Update existing row
+            console.log(`🔄 Updating existing row ${result.pageId} for ${result.repositoryName}`);
+            await this.notionService.updateDatabaseEntry(
+              result.pageId,
+              filteredProperties
+            );
+            console.log(`✅ Successfully updated ${result.repositoryName}`);
+          } else {
+            // Create new row
+            console.log(`🆕 Creating new row for ${result.repositoryName}`);
+            const newEntry = await this.notionService.createDatabaseEntry(
+              databaseId,
+              filteredProperties
+            );
+            console.log(`✅ Successfully created ${result.repositoryName} with ID: ${newEntry.id}`);
+          }
+          success++;
+        } catch (error: any) {
+          failed++;
+          const errorMessage = `Failed to save ${result.repositoryName}: ${error.message}`;
+          console.log(`❌ ${errorMessage}`);
+          errors.push(errorMessage);
         }
-        success++;
-      } catch (error: any) {
-        failed++;
-        errors.push(
-          `Failed to save ${result.repositoryName}: ${error.message}`
-        );
       }
+    } catch (error: any) {
+      console.log(`❌ Database validation failed: ${error.message}`);
+      return {
+        success: 0,
+        failed: results.length,
+        errors: [`Database validation failed: ${error.message}`]
+      };
     }
 
+    console.log(`📊 Save results: ${success} succeeded, ${failed} failed`);
     return { success, failed, errors };
+  }
+
+  /**
+   * Validate that database has all required columns for saving
+   */
+  private async validateDatabaseForSaving(
+    databaseId: string,
+    processingMode: 'code' | 'browser' | 'both'
+  ): Promise<void> {
+    console.log(`🔍 Validating database ${databaseId} for processing mode: ${processingMode}`);
+
+    const databaseProperties = await this.notionService.getDatabaseProperties(databaseId);
+    const missingProperties = NotionSchemaMapper.getMissingGradingProperties(
+      databaseProperties,
+      { skipGithubUrlColumn: false, processingMode }
+    );
+
+    if (Object.keys(missingProperties).length > 0) {
+      console.log(`❌ Database is missing required columns: ${Object.keys(missingProperties).join(', ')}`);
+      throw new Error(`Database is missing required grading columns: ${Object.keys(missingProperties).join(', ')}. Please run the schema update step first.`);
+    }
+
+    console.log(`✅ Database validation passed - all required columns present`);
   }
 
   /**
@@ -330,19 +398,18 @@ export class GradingDatabaseService {
     missingProperties: string[];
   }> {
     try {
-      const database = await this.notionService.getDatabaseMetadata(databaseId);
-      const hasGradingSchema = NotionSchemaMapper.hasGradingProperties(
-        database.properties
-      );
+      // Get enhanced properties using the fixed getDatabaseProperties method
+      const properties = await this.notionService.getDatabaseProperties(databaseId);
+      const hasGradingSchema = NotionSchemaMapper.hasGradingProperties(properties);
 
       let missingProperties: string[] = [];
       if (!hasGradingSchema) {
-        const missing = NotionSchemaMapper.getMissingGradingProperties(
-          database.properties
-        );
+        const missing = NotionSchemaMapper.getMissingGradingProperties(properties);
         missingProperties = Object.keys(missing);
       }
 
+      // Get database metadata for title extraction
+      const database = await this.notionService.getDatabaseMetadata(databaseId);
       const title =
         database.title && database.title.length > 0
           ? database.title[0].plain_text
@@ -362,10 +429,15 @@ export class GradingDatabaseService {
     databaseId: string,
     options: { skipGithubUrlColumn?: string; processingMode?: 'code' | 'browser' | 'both' } = {}
   ): Promise<{ databaseId: string; created: boolean; updated: boolean }> {
+    console.log(`🔧 Updating existing database ${databaseId} for processing mode: ${options.processingMode || 'both'}`);
+
     try {
+      console.log(`📋 Getting existing database properties...`);
       const existingProperties = await this.notionService.getDatabaseProperties(
         databaseId
       );
+
+      console.log(`🔍 Checking for missing grading properties...`);
       const missingProperties = NotionSchemaMapper.getMissingGradingProperties(
         existingProperties,
         {
@@ -375,17 +447,23 @@ export class GradingDatabaseService {
       );
 
       if (Object.keys(missingProperties).length > 0) {
+        console.log(`🔧 Updating database schema with ${Object.keys(missingProperties).length} missing properties`);
+
         // Update database with missing properties
         await this.notionService.updateDatabaseSchema(
           databaseId,
           missingProperties
         );
+
+        console.log(`✅ Database schema successfully updated`);
         return { databaseId, created: false, updated: true };
       }
 
       // Database already has all required properties
+      console.log(`✅ Database already has all required properties - no update needed`);
       return { databaseId, created: false, updated: false };
     } catch (error: any) {
+      console.log(`❌ Failed to update database schema: ${error.message}`);
       throw new Error(`Failed to update database schema: ${error.message}`);
     }
   }

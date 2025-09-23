@@ -13,6 +13,151 @@ This is a homework grading system repository with TypeScript URL loading functio
 - The CLI calls the proxy to start OAuth, opens a browser, and stores the returned access token locally.
 - Default proxy base points to the hosted instance; override with `NOTION_PROXY_URL` for local testing.
 - **Auto-reauth on Invalid Token**: When a Notion token becomes invalid/expired, the system automatically triggers OAuth flow instead of returning to the previous step, ensuring seamless re-authentication.
+- **API Version**: Uses Notion API 2025-09-03 with multi-source database support and enhanced data discovery features.
+- **Notion API Documentation**:
+  - [Upgrade Guide 2025-09-03](https://developers.notion.com/docs/upgrade-guide-2025-09-03) - Migration details for the new API
+  - [Database Reference](https://developers.notion.com/reference/database) - Database object and data sources array
+  - [Data Source Reference](https://developers.notion.com/reference/data-source) - Data source querying and structure
+- **SDK/API Compatibility**: Critical compatibility requirements:
+  - **SDK v5.1.0+**: Only compatible with API versions newer than 2025-09-03
+  - **No Legacy Fallback**: Cannot use older API versions (2022-06-28) with SDK v5+
+  - **Data Source Required**: Database operations require `data_source_id` discovery
+  - **Method Changes**: `databases.query()` replaced with `data_sources.query()` via HTTP requests
+  - **Transition Period**: Use `notion.request()` until `notion.dataSources.query()` method is available
+- **Documentation**: Key Notion API references:
+  - [Working with Databases](https://developers.notion.com/docs/working-with-databases)
+  - [Working with Page Content](https://developers.notion.com/docs/working-with-page-content)
+  - [Database API Reference](https://developers.notion.com/reference/database)
+  - [Data Source API Reference](https://developers.notion.com/reference/data-source)
+  - [Data Source Query API](https://developers.notion.com/reference/query-a-data-source) - **Critical for querying database content**
+  - [Page API Reference](https://developers.notion.com/reference/page)
+  - [API Changelog](https://developers.notion.com/page/changelog)
+
+### Notion Data Source Querying (2025-09-03 API)
+
+**CRITICAL**: In the 2025-09-03 API version, the traditional `databases.query()` method is deprecated. Database content must be queried using the Data Source API.
+
+#### **API Endpoint**
+```
+POST https://api.notion.com/v1/data_sources/{data_source_id}/query
+```
+
+#### **Authentication & Headers**
+```json
+{
+  "Authorization": "Bearer {access_token}",
+  "Content-Type": "application/json",
+  "Notion-Version": "2025-09-03"
+}
+```
+
+#### **Request Structure**
+```json
+{
+  "filter": {
+    "and": [
+      {
+        "property": "Status",
+        "select": { "equals": "Active" }
+      }
+    ]
+  },
+  "sorts": [
+    {
+      "property": "Created",
+      "direction": "descending"
+    }
+  ],
+  "start_cursor": "optional_pagination_cursor",
+  "page_size": 100,
+  "filter_properties": ["prop1", "prop2"]
+}
+```
+
+#### **Response Structure**
+```json
+{
+  "object": "list",
+  "results": [
+    {
+      "object": "page",
+      "id": "page-id",
+      "properties": { ... },
+      "parent": {
+        "type": "data_source_id",
+        "data_source_id": "data-source-id"
+      }
+    }
+  ],
+  "next_cursor": "optional_next_cursor",
+  "has_more": false
+}
+```
+
+#### **Key Implementation Requirements**
+
+1. **Data Source ID Discovery**: Each database has a `data_sources` array containing the data source IDs needed for querying
+   ```typescript
+   // Get database object first
+   const database = await notion.databases.retrieve(databaseId);
+   // Use the data source IDs from the database
+   const dataSourceIds = database.data_sources.map(ds => ds.id);
+   ```
+
+2. **Individual Data Source Queries**: Query each data source separately and combine results
+   ```typescript
+   for (const dataSourceId of dataSourceIds) {
+     const response = await notion.request({
+       path: `data_sources/${dataSourceId}/query`,
+       method: 'POST',
+       body: { /* query parameters */ }
+     });
+   }
+   ```
+
+3. **Filtering**: Supports complex filters similar to Notion UI
+   - Property-based filters (text, number, date, select, checkbox, etc.)
+   - Logical operators: `and`, `or`
+   - Comparison operators: `equals`, `contains`, `starts_with`, `is_empty`, etc.
+
+4. **Pagination**: Use `start_cursor` and `page_size` for large datasets
+   - Default page size: 100 items
+   - Maximum page size: 100 items
+   - Use `next_cursor` from response for subsequent requests
+
+5. **Error Handling**:
+   - **404**: Data source not found or not accessible
+   - **403**: Insufficient permissions (need read content capabilities)
+   - **400**: Invalid request structure or parameters
+
+#### **Permissions Requirements**
+- Integration must have **read content capabilities**
+- Parent database must be **shared with the integration**
+- For wiki data sources: may contain both pages and databases
+
+#### **Performance Considerations**
+- Each data source query is a separate API call
+- Implement proper rate limiting (3 requests per second)
+- Cache data source IDs to avoid repeated database.retrieve() calls
+- Use pagination for large datasets to avoid timeouts
+
+#### **Migration from Legacy API**
+```typescript
+// OLD (deprecated in 2025-09-03):
+await notion.databases.query({ database_id: databaseId });
+
+// NEW (required in 2025-09-03):
+const database = await notion.databases.retrieve(databaseId);
+const results = [];
+for (const dataSource of database.data_sources) {
+  const response = await notion.request({
+    path: `data_sources/${dataSource.id}/query`,
+    method: 'POST',
+    body: { /* filters, sorts, pagination */ }
+  });
+  results.push(...response.results);
+}
+```
 
 ## Development Setup
 
@@ -135,6 +280,8 @@ This helps improve performance and reduces token consumption when processing lar
 - **E2B_API_KEY**: E2B API key for sandbox-based repository processing
 - **BROWSERBASE_API_KEY**: Browserbase API key for browser testing functionality
 - **BROWSERBASE_PROJECT_ID**: Browserbase project ID for browser testing
+- **DEBUG_NOTION**: Set to 'true' to enable detailed Notion API debug logging (disabled by default for clean UX)
+- **DEBUG**: Set to 'true' to enable all debug logging across the application
 - **AI provider variables**: Various API keys for different AI providers (OpenAI, Anthropic, Google, etc.)
 
 ### E2B Sandbox Performance Architecture
@@ -419,6 +566,7 @@ The codebase includes:
 
 - **TypeScript**: Full type safety and compilation
 - **Interactive CLI**: React/Ink components with step-by-step workflow
+- **Clean User Experience**: Minimal logging with console clearing between steps, debug logs available via environment variables
 - **Dual Processing Methods**:
   - **E2B Sandbox (Default)**: High-performance isolated cloud environment processing
   - **GitHub API (Fallback)**: Traditional API-based repository processing
@@ -462,12 +610,34 @@ The codebase includes:
   - **Progress Tracking**: Clear indication of conflict resolution progress
   - **Non-Destructive by Default**: Prevents accidental data loss
   - **Legacy Compatibility**: Seamless integration with existing save workflows
+- **Enhanced Database Schema Management**:
+  - **Robust Column Creation**: Retry logic with exponential backoff for schema updates
+  - **Column Verification**: Automatic verification that columns were actually created
+  - **Comprehensive Error Handling**: Specific error messages for different failure scenarios
+  - **Processing Mode Awareness**: Schema updates based on code/browser/both processing modes
+  - **Detailed Logging**: Extensive logging throughout the database update process
+  - **Validation Before Saving**: Pre-save validation ensures all required columns exist
 - **CSV Processing**: File validation, analysis, and URL extraction
 - **Error Handling**: Comprehensive error handling with automatic fallback mechanisms
 - **Resource Management**: Automatic sandbox and browser session cleanup
 - **File Management**: Automatic deduplication and validation
 
 ## Important Instructions
+
+### Notion API Development Rules
+
+**ALWAYS fetch and read the official Notion API documentation before writing or making any changes regarding Notion integration**. This is critical because:
+- The Notion API is actively evolving (especially the 2025-09-03 version)
+- Implementation details change between API versions
+- Official documentation provides the most accurate and up-to-date information
+- **Key Migration Knowledge**: In 2025-09-03 API, `/v1/databases/{id}/query` is deprecated - use data source queries or search API instead
+- Always reference these key documentation sources:
+  - [Upgrade Guide 2025-09-03](https://developers.notion.com/docs/upgrade-guide-2025-09-03)
+  - [Database Reference](https://developers.notion.com/reference/database)
+  - [Data Source Reference](https://developers.notion.com/reference/data-source)
+  - [Changelog](https://developers.notion.com/page/changelog)
+
+### General Development Rules
 
 **ALWAYS update this CLAUDE.md file as the last step of every successful change** when the user confirms the changes are good. Keep the file current with:
 

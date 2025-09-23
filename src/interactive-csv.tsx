@@ -7,7 +7,7 @@ import open from "open";
 import { TokenStorage } from "./lib/token-storage.js";
 import { E2BTokenStorage } from "./lib/e2b-token-storage.js";
 import { GitHubService } from "./github/github-service.js";
-import { GitHubUrlDetector } from "./lib/github-url-detector.js";
+import { GitHubUrlDetector, GitHubUrlDetectionResult } from "./lib/github-url-detector.js";
 import { saveRepositoryFiles } from "./lib/file-saver.js";
 import { ProviderSelector } from "./components/provider-selector.js";
 import {
@@ -48,6 +48,8 @@ import { BrowserTestMode } from "./components/browser-test-mode.js";
 import { ComputerUseModelSelector } from "./components/computer-use-model-selector.js";
 import { OverrideConfirmation } from "./components/notion/override-confirmation.js";
 import { ConflictDetectionResult, OverrideDecision } from "./lib/notion/conflict-detector.js";
+import { PromptSelector } from "./components/prompt-selector.js";
+import { GradingPrompt, getDefaultGradingPrompt } from "./consts/grading-prompts.js";
 
 export interface CSVColumn {
   name: string;
@@ -95,6 +97,7 @@ type Step =
   | "notion-github-column-select"
   | "notion-processing"
   | "processing-choice"
+  | "prompt-select"
   | "browser-testing-prompt"
   | "browser-computer-use-model-select"
   | "deployed-url-select"
@@ -125,6 +128,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
   const [selectedBrowserComputerUseModel, setSelectedBrowserComputerUseModel] = useState<ComputerUseModel | null>(null);
   const [selectedDataSource, setSelectedDataSource] =
     useState<DataSource | null>(null);
+  const [selectedGradingPrompt, setSelectedGradingPrompt] = useState<GradingPrompt>(getDefaultGradingPrompt());
   const [notionClient] = useState(new NotionMCPClient());
   const [notionOAuthClient] = useState(new NotionOAuthClient());
   const [notionDatabase, setNotionDatabase] = useState<NotionDatabase | null>(
@@ -147,6 +151,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
     Array<{ url: string; pageId: string }>
   >([]);
   const [selectedGitHubColumn, setSelectedGitHubColumn] = useState<string>("");
+  const [gitHubUrlDetectionResult, setGitHubUrlDetectionResult] = useState<GitHubUrlDetectionResult | null>(null);
   // Cache Notion data to avoid refetching on back navigation
   const [cachedNotionPages, setCachedNotionPages] = useState<any[]>([]);
   const [cachedNotionDatabases, setCachedNotionDatabases] = useState<any[]>([]);
@@ -185,6 +190,21 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
 
   // Helper function to navigate to a new step and clear any existing errors
   const navigateToStep = (newStep: Step) => {
+    // Clear console when moving between major workflow steps for cleaner UX
+    const majorSteps: Step[] = [
+      'data-source-select',
+      'notion-page-selector',
+      'notion-api-content-view',
+      'notion-github-column-select',
+      'processing-choice',
+      'notion-processing',
+      'complete'
+    ];
+
+    if (majorSteps.includes(newStep) && newStep !== step) {
+      console.clear();
+    }
+
     setError(null); // Clear any existing error messages
     setStep(newStep);
   };
@@ -311,7 +331,8 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
                   const result = await sandboxService.processGitHubUrl(
                     url,
                     selectedProvider || DEFAULT_PROVIDER,
-                    chunkingPreference
+                    chunkingPreference,
+                    selectedGradingPrompt.value
                   );
 
                   const gradingResult = await saveRepositoryFiles(
@@ -390,7 +411,8 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
                     result = await githubService.processGitHubUrl(
                       url,
                       selectedProvider || DEFAULT_PROVIDER,
-                      chunkingPreference
+                      chunkingPreference,
+                      selectedGradingPrompt.value
                     );
                   }
                 }
@@ -582,7 +604,6 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           // Try to use existing auth directly
           try {
             console.log("🔍 Checking existing Notion authentication...");
-            await notionOAuthClient.refreshIfPossible();
             const token = await notionOAuthClient.ensureAuthenticated();
 
             // Validate the token with a test API call
@@ -612,8 +633,35 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
             navigateToStep("notion-oauth-info");
           }
         } else {
-          // No existing auth, show OAuth info page
-          navigateToStep("notion-oauth-info");
+          // No existing auth, perform OAuth
+          try {
+            console.log("🔄 Starting fresh Notion authentication...");
+            const token = await notionOAuthClient.ensureAuthenticated();
+
+            // Validate the new token
+            const { NotionService } = await import("./lib/notion/notion-service.js");
+            const service = new NotionService(token.access_token);
+            const validation = await service.validateToken();
+
+            if (validation.valid) {
+              console.log("✓ New Notion authentication successful");
+              navigateToStep("notion-page-selector");
+            } else {
+              throw new Error(validation.error || "Token validation failed after authentication");
+            }
+          } catch (e: any) {
+            console.log("❌ Notion authentication failed:", e.message || String(e));
+            let errorMessage = "Authentication failed";
+            if (e.message?.includes("API token is invalid")) {
+              errorMessage = "The authentication process failed. Please try again.";
+            } else if (e.message?.includes("unauthorized")) {
+              errorMessage = "Access was denied. Please ensure you grant the necessary permissions.";
+            } else if (e.message) {
+              errorMessage = e.message;
+            }
+            setError(errorMessage);
+            navigateToStep("notion-oauth-info");
+          }
         }
       }, 1500); // Show loading animation for 1.5 seconds
 
@@ -677,7 +725,12 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
     const performNotionSave = async () => {
       if (step === "notion-saving") {
         try {
-          const service = new GradingDatabaseService();
+          // Ensure we have a valid Notion access token before creating the service
+          const oauth = new NotionOAuthClient();
+          const token = await oauth.ensureAuthenticated();
+          const accessToken = token.access_token;
+
+          const service = new GradingDatabaseService(accessToken);
 
           // Determine processing mode based on what was performed
           const hasBrowserTests = browserTestResults && browserTestResults.length > 0;
@@ -710,7 +763,17 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
 
           navigateToStep("complete");
         } catch (error: any) {
-          setError(`Failed to save to Notion: ${error.message}`);
+          console.error("Notion save operation failed:", error);
+
+          // Provide specific error messages for common issues
+          let errorMessage = `Failed to save to Notion: ${error.message}`;
+          if (error.message.includes("unauthorized") || error.message.includes("Token validation failed")) {
+            errorMessage = "Authentication failed. Please re-authenticate with Notion and try again.";
+          } else if (error.message.includes("database_not_found") || error.message.includes("object_not_found")) {
+            errorMessage = "Database not found. Please ensure you have access to the selected database.";
+          }
+
+          setError(errorMessage);
           navigateToStep("grading-save-options");
         }
       }
@@ -1164,17 +1227,17 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         setSelectedProcessingOption((prev) => (prev < 2 ? prev + 1 : 0));
       } else if (key.return) {
         if (selectedProcessingOption === 0) {
-          // Grade repository code - need to clone and process
+          // Grade repository code - need to clone and process, first select prompt
           setProcessingMode("code");
-          navigateToStep("notion-processing");
+          navigateToStep("prompt-select");
         } else if (selectedProcessingOption === 1) {
           // Test deployed applications only - skip cloning, go directly to deployed URL selection
           setProcessingMode("browser");
           navigateToStep("deployed-url-select");
         } else if (selectedProcessingOption === 2) {
-          // Do both - clone and process first, then browser test
+          // Do both - clone and process first, then browser test, first select prompt
           setProcessingMode("both");
-          navigateToStep("notion-processing");
+          navigateToStep("prompt-select");
         }
       }
     } else if (step === "browser-testing-prompt") {
@@ -1210,7 +1273,12 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         // Check for conflicts first
         navigateToStep("notion-conflict-check");
 
-        const service = new GradingDatabaseService();
+        // Ensure we have a valid Notion access token before creating the service
+        const oauth = new NotionOAuthClient();
+        const token = await oauth.ensureAuthenticated();
+        const accessToken = token.access_token;
+
+        const service = new GradingDatabaseService(accessToken);
 
         // Determine processing mode based on what was performed
         const hasBrowserTests = browserTestResults && browserTestResults.length > 0;
@@ -1245,7 +1313,17 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         }
       }
     } catch (error: any) {
-      setError(`Failed to save to Notion: ${error.message}`);
+      console.error("Failed to prepare Notion save:", error);
+
+      // Provide specific error messages for common issues
+      let errorMessage = `Failed to prepare Notion save: ${error.message}`;
+      if (error.message.includes("unauthorized") || error.message.includes("Token validation failed")) {
+        errorMessage = "Authentication failed. Please re-authenticate with Notion and try again.";
+      } else if (error.message.includes("database_not_found") || error.message.includes("object_not_found")) {
+        errorMessage = "Database not found. Please ensure you have access to the selected database.";
+      }
+
+      setError(errorMessage);
       navigateToStep("grading-save-options");
     }
   };
@@ -1544,38 +1622,8 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         <NotionOAuthInfo
           onContinue={() => {
             setError(null); // Clear previous errors
-            navigateToStep("loading");
-            (async () => {
-              try {
-                console.log("🔄 Starting fresh Notion authentication...");
-                await notionOAuthClient.refreshIfPossible();
-                const token = await notionOAuthClient.ensureAuthenticated();
-
-                // Validate the new token
-                const { NotionService } = await import("./lib/notion/notion-service.js");
-                const service = new NotionService(token.access_token);
-                const validation = await service.validateToken();
-
-                if (validation.valid) {
-                  console.log("✓ New Notion authentication successful");
-                  navigateToStep("notion-page-selector");
-                } else {
-                  throw new Error(validation.error || "Token validation failed after authentication");
-                }
-              } catch (e: any) {
-                console.log("❌ Notion authentication failed:", e.message || String(e));
-                let errorMessage = "Authentication failed";
-                if (e.message?.includes("API token is invalid")) {
-                  errorMessage = "The authentication process failed. Please try again.";
-                } else if (e.message?.includes("unauthorized")) {
-                  errorMessage = "Access was denied. Please ensure you grant the necessary permissions.";
-                } else if (e.message) {
-                  errorMessage = e.message;
-                }
-                setError(errorMessage);
-                navigateToStep("notion-oauth-info");
-              }
-            })();
+            navigateToStep("notion-auth-loading");
+            // The useEffect hook will handle the OAuth flow
           }}
           onBack={() => {
             setError(null);
@@ -1848,22 +1896,38 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
     return (
       <Box flexDirection="column">
         <NotionPageSelector
-          onSelect={(pageId, pageTitle) => {
+          onSelect={(pageId, pageTitle, type) => {
             setNotionApiSelectedPageId(pageId);
             setNotionApiSelectedPageTitle(pageTitle);
+            setNotionApiContentType(type);
             navigateToStep("notion-api-content-view");
           }}
           onStartGrading={async (pageId, pageTitle) => {
-            // Start grading directly without viewing content first
+            // Start grading directly by fetching content silently and extracting GitHub URLs
             setNotionApiSelectedPageId(pageId);
             setNotionApiSelectedPageTitle(pageTitle);
+            setNotionApiContentType("database"); // onStartGrading is only for databases
 
-            // Fetch the content directly and proceed to column selection
             try {
               const token = await notionOAuthClient.ensureAuthenticated();
               const notionService = new NotionService(token.access_token);
-              const content = await notionService.getPageContent(pageId);
+
+              // Fetch the content silently (don't show database pages)
+              const content = await notionService.getDatabaseContent(pageId);
               setNotionApiContent(content);
+
+              // Auto-detect GitHub URL column and extract URLs
+              const detectionResult = GitHubUrlDetector.detectGitHubUrls(content);
+
+              if (detectionResult.candidates.length === 0) {
+                setError("No GitHub URL columns found in this database. Please ensure the database contains GitHub repository URLs.");
+                return;
+              }
+
+              // Store GitHub URL detection results for user confirmation
+              setGitHubUrlDetectionResult(detectionResult);
+
+              // Navigate to column selection for user confirmation
               navigateToStep("notion-github-column-select");
             } catch (error) {
               setError(
@@ -1919,14 +1983,28 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
             // Start grading directly from content viewer
             setNotionApiSelectedPageId(pageId);
             setNotionApiSelectedPageTitle(pageTitle);
+            setNotionApiContentType("database"); // onStartGrading is only for databases
 
-            // Fetch the content directly and proceed to column selection
             try {
               const token = await notionOAuthClient.ensureAuthenticated();
               const notionService = new NotionService(token.access_token);
-              // For databases, we need to get database content (entries), not page content
+
+              // Fetch the content silently (don't show database pages)
               const content = await notionService.getDatabaseContent(pageId);
               setNotionApiContent(content);
+
+              // Auto-detect GitHub URL column and extract URLs
+              const detectionResult = GitHubUrlDetector.detectGitHubUrls(content);
+
+              if (detectionResult.candidates.length === 0) {
+                setError("No GitHub URL columns found in this database. Please ensure the database contains GitHub repository URLs.");
+                return;
+              }
+
+              // Store GitHub URL detection results for user confirmation
+              setGitHubUrlDetectionResult(detectionResult);
+
+              // Navigate to column selection for user confirmation
               navigateToStep("notion-github-column-select");
             } catch (error) {
               setError(
@@ -1950,13 +2028,22 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           onSelect={(selectedProperty, githubUrls) => {
             setNotionSelectedProperty(selectedProperty);
 
-            // Convert string[] to the expected format if needed
-            const urlsWithIds: Array<{ url: string; pageId: string }> =
-              Array.isArray(githubUrls) &&
-              githubUrls.length > 0 &&
-              typeof githubUrls[0] === "string"
-                ? (githubUrls as string[]).map((url) => ({ url, pageId: "" }))
-                : (githubUrls as Array<{ url: string; pageId: string }>);
+            // Handle both URL formats - preserve pageIds when available from database entries
+            let urlsWithIds: Array<{ url: string; pageId: string }> = [];
+
+            if (Array.isArray(githubUrls) && githubUrls.length > 0) {
+              if (typeof githubUrls[0] === "string") {
+                // Legacy string array format - no pageIds available
+                console.log("⚠️ Received string URLs without pageIds - new entries will be created");
+                urlsWithIds = (githubUrls as string[]).map((url) => ({ url, pageId: "" }));
+              } else if (typeof githubUrls[0] === "object" && githubUrls[0] !== null) {
+                // Object format with pageIds - use for updating existing entries
+                const urlObjects = githubUrls as Array<{ url: string; pageId: string }>;
+                console.log(`✅ Received ${urlObjects.length} URLs with pageIds for updating existing entries:`,
+                  urlObjects.map(u => `${u.url} -> ${u.pageId}`));
+                urlsWithIds = urlObjects;
+              }
+            }
 
             setNotionGitHubUrls(urlsWithIds);
             setSelectedGitHubColumn(
@@ -2195,13 +2282,22 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           onSelect={(selectedProperty, deployedAppUrls) => {
             setNotionSelectedProperty(selectedProperty);
 
-            // Convert string[] to the expected format if needed
-            const urlsWithIds: Array<{ url: string; pageId: string }> =
-              Array.isArray(deployedAppUrls) &&
-              deployedAppUrls.length > 0 &&
-              typeof deployedAppUrls[0] === "string"
-                ? (deployedAppUrls as string[]).map((url) => ({ url, pageId: "" }))
-                : (deployedAppUrls as Array<{ url: string; pageId: string }>);
+            // Handle both URL formats - preserve pageIds when available from database entries
+            let urlsWithIds: Array<{ url: string; pageId: string }> = [];
+
+            if (Array.isArray(deployedAppUrls) && deployedAppUrls.length > 0) {
+              if (typeof deployedAppUrls[0] === "string") {
+                // Legacy string array format - no pageIds available
+                console.log("⚠️ Received deployed URLs without pageIds - new entries will be created");
+                urlsWithIds = (deployedAppUrls as string[]).map((url) => ({ url, pageId: "" }));
+              } else if (typeof deployedAppUrls[0] === "object" && deployedAppUrls[0] !== null) {
+                // Object format with pageIds - use for updating existing entries
+                const urlObjects = deployedAppUrls as Array<{ url: string; pageId: string }>;
+                console.log(`✅ Received ${urlObjects.length} deployed URLs with pageIds for updating existing entries:`,
+                  urlObjects.map(u => `${u.url} -> ${u.pageId}`));
+                urlsWithIds = urlObjects;
+              }
+            }
 
             setDeployedUrls(urlsWithIds);
             setSelectedDeployedUrlColumn(
@@ -2254,6 +2350,22 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
             navigateToStep("deployed-url-select");
           }}
           onBack={() => navigateToStep("deployed-url-select")}
+        />
+      </Box>
+    );
+  }
+
+  if (step === "prompt-select") {
+    return (
+      <Box flexDirection="column">
+        <PromptSelector
+          onSelect={(prompt) => {
+            setSelectedGradingPrompt(prompt);
+            navigateToStep("notion-processing");
+          }}
+          onBack={() => {
+            navigateToStep("processing-choice");
+          }}
         />
       </Box>
     );

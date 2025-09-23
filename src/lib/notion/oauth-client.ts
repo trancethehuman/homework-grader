@@ -3,6 +3,7 @@ import {
   NotionTokenStorage,
   NotionOAuthToken,
 } from "./notion-token-storage.js";
+import { DebugLogger } from "../debug-logger.js";
 
 const DEFAULT_PROXY_URL =
   process.env.NOTION_PROXY_URL || "https://notion-proxy-8xr3.onrender.com";
@@ -37,27 +38,27 @@ export class NotionOAuthClient {
     if (existing && existing.access_token) {
       // Check if token is expired
       if (this.storage.isTokenExpired(existing)) {
-        console.log("🔄 Token expired, attempting to refresh...");
+        DebugLogger.debugAuth("Token expired, attempting to refresh...");
         const refreshed = await this.refreshIfPossible();
         if (refreshed) {
-          console.log("✓ Token refreshed successfully");
+          DebugLogger.debugAuth("Token refreshed successfully");
           return refreshed;
         }
-        console.log("⚠ Token refresh failed, requiring new authentication");
+        DebugLogger.debugAuth("Token refresh failed, requiring new authentication");
       } else if (this.shouldProactivelyRefresh(existing)) {
         // Proactively refresh token if it expires soon
-        console.log("🔄 Token expires soon, proactively refreshing...");
+        DebugLogger.debugAuth("Token expires soon, proactively refreshing...");
         try {
           const refreshed = await this.refreshIfPossible();
           if (refreshed) {
-            console.log("✓ Proactive token refresh successful");
+            DebugLogger.debugAuth("Proactive token refresh successful");
             return refreshed;
           } else {
-            console.log("⚠ Proactive refresh failed, using current token");
+            DebugLogger.debugAuth("Proactive refresh failed, using current token");
             return existing;
           }
         } catch (error) {
-          console.log("⚠ Proactive refresh failed, using current token:", error instanceof Error ? error.message : String(error));
+          DebugLogger.debugAuth("Proactive refresh failed, using current token:", error instanceof Error ? error.message : String(error));
           return existing;
         }
       } else {
@@ -78,7 +79,6 @@ export class NotionOAuthClient {
   async forceOAuth(): Promise<NotionOAuthToken> {
     // Clear any existing token first
     this.storage.clearToken();
-    console.log("🔄 Initiating new OAuth authentication...");
 
     // Perform new OAuth
     const token = await this.performOAuth();
@@ -101,7 +101,6 @@ export class NotionOAuthClient {
   async refreshIfPossible(): Promise<NotionOAuthToken | null> {
     // Check if a refresh is already in progress
     if (this.refreshInProgress) {
-      console.log("🔄 Refresh already in progress, waiting...");
       return await this.refreshInProgress;
     }
 
@@ -109,13 +108,12 @@ export class NotionOAuthClient {
     const now = Date.now();
     if (now - this.lastRefreshAttempt < this.refreshCooldownMs) {
       const remainingMs = this.refreshCooldownMs - (now - this.lastRefreshAttempt);
-      console.log(`⏳ Refresh cooldown active, ${Math.ceil(remainingMs / 1000)}s remaining`);
       return null;
     }
 
     const existing = this.storage.getToken();
     if (!existing || !existing.refresh_token) {
-      console.log("❌ No refresh token available");
+      // This is expected during initial authentication
       return null;
     }
 
@@ -136,7 +134,7 @@ export class NotionOAuthClient {
 
     for (let attempt = 1; attempt <= this.retryConfig.maxRetries; attempt++) {
       try {
-        console.log(`🔄 Attempting to refresh Notion token (${attempt}/${this.retryConfig.maxRetries})...`);
+        DebugLogger.debugAuth(`Attempting to refresh Notion token (${attempt}/${this.retryConfig.maxRetries})...`);
 
         const res = await fetch(`${this.proxyBaseUrl}/refresh`, {
           method: "POST",
@@ -151,12 +149,12 @@ export class NotionOAuthClient {
           // Handle different error types
           if (res.status === 401 || res.status === 403) {
             // Invalid refresh token - don't retry
-            console.log("🧹 Invalid refresh token, clearing from storage");
+            DebugLogger.debugAuth("Invalid refresh token, clearing from storage");
             this.storage.clearToken();
             throw new Error("Refresh token is invalid or expired");
           } else if (res.status >= 500 && attempt < this.retryConfig.maxRetries) {
             // Server error - retry with exponential backoff
-            console.log(`⚠️  Server error (${res.status}), will retry in ${this.calculateDelay(attempt)}ms`);
+            DebugLogger.debugAuth(`Server error (${res.status}), will retry in ${this.calculateDelay(attempt)}ms`);
             lastError = error;
             await this.delay(this.calculateDelay(attempt));
             continue;
@@ -177,7 +175,7 @@ export class NotionOAuthClient {
         }
 
         this.storage.saveToken(merged);
-        console.log(`✓ Token refreshed and saved successfully on attempt ${attempt}`);
+        DebugLogger.debugAuth(`Token refreshed and saved successfully on attempt ${attempt}`);
         return merged;
 
       } catch (error) {
@@ -190,14 +188,13 @@ export class NotionOAuthClient {
 
         if (attempt < this.retryConfig.maxRetries) {
           const delay = this.calculateDelay(attempt);
-          console.log(`❌ Attempt ${attempt} failed: ${error instanceof Error ? error.message : String(error)}`);
-          console.log(`⏳ Retrying in ${delay}ms...`);
+          DebugLogger.debugAuth(`Attempt ${attempt} failed: ${error instanceof Error ? error.message : String(error)}`);
+          DebugLogger.debugAuth(`Retrying in ${delay}ms...`);
           await this.delay(delay);
         }
       }
     }
 
-    console.log(`❌ Token refresh failed after ${this.retryConfig.maxRetries} attempts`);
     throw lastError || new Error("Token refresh failed after all retry attempts");
   }
 

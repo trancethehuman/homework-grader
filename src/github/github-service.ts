@@ -388,7 +388,8 @@ export class GitHubService {
   async processGitHubUrl(
     url: string,
     provider: AIProvider,
-    chunkingPreference: 'allow' | 'skip' = 'allow'
+    chunkingPreference: 'allow' | 'skip' = 'allow',
+    selectedPrompt?: string
   ): Promise<{ content: string; scores: Promise<any> }> {
     const totalStartTime = Date.now();
     const repoInfo = this.parseGitHubUrl(url);
@@ -414,7 +415,7 @@ export class GitHubService {
     console.log(`✓ Successfully processed ${repoInfo.owner}/${repoInfo.repo} via GitHub API - Content extraction: ${contentTime}ms`);
 
     const gradingStartTime = Date.now();
-    const scoresPromise = getRepoScores(concatenatedContent, provider, chunkingPreference).then(result => {
+    const scoresPromise = getRepoScores(concatenatedContent, provider, chunkingPreference, selectedPrompt).then(result => {
       const gradingTime = Date.now() - gradingStartTime;
       const totalTime = Date.now() - totalStartTime;
       console.log(`✓ Grading completed for ${repoInfo.owner}/${repoInfo.repo} - Grading: ${gradingTime}ms, Total: ${totalTime}ms`);

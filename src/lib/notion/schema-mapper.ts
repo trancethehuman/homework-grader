@@ -274,11 +274,19 @@ export class NotionSchemaMapper {
   /**
    * Check if database has all required grading properties
    */
-  static hasGradingProperties(databaseProperties: Record<string, any>): boolean {
-    const requiredProperties = this.getGradingPropertyNames();
+  static hasGradingProperties(
+    databaseProperties: Record<string, any>,
+    options: { processingMode?: 'code' | 'browser' | 'both' } = {}
+  ): boolean {
+    // Generate required properties based on processing mode
+    const requiredProperties = this.generateGradingDatabaseProperties(false, {
+      skipGithubUrlColumn: false,
+      processingMode: options.processingMode || 'both'
+    });
     const existingProperties = Object.keys(databaseProperties);
-    
-    return requiredProperties.every(prop => existingProperties.includes(prop));
+
+    // Check if all required properties exist
+    return Object.keys(requiredProperties).every(prop => existingProperties.includes(prop));
   }
 
   /**
@@ -288,23 +296,38 @@ export class NotionSchemaMapper {
     databaseProperties: Record<string, any>,
     options: { skipGithubUrlColumn?: boolean; processingMode?: 'code' | 'browser' | 'both' } = {}
   ): Record<string, NotionProperty> {
+    const processingMode = options.processingMode || 'both';
+
     // Check if database already has a title property
     const hasExistingTitle = Object.values(databaseProperties).some((prop: any) => prop.type === "title");
-    
+
     // Generate required properties, excluding title if one already exists, and optionally skip github_url
     const requiredProperties = this.generateGradingDatabaseProperties(!hasExistingTitle, {
       skipGithubUrlColumn: options.skipGithubUrlColumn,
-      processingMode: options.processingMode || 'both'
+      processingMode: processingMode
     });
     const existingProperties = Object.keys(databaseProperties);
     const missingProperties: Record<string, NotionProperty> = {};
-    
+
+    console.log(`🔍 Checking for missing grading properties (mode: ${processingMode})`);
+    console.log(`📋 Required properties:`, Object.keys(requiredProperties));
+    console.log(`📋 Existing properties:`, existingProperties);
+
     for (const [propertyName, propertyConfig] of Object.entries(requiredProperties)) {
       if (!existingProperties.includes(propertyName)) {
         missingProperties[propertyName] = propertyConfig;
+        console.log(`❌ Missing property: ${propertyName} (${propertyConfig.type})`);
+      } else {
+        console.log(`✅ Found existing property: ${propertyName}`);
       }
     }
-    
+
+    if (Object.keys(missingProperties).length === 0) {
+      console.log(`✅ All required grading properties exist in database`);
+    } else {
+      console.log(`📝 Will add ${Object.keys(missingProperties).length} missing properties:`, Object.keys(missingProperties));
+    }
+
     return missingProperties;
   }
 }

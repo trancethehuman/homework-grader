@@ -65,7 +65,7 @@
     "@browserbasehq/stagehand": "^2.4.3",
     "@e2b/code-interpreter": "^1.5.1",
     "@modelcontextprotocol/sdk": "^1.15.1",
-    "@notionhq/client": "^4.0.1",
+    "@notionhq/client": "^5.1.0",
     "@octokit/rest": "^22.0.0",
     "@types/react": "^19.1.8",
     "ai": "^5.0.0",

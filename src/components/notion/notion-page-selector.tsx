@@ -11,7 +11,7 @@ import { NotionTokenStorage } from "../../lib/notion/notion-token-storage.js";
 import { BackButton, useBackNavigation } from "../ui/back-button.js";
 
 interface NotionPageSelectorProps {
-  onSelect: (pageId: string, pageTitle: string) => void;
+  onSelect: (pageId: string, pageTitle: string, type: "page" | "database") => void;
   onStartGrading?: (pageId: string, pageTitle: string) => void;
   onError: (error: string) => void;
   onAuthenticationRequired?: () => void;
@@ -170,7 +170,8 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
         // If there are search results, select the first one
         if (searchResultsItems.length > 0) {
           const item = searchResultsItems[0];
-          onSelect(item.id, item.title);
+          const type = "properties" in item ? "database" : "page";
+          onSelect(item.id, item.title, type);
         }
         return;
       }
@@ -233,7 +234,8 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
       } else if (key.return) {
         if (displayItems[selectedIndex]) {
           const item = displayItems[selectedIndex];
-          onSelect(item.id, item.title);
+          const type = "properties" in item ? "database" : "page";
+          onSelect(item.id, item.title, type);
         }
       } else if (input === "d") {
         setShowingDatabases(!showingDatabases);
@@ -259,7 +261,8 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
         if (selectedIndex < searchResultsItems.length) {
           // Select a search result
           const item = searchResultsItems[selectedIndex];
-          onSelect(item.id, item.title);
+          const type = "properties" in item ? "database" : "page";
+          onSelect(item.id, item.title, type);
         } else if (selectedIndex === searchResultsItems.length) {
           // "View All" button selected
           setIsViewAllMode(true);

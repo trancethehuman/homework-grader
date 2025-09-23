@@ -1,6 +1,7 @@
 import { generateObject } from "ai";
 import { GRADING_CATEGORIES } from "./schemas.js";
 import { PROMPT_GRADER, PROMPT_GRADER_CHUNK, PROMPT_GRADER_FINAL } from "../prompts/grader.js";
+import { getDefaultGradingPrompt } from "../consts/grading-prompts.js";
 import { AIProvider, DEFAULT_CONTEXT_WINDOW_TOKENS } from "../consts/ai-providers.js";
 import dotenv from "dotenv";
 
@@ -168,7 +169,8 @@ async function aggregateChunkFeedbacks(
 export async function getRepoScores(
   repoContent: string,
   provider: AIProvider,
-  chunkingPreference: 'allow' | 'skip' = 'allow'
+  chunkingPreference: 'allow' | 'skip' = 'allow',
+  selectedPrompt?: string
 ): Promise<any> {
   const contextLimit = provider.contextWindowTokens || DEFAULT_CONTEXT_WINDOW_TOKENS;
   const reservedTokensForSystemPrompt = 2000;
@@ -178,7 +180,7 @@ export async function getRepoScores(
 
   if (estimatedTokens <= maxContentTokens) {
     console.log(`📊 Content size: ${estimatedTokens} tokens (within ${contextLimit} limit)`);
-    return await processStandardGrading(repoContent, provider);
+    return await processStandardGrading(repoContent, provider, selectedPrompt);
   }
 
   console.log(`⚠️  Large repository detected: ${estimatedTokens} tokens exceeds ${maxContentTokens} limit`);
@@ -222,15 +224,19 @@ export async function getRepoScores(
 
 async function processStandardGrading(
   repoContent: string,
-  provider: AIProvider
+  provider: AIProvider,
+  selectedPrompt?: string
 ): Promise<any> {
   const modelInstance = await provider.getModelInstance();
+
+  // Use selected prompt or fall back to default
+  const promptToUse = selectedPrompt || getDefaultGradingPrompt().value;
 
   const generateObjectOptions: any = {
     model: modelInstance,
     schemaName: "Grading feedback",
     schemaDescription: "Comprehensive code homework feedback",
-    system: PROMPT_GRADER,
+    system: promptToUse,
     prompt: repoContent,
     schema: GRADING_CATEGORIES,
   };
@@ -276,21 +282,21 @@ async function processStandardGrading(
 
         if (errorMsg.includes('Schema validation failed')) {
           // Schema validation error - provide more specific guidance
-          generateObjectOptions.system = PROMPT_GRADER +
+          generateObjectOptions.system = promptToUse +
             "\n\nIMPORTANT: The previous attempt failed schema validation. Please ensure:\n" +
             "- Your response contains a single 'feedbacks' field with comprehensive markdown-formatted feedback\n" +
             "- The feedback should be detailed, well-structured, and cover all the specified areas\n" +
             "- Use proper markdown formatting with headers, bullet points, and code examples where appropriate";
         } else if (errorMsg.includes('JSON') || errorMsg.includes('parse')) {
           // JSON parsing error - focus on format
-          generateObjectOptions.system = PROMPT_GRADER +
+          generateObjectOptions.system = promptToUse +
             "\n\nIMPORTANT: The previous attempt had JSON formatting issues. Please ensure:\n" +
             "- Valid JSON syntax with proper brackets, quotes, and commas\n" +
             "- The feedbacks field contains a properly escaped string\n" +
             "- All special characters in the markdown are properly escaped for JSON";
         } else {
           // Generic error - general improvement guidance
-          generateObjectOptions.system = PROMPT_GRADER +
+          generateObjectOptions.system = promptToUse +
             "\n\nIMPORTANT: The previous attempt failed. Please ensure your response strictly follows the provided schema with a single 'feedbacks' field containing comprehensive, well-formatted feedback.";
         }
 
