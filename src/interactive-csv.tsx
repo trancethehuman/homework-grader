@@ -46,8 +46,7 @@ import { BrowserTesting } from "./components/browser-testing.js";
 import { BrowserTestResult } from "./lib/stagehand/browser-testing-service.js";
 import { BrowserTestMode } from "./components/browser-test-mode.js";
 import { ComputerUseModelSelector } from "./components/computer-use-model-selector.js";
-import { OverrideConfirmation } from "./components/notion/override-confirmation.js";
-import { ConflictDetectionResult, OverrideDecision } from "./lib/notion/conflict-detector.js";
+import { SimpleOverrideConfirmation } from "./components/notion/simple-override-confirmation.js";
 import { PromptSelector } from "./components/prompt-selector.js";
 import { GradingPrompt, getDefaultGradingPrompt } from "./consts/grading-prompts.js";
 
@@ -106,6 +105,7 @@ type Step =
   | "notion-conflict-check"
   | "notion-override-confirmation"
   | "notion-saving"
+  | "notion-save-complete"
   | "input"
   | "analyzing"
   | "select"
@@ -171,8 +171,8 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
   const [browserTestResults, setBrowserTestResults] = useState<BrowserTestResult[]>([]);
   const [deployedUrls, setDeployedUrls] = useState<Array<{ url: string; pageId: string }>>([]);
   const [selectedDeployedUrlColumn, setSelectedDeployedUrlColumn] = useState<string>("");
-  const [conflicts, setConflicts] = useState<ConflictDetectionResult[]>([]);
-  const [overrideDecisions, setOverrideDecisions] = useState<Map<string, OverrideDecision[]>>(new Map());
+  const [existingGradingFields, setExistingGradingFields] = useState<string[]>([]);
+  const [shouldOverrideData, setShouldOverrideData] = useState<boolean>(false);
   const [originalDatabaseId, setOriginalDatabaseId] = useState<
     string | undefined
   >();
@@ -186,6 +186,8 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
   const [selectedProcessingOption, setSelectedProcessingOption] = useState(0); // 0 = code only (default), 1 = browser only, 2 = both
   const [chunkingPreference, setChunkingPreference] = useState<'allow' | 'skip'>('skip');
   const [selectedChunkingOption, setSelectedChunkingOption] = useState(1); // 0 = allow, 1 = skip (default)
+  const [notionSaveResult, setNotionSaveResult] = useState<{ success: number; failed: number; errors: string[] } | null>(null);
+  const [selectedNavOption, setSelectedNavOption] = useState(0);
   const { exit } = useApp();
 
   // Helper function to navigate to a new step and clear any existing errors
@@ -595,7 +597,8 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
   // Handle Notion authentication loading transition
   useEffect(() => {
     if (step === "notion-auth-loading") {
-      const timer = setTimeout(async () => {
+      // Remove artificial delay - start checking immediately
+      const checkAuth = async () => {
         // Check if user already has authentication
         const storage = new NotionTokenStorage();
         const hasExistingAuth = storage.hasToken();
@@ -616,21 +619,60 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
               navigateToStep("notion-page-selector");
             } else {
               console.log("❌ Notion token validation failed:", validation.error);
-              setError(`Notion authentication expired: ${validation.error || "Please re-authenticate"}`);
-              navigateToStep("notion-oauth-info");
+              console.log("🔄 Auto-triggering OAuth re-authentication...");
+
+              // Clear the invalid token
+              storage.clearToken();
+
+              // Automatically start OAuth without user intervention
+              try {
+                const token = await notionOAuthClient.ensureAuthenticated();
+                const service = new NotionService(token.access_token);
+                const revalidation = await service.validateToken();
+
+                if (revalidation.valid) {
+                  console.log("✓ Re-authentication successful");
+                  navigateToStep("notion-page-selector");
+                } else {
+                  throw new Error(revalidation.error || "Re-authentication failed");
+                }
+              } catch (reauthError: any) {
+                setError(`Re-authentication failed: ${reauthError.message}`);
+                navigateToStep("notion-oauth-info");
+              }
             }
           } catch (e: any) {
             console.log("❌ Notion authentication error:", e.message || String(e));
-            let errorMessage = "Authentication failed";
-            if (e.message?.includes("API token is invalid")) {
-              errorMessage = "Your Notion access has expired. Please re-authenticate.";
-            } else if (e.message?.includes("unauthorized")) {
-              errorMessage = "Notion access is no longer valid. Please re-authenticate.";
-            } else if (e.message) {
-              errorMessage = e.message;
+
+            // Auto-trigger OAuth for authentication errors
+            if (e.message?.includes("API token is invalid") ||
+                e.message?.includes("unauthorized")) {
+              console.log("🔄 Auto-triggering OAuth due to authentication error...");
+
+              // Clear the invalid token
+              storage.clearToken();
+
+              // Automatically start OAuth without user intervention
+              try {
+                const token = await notionOAuthClient.ensureAuthenticated();
+                const service = new NotionService(token.access_token);
+                const revalidation = await service.validateToken();
+
+                if (revalidation.valid) {
+                  console.log("✓ Re-authentication successful");
+                  navigateToStep("notion-page-selector");
+                } else {
+                  throw new Error(revalidation.error || "Re-authentication failed");
+                }
+              } catch (reauthError: any) {
+                setError(`Re-authentication failed: ${reauthError.message}`);
+                navigateToStep("notion-oauth-info");
+              }
+            } else {
+              // For non-auth errors, show the info screen
+              setError(e.message || "Authentication check failed");
+              navigateToStep("notion-oauth-info");
             }
-            setError(errorMessage);
-            navigateToStep("notion-oauth-info");
           }
         } else {
           // No existing auth, perform OAuth
@@ -663,9 +705,10 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
             navigateToStep("notion-oauth-info");
           }
         }
-      }, 1500); // Show loading animation for 1.5 seconds
+      };
 
-      return () => clearTimeout(timer);
+      // Execute immediately without delay
+      checkAuth();
     }
   }, [step, notionOAuthClient]);
 
@@ -739,29 +782,30 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
             hasBrowserTests && hasCodeGrading ? 'both' :
             hasBrowserTests ? 'browser' : 'code';
 
-          // Save all grading results with conflict resolution
-          const result = await service.saveGradingResultsWithConflictResolution(
+          // Save all grading results with simple override flag
+          const result = await service.saveGradingResultsWithOverride(
             originalDatabaseId!,
             gradingResults,
-            overrideDecisions,
+            shouldOverrideData,
             selectedGitHubColumn,
             browserTestResults,
             processingMode
           );
 
+          // Store the save result for the completion step
+          setNotionSaveResult(result);
+
           if (result.failed > 0) {
-            setError(
-              `Saved ${result.success} entries, failed ${
-                result.failed
-              }. Errors: ${result.errors.join(", ")}`
+            console.log(
+              `⚠️ Saved ${result.success} entries, ${result.failed} failed`
             );
           } else {
             console.log(
-              `✓ Successfully saved ${result.success} grading results to Notion database`
+              `✅ Successfully saved ${result.success} grading results to Notion database`
             );
           }
 
-          navigateToStep("complete");
+          navigateToStep("notion-save-complete");
         } catch (error: any) {
           console.error("Notion save operation failed:", error);
 
@@ -773,14 +817,16 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
             errorMessage = "Database not found. Please ensure you have access to the selected database.";
           }
 
+          // Store the error result for the completion step
+          setNotionSaveResult({ success: 0, failed: gradingResults.length, errors: [errorMessage] });
           setError(errorMessage);
-          navigateToStep("grading-save-options");
+          navigateToStep("notion-save-complete");
         }
       }
     };
 
     performNotionSave();
-  }, [step, gradingResults, browserTestResults, overrideDecisions, originalDatabaseId, selectedGitHubColumn]);
+  }, [step, gradingResults, browserTestResults, shouldOverrideData, originalDatabaseId, selectedGitHubColumn]);
 
   const validateAndAnalyzeCSV = async (
     filePath: string
@@ -1270,7 +1316,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           return;
         }
 
-        // Check for conflicts first
+        // Show schema checking step
         navigateToStep("notion-conflict-check");
 
         // Ensure we have a valid Notion access token before creating the service
@@ -1293,22 +1339,19 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           processingMode,
         });
 
-        // Check for conflicts before saving
-        const conflictResults = await service.checkForConflicts(
+        // Check if grading fields already exist (simple schema check)
+        const existingFieldsCheck = await service.checkForExistingGradingFields(
           databaseId,
-          gradingResults,
-          selectedGitHubColumn,
-          browserTestResults,
           processingMode
         );
 
-        setConflicts(conflictResults);
-
-        // If there are conflicts, show override confirmation
-        if (conflictResults.some(c => c.hasConflicts)) {
+        // If grading fields exist, ask user for override permission
+        if (existingFieldsCheck.hasExistingFields) {
+          // Store the existing fields for the simple override prompt
+          setExistingGradingFields(existingFieldsCheck.existingFields);
           navigateToStep("notion-override-confirmation");
         } else {
-          // No conflicts, proceed directly to saving
+          // No existing grading fields, proceed directly to saving
           navigateToStep("notion-saving");
         }
       }
@@ -2165,11 +2208,11 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
     return (
       <Box flexDirection="column">
         <Text color="yellow" bold>
-          Checking for Data Conflicts...
+          Checking Database Schema...
         </Text>
         <Text></Text>
         <Text>
-          Checking {gradingResults.length} grading results for existing data in Notion database...
+          Checking if grading fields already exist in Notion database...
         </Text>
         <Text dimColor>
           This will help prevent accidentally overwriting existing grading data.
@@ -2180,10 +2223,10 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
 
   if (step === "notion-override-confirmation") {
     return (
-      <OverrideConfirmation
-        conflicts={conflicts}
-        onDecision={(decisions) => {
-          setOverrideDecisions(decisions);
+      <SimpleOverrideConfirmation
+        existingFields={existingGradingFields}
+        onDecision={(shouldOverride) => {
+          setShouldOverrideData(shouldOverride);
           navigateToStep("notion-saving");
         }}
         onCancel={() => {
@@ -2206,6 +2249,81 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         <Text dimColor>
           This may take a moment to create/update database schema and save
           entries.
+        </Text>
+      </Box>
+    );
+  }
+
+  if (step === "notion-save-complete") {
+    useInput((input, key) => {
+      if (key.upArrow && selectedNavOption > 0) {
+        setSelectedNavOption(selectedNavOption - 1);
+      } else if (key.downArrow && selectedNavOption < 2) {
+        setSelectedNavOption(selectedNavOption + 1);
+      } else if (key.return) {
+        if (selectedNavOption === 0) {
+          // Back to Save Options
+          navigateToStep("grading-save-options");
+        } else if (selectedNavOption === 1) {
+          // Choose Different Database
+          navigateToStep("notion-page-selector");
+        } else if (selectedNavOption === 2) {
+          // Exit
+          navigateToStep("complete");
+        }
+      }
+    });
+
+    const wasSuccessful = notionSaveResult && notionSaveResult.success > 0;
+    const hasFailures = notionSaveResult && notionSaveResult.failed > 0;
+
+    return (
+      <Box flexDirection="column" marginY={1}>
+        {wasSuccessful ? (
+          <Text color="green" bold>
+            ✅ Notion Save Complete!
+          </Text>
+        ) : (
+          <Text color="red" bold>
+            ❌ Notion Save Failed
+          </Text>
+        )}
+        <Text></Text>
+
+        {notionSaveResult && (
+          <>
+            <Text>
+              Results: {notionSaveResult.success} saved{hasFailures ? `, ${notionSaveResult.failed} failed` : ''}
+            </Text>
+            {hasFailures && notionSaveResult.errors.length > 0 && (
+              <>
+                <Text></Text>
+                <Text color="red">
+                  Errors: {notionSaveResult.errors.slice(0, 2).join('; ')}
+                  {notionSaveResult.errors.length > 2 && '...'}
+                </Text>
+              </>
+            )}
+            <Text></Text>
+          </>
+        )}
+
+        <Text>What would you like to do next?</Text>
+        <Text></Text>
+
+        <Text color={selectedNavOption === 0 ? "cyan" : "white"}>
+          {selectedNavOption === 0 ? "→ " : "  "}Back to Save Options
+        </Text>
+        <Text color={selectedNavOption === 1 ? "cyan" : "white"}>
+          {selectedNavOption === 1 ? "→ " : "  "}Choose Different Database
+        </Text>
+        <Text color={selectedNavOption === 2 ? "cyan" : "white"}>
+          {selectedNavOption === 2 ? "→ " : "  "}Exit
+        </Text>
+
+        <Text></Text>
+        <Text color="gray" dimColor>
+          [Use arrow keys to navigate, press Enter to select]
         </Text>
       </Box>
     );

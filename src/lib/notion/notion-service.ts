@@ -88,7 +88,7 @@ export class NotionService {
   async validateToken(): Promise<{ valid: boolean; error?: string }> {
     // Check if validation is already in progress
     if (this.validationInProgress) {
-      console.log("🔄 Token validation already in progress, waiting...");
+      DebugLogger.debug("🔄 Token validation already in progress, waiting...");
       return await this.validationInProgress;
     }
 
@@ -96,7 +96,7 @@ export class NotionService {
     const now = Date.now();
     if (this.validationCache && (now - this.validationCache.timestamp) < this.validationCacheTtlMs) {
       const ageSeconds = Math.round((now - this.validationCache.timestamp) / 1000);
-      console.log(`📋 Using cached validation result (${ageSeconds}s old)`);
+      DebugLogger.debug(`📋 Using cached validation result (${ageSeconds}s old)`);
       DebugLogger.debug(`📋 Cache hit: validation result (${ageSeconds}s old, valid: ${this.validationCache.valid})`);
       return {
         valid: this.validationCache.valid,
@@ -168,10 +168,22 @@ export class NotionService {
 
   private async performTokenValidation(): Promise<{ valid: boolean; error?: string }> {
     try {
-      console.log("🔍 Validating Notion token...");
-      // Make a simple API call to test token validity
-      await this.notion.users.me({});
-      console.log("✓ Token validation successful");
+      DebugLogger.debug("🔍 Validating Notion token...");
+
+      // Create a promise that rejects after 15 seconds
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => {
+          reject(new Error("Token validation timed out after 15 seconds"));
+        }, 15000);
+      });
+
+      // Race between the API call and the timeout
+      await Promise.race([
+        this.notion.users.me({}),
+        timeoutPromise
+      ]);
+
+      DebugLogger.debug("✓ Token validation successful");
       return { valid: true };
     } catch (error: any) {
       const errorMessage = error.message || String(error);
@@ -179,10 +191,11 @@ export class NotionService {
 
       if (errorMessage.includes("API token is invalid") ||
           errorMessage.includes("unauthorized") ||
+          errorMessage.includes("timed out") ||
           error.code === "unauthorized") {
         // Only clear storage if we're using a token from storage, not an explicit token
         if (!this.isUsingExplicitToken) {
-          console.log("🧹 Clearing invalid token from storage");
+          DebugLogger.debug("🧹 Clearing invalid token from storage");
           this.storage.clearToken();
         } else {
           console.log("⚠️ Explicit token is invalid, but not clearing storage");
@@ -537,7 +550,7 @@ export class NotionService {
 
     // Helper function to query using search API as fallback
     const queryUsingSearchAPI = async (): Promise<any[]> => {
-      console.log(`🔍 Using search API fallback for database ${databaseId}`);
+      DebugLogger.debug(`🔍 Using search API fallback for database ${databaseId}`);
       const results: any[] = [];
       let hasMore = true;
       let nextCursor: string | undefined;
@@ -568,29 +581,29 @@ export class NotionService {
 
     try {
       // First get the database to obtain data_source_id
-      console.log(`🔍 Getting database metadata for ${databaseId}`);
+      DebugLogger.debug(`🔍 Getting database metadata for ${databaseId}`);
       const database = await this.getDatabaseMetadata(databaseId);
       const dataSourceId = (database as any).data_source_id;
 
       if (!dataSourceId) {
         // No data source ID, use search API
-        console.log(`📊 No data source found, using search API for ${databaseId}`);
+        DebugLogger.debug(`📊 No data source found, using search API for ${databaseId}`);
         const results = await queryUsingSearchAPI();
-        console.log(`✓ Successfully queried via search: ${results.length} results`);
+        DebugLogger.debug(`✓ Successfully queried via search: ${results.length} results`);
         return results;
       }
 
       // Check if this data source has consistently failed before
       if (this.failedDataSources.has(dataSourceId)) {
         DebugLogger.debug(`⏭️ Skipping known failed data source ${dataSourceId}, using search API`);
-        console.log(`📊 Skipping known failed data source, using search API for ${databaseId}`);
+        DebugLogger.debug(`📊 Skipping known failed data source, using search API for ${databaseId}`);
         const results = await queryUsingSearchAPI();
-        console.log(`✓ Successfully queried via search fallback: ${results.length} results`);
+        DebugLogger.debug(`✓ Successfully queried via search fallback: ${results.length} results`);
         return results;
       }
 
       // Try data source query first
-      console.log(`🔍 Attempting data source query for ${dataSourceId}`);
+      DebugLogger.debug(`🔍 Attempting data source query for ${dataSourceId}`);
 
       try {
         const results: any[] = [];
@@ -606,7 +619,7 @@ export class NotionService {
             start_cursor: nextCursor
           };
 
-          console.log(`🔍 Data source query request:`, {
+          DebugLogger.debug(`🔍 Data source query request:`, {
             path: `/v1/data_sources/${dataSourceId}/query`,
             method: 'post',
             dataSourceId,
@@ -627,10 +640,10 @@ export class NotionService {
           nextCursor = (response as any).next_cursor || undefined;
           pageCount++;
 
-          console.log(`✓ Retrieved page ${pageCount} with ${pageResults.length} results`);
+          DebugLogger.debug(`✓ Retrieved page ${pageCount} with ${pageResults.length} results`);
         }
 
-        console.log(`✓ Successfully queried via data source: ${results.length} results`);
+        DebugLogger.debug(`✓ Successfully queried via data source: ${results.length} results`);
         return results;
 
       } catch (dataSourceError: any) {
@@ -651,7 +664,7 @@ export class NotionService {
 
         try {
           const results = await queryUsingSearchAPI();
-          console.log(`✓ Successfully queried via search fallback: ${results.length} results`);
+          DebugLogger.debug(`✓ Successfully queried via search fallback: ${results.length} results`);
           return results;
         } catch (searchError: any) {
           // Both methods failed

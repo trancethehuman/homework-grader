@@ -43,6 +43,9 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
   const [searchTerm, setSearchTerm] = useState("");
   const [isSearchFocused, setIsSearchFocused] = useState(true);
   const [isViewAllMode, setIsViewAllMode] = useState(false);
+  const [loadingIconIndex, setLoadingIconIndex] = useState(0);
+  const [isStartingGrading, setIsStartingGrading] = useState(false);
+  const [selectedDatabaseName, setSelectedDatabaseName] = useState("");
   const itemsPerPage = 10;
   const maxSearchResults = 3;
 
@@ -132,13 +135,30 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
     loadNotionData();
   }, [onError, cachedPages, cachedDatabases, onDataLoaded]);
 
+  // Loading animation effect
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+
+    if (isLoading) {
+      interval = setInterval(() => {
+        setLoadingIconIndex((prev) => (prev + 1) % 6);
+      }, 2000);
+    }
+
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
+  }, [isLoading]);
+
   // Reset selection when search term changes
   useEffect(() => {
     setSelectedIndex(0);
   }, [searchTerm]);
 
   useInput((input, key) => {
-    if (isLoading || error) return;
+    if (isLoading || error || isStartingGrading) return;
 
     // Handle back navigation first
     if (handleBackInput(input, key)) {
@@ -158,7 +178,9 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
       const items = isViewAllMode ? displayItems : searchResultsItems;
       const currentItem = items[selectedIndex];
       if (currentItem && "properties" in currentItem) {
-        // It's a database
+        // It's a database - immediately set loading state before async operations
+        setIsStartingGrading(true);
+        setSelectedDatabaseName(currentItem.title);
         onStartGrading(currentItem.id, currentItem.title);
         return;
       }
@@ -273,14 +295,54 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
     }
   });
 
-  if (isLoading) {
+  if (isStartingGrading) {
     return (
-      <Box flexDirection="column">
-        <Text color="blue" bold>
+      <Box flexDirection="column" alignItems="center">
+        <Text bold color="blue">
+          Preparing to Grade Database
+        </Text>
+        <Box marginTop={1} alignItems="center">
+          <Text>🎯</Text>
+        </Box>
+        <Box marginTop={1}>
+          <Text color="cyan">Setting up grading for "{selectedDatabaseName}"...</Text>
+        </Box>
+        <Box marginTop={2}>
+          <Text color="gray">
+            Analyzing database structure and detecting GitHub URLs...
+          </Text>
+        </Box>
+      </Box>
+    );
+  }
+
+  if (isLoading) {
+    const loadingIcons = ["🔄", "⚡", "🚀", "✨", "🔮", "💫"];
+    const loadingMessages = [
+      "Connecting to your Notion workspace...",
+      "Fetching pages and databases...",
+      "Loading your content...",
+      "Organizing workspace data...",
+      "Preparing your workspace...",
+      "Almost ready...",
+    ];
+
+    return (
+      <Box flexDirection="column" alignItems="center">
+        <Text bold color="blue">
           Loading Notion Data...
         </Text>
-        <Text></Text>
-        <Text>Fetching pages and databases from your Notion workspace...</Text>
+        <Box marginTop={1} alignItems="center">
+          <Text>{loadingIcons[loadingIconIndex]}</Text>
+        </Box>
+        <Box marginTop={1}>
+          <Text color="cyan">{loadingMessages[loadingIconIndex]}</Text>
+        </Box>
+        <Box marginTop={2}>
+          <Text color="gray">
+            This may take a moment while we fetch your workspace data...
+          </Text>
+        </Box>
       </Box>
     );
   }

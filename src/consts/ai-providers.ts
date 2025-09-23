@@ -22,6 +22,17 @@ export const AI_PROVIDERS: AIProvider[] = [
     },
   },
   {
+    id: "gemini-flash",
+    name: "Gemini 2.5 Flash",
+    description: "Google Gemini's standard flash model with larger context window",
+    model: "gemini-2.5-flash",
+    contextWindowTokens: 1000000,
+    getModelInstance: async () => {
+      const { google } = await import("@ai-sdk/google");
+      return google("gemini-2.5-flash");
+    },
+  },
+  {
     id: "openai",
     name: "OpenAI GPT-4.1",
     description: "OpenAI's latest GPT-4.1 model",

@@ -19,42 +19,54 @@ Example: "React e-commerce app with Node.js backend and MongoDB for product cata
 **2. DEVELOPER_FEEDBACK (Max 1,500 characters):**
 Write exactly 3 short paragraphs in a conversational, email-like tone. Be matter-of-fact but not formal:
 
-**Paragraph 1 - Outstanding Choices (2-3 sentences max):**
-Point out the 2 most impressive technical decisions or patterns in the code. Explain why these choices are good and show solid understanding.
+**Paragraph 1 - Good technical decisions (1 sentence max):**
+Point out the technical decision or pattern in the code. Explain why these choices are ok. Don't get overly excited or sycophant. Just acknowledge.
 
-**Paragraph 2 - Critical Improvements (2-3 sentences max):**
-Identify the 2 most important issues that need fixing. Explain why these problems are significant and should be prioritized.
+**Paragraph 2 - Improvements (1 sentence max):**
+Identify the most important issue that need fixing. Explain why the problem is significant and should be prioritized.
 
-**Paragraph 3 - Optional Nitpicks (2-3 sentences max):**
+**Paragraph 3 - Optional Nitpicks (1 sentence max):**
 Mention 2 smaller improvements that would be nice to have. Keep the tone casual and helpful - these aren't dealbreakers.
 
 **Format Requirements:**
 - repo_explained: Single paragraph, max 300 chars
-- developer_feedback: Exactly 3 paragraphs, max 1,500 chars total
-- Each paragraph: 2-3 sentences maximum
+- developer_feedback: Exactly 3 paragraphs, max 1000 chars total
 - Conversational tone, not bullet points
 - Include the "why" behind each point
 
 **Important Notes:**
 - The most recent common AI models are GPT-5, Claude Sonnet 4, and Opus 4
-- Do not make obvious comments about shadcn or other basic implementation details
+- Do not make obvious comments about shadcn or other basic implementation details of nextjs, ai sdk, react, etc..
 - Focus on meaningful technical insights and architectural decisions
+- Do not make non-useful comments about the choice of libraries and such since that is usually not determined by the developer.
+- Do not use big words like emphasize and delve and such. Use common words and easy to understand words. No bulletpoints or list of any kind.
+- Do not sound formal.
+- Hard coded values as consts are fine (like AI model names)
+- Don't make any comments on things like logging systems or whatever, or sycophant over a cool feature. Just keep very brief and comment on how the feature is built, whether its good enough or need improvements.
+
+NEVER GET OVERLY EXCITED.
+
+Keep your answer extremely short and straight. Do not overly complement.
+
 `;
 
 export const GRADING_PROMPTS: GradingPrompt[] = [
   {
     name: "BUILD YOUR FIRST AGENT PROMPT",
     value: BUILD_YOUR_FIRST_AGENT_PROMPT,
-    description: "Comprehensive code review focusing on technical decisions, critical improvements, and optional enhancements. Designed for agent development projects with modern AI model awareness."
-  }
+    description:
+      "Comprehensive code review focusing on technical decisions, critical improvements, and optional enhancements. Designed for agent development projects with modern AI model awareness.",
+  },
 ];
 
 export function getGradingPrompts(): GradingPrompt[] {
   return GRADING_PROMPTS;
 }
 
-export function getGradingPromptByName(name: string): GradingPrompt | undefined {
-  return GRADING_PROMPTS.find(prompt => prompt.name === name);
+export function getGradingPromptByName(
+  name: string
+): GradingPrompt | undefined {
+  return GRADING_PROMPTS.find((prompt) => prompt.name === name);
 }
 
 export function getDefaultGradingPrompt(): GradingPrompt {

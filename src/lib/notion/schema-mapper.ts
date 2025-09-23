@@ -1,3 +1,5 @@
+import { DebugLogger } from "../debug-logger.js";
+
 export interface NotionProperty {
   type: string;
   [key: string]: any;
@@ -309,23 +311,23 @@ export class NotionSchemaMapper {
     const existingProperties = Object.keys(databaseProperties);
     const missingProperties: Record<string, NotionProperty> = {};
 
-    console.log(`🔍 Checking for missing grading properties (mode: ${processingMode})`);
-    console.log(`📋 Required properties:`, Object.keys(requiredProperties));
-    console.log(`📋 Existing properties:`, existingProperties);
+    DebugLogger.debug(`🔍 Checking for missing grading properties (mode: ${processingMode})`);
+    DebugLogger.debug(`📋 Required properties:`, Object.keys(requiredProperties));
+    DebugLogger.debug(`📋 Existing properties:`, existingProperties);
 
     for (const [propertyName, propertyConfig] of Object.entries(requiredProperties)) {
       if (!existingProperties.includes(propertyName)) {
         missingProperties[propertyName] = propertyConfig;
-        console.log(`❌ Missing property: ${propertyName} (${propertyConfig.type})`);
+        DebugLogger.debug(`❌ Missing property: ${propertyName} (${propertyConfig.type})`);
       } else {
-        console.log(`✅ Found existing property: ${propertyName}`);
+        DebugLogger.debug(`✅ Found existing property: ${propertyName}`);
       }
     }
 
     if (Object.keys(missingProperties).length === 0) {
-      console.log(`✅ All required grading properties exist in database`);
+      DebugLogger.debug(`✅ All required grading properties exist in database`);
     } else {
-      console.log(`📝 Will add ${Object.keys(missingProperties).length} missing properties:`, Object.keys(missingProperties));
+      DebugLogger.debug(`📝 Will add ${Object.keys(missingProperties).length} missing properties:`, Object.keys(missingProperties));
     }
 
     return missingProperties;

@@ -2,6 +2,8 @@ import express from "express";
 import cors from "cors";
 import fetch from "node-fetch";
 import dotenv from "dotenv";
+import fs from "fs";
+import path from "path";
 
 dotenv.config();
 
@@ -33,6 +35,44 @@ if (!NOTION_CLIENT_SECRET) {
 }
 
 const pendingTokens = new Map();
+
+// Helper functions to load HTML templates
+function loadTemplate(templateName) {
+  const templatePath = path.join(process.cwd(), 'templates', `${templateName}.html`);
+  try {
+    return fs.readFileSync(templatePath, 'utf8');
+  } catch (error) {
+    console.warn(`Could not load template ${templateName}.html:`, error.message);
+    return null;
+  }
+}
+
+function getSuccessPage() {
+  const template = loadTemplate('success');
+  return template || `
+    <html>
+      <body style="font-family: sans-serif; text-align: center; padding: 3rem;">
+        <h2>Notion authorization complete</h2>
+        <p>You can return to the CLI.</p>
+      </body>
+    </html>
+  `;
+}
+
+function getErrorPage(errorMessage) {
+  const template = loadTemplate('error');
+  if (template) {
+    return template.replace('{{ERROR_MESSAGE}}', errorMessage || 'Unknown error occurred');
+  }
+  return `
+    <html>
+      <body style="font-family: sans-serif; text-align: center; padding: 3rem;">
+        <h2>Token exchange failed</h2>
+        <pre style="text-align: left; background: #f5f5f5; padding: 1rem; border-radius: 4px;">${errorMessage || 'Unknown error occurred'}</pre>
+      </body>
+    </html>
+  `;
+}
 
 app.get("/health", (req, res) => {
   res.json({ ok: true });
@@ -97,26 +137,16 @@ app.get("/callback", async (req, res) => {
 
     if (!response.ok) {
       const text = await response.text();
-      return res
-        .status(500)
-        .send(
-          `<html><body><h2>Token exchange failed</h2><pre>${text}</pre></body></html>`
-        );
+      return res.status(500).send(getErrorPage(text));
     }
 
     const data = await response.json();
     if (state && pendingTokens.has(state)) {
       pendingTokens.set(state, data);
     }
-    res.send(
-      "<html><body><h2>Notion authorization complete</h2><p>You can return to the CLI.</p></body></html>"
-    );
+    res.send(getSuccessPage());
   } catch (error) {
-    res
-      .status(500)
-      .send(
-        `<html><body><h2>Token exchange error</h2><pre>${error.message}</pre></body></html>`
-      );
+    res.status(500).send(getErrorPage(error.message));
   }
 });
 

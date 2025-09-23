@@ -3,6 +3,7 @@ import { NotionOAuthClient } from "./oauth-client.js";
 import { NotionSchemaMapper } from "./schema-mapper.js";
 import { GradingResult } from "../file-saver.js";
 import { ConflictDetector, ConflictDetectionResult, OverrideDecision } from "./conflict-detector.js";
+import { DebugLogger } from "../debug-logger.js";
 
 export interface DatabaseCreationOptions {
   title?: string;
@@ -26,16 +27,16 @@ export class GradingDatabaseService {
     sourceDatabaseId?: string,
     options: DatabaseCreationOptions & { skipGithubUrlColumn?: string; processingMode?: 'code' | 'browser' | 'both' } = {}
   ): Promise<{ databaseId: string; created: boolean; updated: boolean }> {
-    console.log(`🏗️ Ensuring grading database exists...`);
-    console.log(`📊 Processing mode: ${options.processingMode || 'both'}`);
+    DebugLogger.debug(`🏗️ Ensuring grading database exists...`);
+    DebugLogger.debug(`📊 Processing mode: ${options.processingMode || 'both'}`);
 
     try {
       if (sourceDatabaseId) {
-        console.log(`🔧 Using existing database: ${sourceDatabaseId}`);
+        DebugLogger.debug(`🔧 Using existing database: ${sourceDatabaseId}`);
         // Check existing database and update schema if needed
         return await this.updateExistingDatabase(sourceDatabaseId, options);
       } else {
-        console.log(`🆕 Creating new grading database`);
+        DebugLogger.debug(`🆕 Creating new grading database`);
         // Create new database
         return await this.createNewGradingDatabase(options);
       }
@@ -46,78 +47,68 @@ export class GradingDatabaseService {
   }
 
   /**
-   * Check for conflicts before saving grading results
+   * Check if grading fields exist in database schema (simplified approach)
    */
-  async checkForConflicts(
+  async checkForExistingGradingFields(
     databaseId: string,
-    results: GradingResult[],
-    githubUrlColumnName?: string,
-    browserTestResults?: any[],
     processingMode: 'code' | 'browser' | 'both' = 'both'
-  ): Promise<ConflictDetectionResult[]> {
-    // Get the existing database properties
-    const databaseProperties = await this.notionService.getDatabaseProperties(
-      databaseId
-    );
-    const titlePropertyName = Object.keys(databaseProperties).find(
-      (key) => databaseProperties[key].type === "title"
-    );
+  ): Promise<{ hasExistingFields: boolean; existingFields: string[] }> {
+    // Get database properties to check what fields exist
+    const databaseProperties = await this.notionService.getDatabaseProperties(databaseId);
     const availableProperties = new Set(Object.keys(databaseProperties));
 
-    // Prepare updates for conflict checking
-    const updatesForConflictCheck: Array<{
-      pageId: string;
-      properties: Record<string, any>;
-      repositoryName: string;
-    }> = [];
+    // Get grading field mappings based on processing mode
+    const gradingFields = this.getGradingFieldMappings(processingMode);
 
-    for (const result of results) {
-      if (result.pageId) { // Only check conflicts for updates, not new entries
-        // Find matching browser test result for this repository
-        const matchingBrowserTest = browserTestResults?.find(browserTest =>
-          browserTest.pageId === result.pageId ||
-          browserTest.url?.includes(result.repositoryName.replace('/', '-'))
-        );
+    // Check which grading fields already exist
+    const existingFields = Object.keys(gradingFields).filter(fieldName =>
+      availableProperties.has(fieldName)
+    );
 
-        const allProperties =
-          NotionSchemaMapper.transformGradingDataToNotionProperties(
-            result.gradingData,
-            result.repositoryName,
-            result.githubUrl,
-            titlePropertyName,
-            githubUrlColumnName,
-            true, // isUpdate
-            matchingBrowserTest,
-            result.error,
-            processingMode
-          );
-
-        // Only include properties that actually exist in the database
-        const filteredProperties: Record<string, any> = {};
-        for (const [key, value] of Object.entries(allProperties)) {
-          if (availableProperties.has(key)) {
-            filteredProperties[key] = value;
-          }
-        }
-
-        updatesForConflictCheck.push({
-          pageId: result.pageId,
-          properties: filteredProperties,
-          repositoryName: result.repositoryName
-        });
-      }
-    }
-
-    return await this.conflictDetector.checkBatchConflicts(updatesForConflictCheck);
+    return {
+      hasExistingFields: existingFields.length > 0,
+      existingFields
+    };
   }
 
   /**
-   * Save grading results to database with conflict resolution
+   * Get mapping of grading field names based on processing mode
    */
-  async saveGradingResultsWithConflictResolution(
+  private getGradingFieldMappings(processingMode: 'code' | 'browser' | 'both' = 'both'): Record<string, string> {
+    const baseFields = {
+      'Processing Status': 'Processing Status',
+      'Processing Error': 'Processing Error'
+    };
+
+    if (processingMode === 'code' || processingMode === 'both') {
+      Object.assign(baseFields, {
+        'Developer Feedback': 'Developer Feedback',
+        'Repo Explained': 'Repository Explanation',
+        'Grade': 'Grade'
+      });
+    }
+
+    if (processingMode === 'browser' || processingMode === 'both') {
+      Object.assign(baseFields, {
+        'Browser Test Results': 'Browser Test Results',
+        'Browser Test Status': 'Browser Test Status',
+        'Browser Test Screenshots': 'Browser Test Screenshots',
+        'Browser Test Actions': 'Browser Test Actions',
+        'Browser Test Duration': 'Browser Test Duration',
+        'Browser Test Errors': 'Browser Test Errors'
+      });
+    }
+
+    return baseFields;
+  }
+
+  /**
+   * Save grading results to database (simplified without complex conflict resolution)
+   */
+  async saveGradingResultsWithOverride(
     databaseId: string,
     results: GradingResult[],
-    overrideDecisions: Map<string, OverrideDecision[]>,
+    overrideExistingData: boolean,
     githubUrlColumnName?: string,
     browserTestResults?: any[],
     processingMode: 'code' | 'browser' | 'both' = 'both'
@@ -166,13 +157,10 @@ export class GradingDatabaseService {
           }
         }
 
-        // Apply override decisions if this is an update with conflicts
-        if (isUpdate && result.pageId && overrideDecisions.has(result.pageId)) {
-          const decisions = overrideDecisions.get(result.pageId)!;
-          filteredProperties = this.conflictDetector.applyOverrideDecisions(
-            filteredProperties,
-            decisions
-          );
+        // Simple override logic: if overrideExistingData is false and this is an update, skip it
+        if (isUpdate && result.pageId && !overrideExistingData) {
+          // Skip updating existing entries if override is disabled
+          continue;
         }
 
         if (isUpdate && result.pageId) {
@@ -210,9 +198,10 @@ export class GradingDatabaseService {
     browserTestResults?: any[],
     processingMode: 'code' | 'browser' | 'both' = 'both'
   ): Promise<{ success: number; failed: number; errors: string[] }> {
-    console.log(`💾 Starting to save ${results.length} grading results to database ${databaseId}`);
-    console.log(`🔧 Processing mode: ${processingMode}`);
+    console.log(`💾 Saving ${results.length} grading results to Notion database...`);
+    DebugLogger.debug(`🔧 Processing mode: ${processingMode}`);
 
+    const overallStartTime = Date.now();
     const errors: string[] = [];
     let success = 0;
     let failed = 0;
@@ -230,79 +219,85 @@ export class GradingDatabaseService {
       );
       const availableProperties = new Set(Object.keys(databaseProperties));
 
-      console.log(`📋 Available database properties: ${Array.from(availableProperties).join(', ')}`);
+      DebugLogger.debug(`📋 Available database properties: ${Array.from(availableProperties).join(', ')}`);
 
-      for (const result of results) {
-        try {
-          const isUpdate = !!result.pageId;
-          console.log(`💾 Processing ${result.repositoryName} (${isUpdate ? 'update' : 'create'})`);
+      // Use batched parallel processing for better performance
+      const BATCH_SIZE = 3; // Respect Notion API rate limit of 3 requests/second
+      const DELAY_BETWEEN_BATCHES = 1000; // 1 second delay between batches
+      const totalBatches = Math.ceil(results.length / BATCH_SIZE);
 
-          // Find matching browser test result for this repository
-          const matchingBrowserTest = browserTestResults?.find(browserTest =>
-            browserTest.pageId === result.pageId ||
-            browserTest.url?.includes(result.repositoryName.replace('/', '-'))
-          );
+      DebugLogger.debug(`🚀 Starting batched parallel processing: ${results.length} repositories in ${totalBatches} batches`);
 
-          const allProperties =
-            NotionSchemaMapper.transformGradingDataToNotionProperties(
-              result.gradingData,
-              result.repositoryName,
-              result.githubUrl,
-              titlePropertyName,
-              githubUrlColumnName,
-              isUpdate,
-              matchingBrowserTest,
-              result.error,
-              processingMode
-            );
+      for (let i = 0; i < results.length; i += BATCH_SIZE) {
+        const batch = results.slice(i, i + BATCH_SIZE);
+        const batchNumber = Math.floor(i / BATCH_SIZE) + 1;
+        const startIndex = i;
 
-          console.log(`📝 Generated ${Object.keys(allProperties).length} properties for ${result.repositoryName}`);
+        DebugLogger.debug(`📦 Processing batch ${batchNumber}/${totalBatches} (${batch.length} repositories)...`);
 
-          // Only include properties that actually exist in the database
-          const filteredProperties: Record<string, any> = {};
-          const missingProperties: string[] = [];
+        // Show batch start info
+        const batchRepoNames = batch.map(r => r.repositoryName).join(', ');
+        DebugLogger.debug(`🚀 Starting batch ${batchNumber}: ${batchRepoNames}`);
 
-          for (const [key, value] of Object.entries(allProperties)) {
-            if (availableProperties.has(key)) {
-              filteredProperties[key] = value;
-            } else {
-              missingProperties.push(key);
-            }
-          }
+        // Process batch in parallel using Promise.allSettled
+        const batchStartTime = Date.now();
+        const batchPromises = batch.map((result, batchIndex) =>
+          this.processSingleResult(
+            result,
+            databaseId,
+            titlePropertyName,
+            githubUrlColumnName,
+            availableProperties,
+            browserTestResults,
+            processingMode,
+            startIndex + batchIndex + 1,
+            results.length
+          )
+        );
 
-          if (missingProperties.length > 0) {
-            console.log(`⚠️ Some properties are missing from database and will be skipped: ${missingProperties.join(', ')}`);
-          }
+        const batchResults = await Promise.allSettled(batchPromises);
+        const batchDuration = Date.now() - batchStartTime;
 
-          console.log(`📝 Using ${Object.keys(filteredProperties).length} properties for ${result.repositoryName}`);
+        // Process batch results with detailed feedback
+        let batchSuccess = 0;
+        let batchFailed = 0;
 
-          if (isUpdate && result.pageId) {
-            // Update existing row
-            console.log(`🔄 Updating existing row ${result.pageId} for ${result.repositoryName}`);
-            await this.notionService.updateDatabaseEntry(
-              result.pageId,
-              filteredProperties
-            );
-            console.log(`✅ Successfully updated ${result.repositoryName}`);
+        batchResults.forEach((batchResult, batchIndex) => {
+          const result = batch[batchIndex];
+          if (batchResult.status === 'fulfilled') {
+            batchSuccess++;
+            success++;
           } else {
-            // Create new row
-            console.log(`🆕 Creating new row for ${result.repositoryName}`);
-            const newEntry = await this.notionService.createDatabaseEntry(
-              databaseId,
-              filteredProperties
-            );
-            console.log(`✅ Successfully created ${result.repositoryName} with ID: ${newEntry.id}`);
+            batchFailed++;
+            failed++;
+            const errorMessage = `Failed to save ${result.repositoryName}: ${batchResult.reason?.message || batchResult.reason}`;
+            DebugLogger.debug(`❌ Error: ${errorMessage}`);
+            errors.push(errorMessage);
           }
-          success++;
-        } catch (error: any) {
-          failed++;
-          const errorMessage = `Failed to save ${result.repositoryName}: ${error.message}`;
-          console.log(`❌ ${errorMessage}`);
-          errors.push(errorMessage);
+        });
+
+        // Show batch completion summary
+        const completedCount = Math.min(i + BATCH_SIZE, results.length);
+        const progressPercent = Math.round((completedCount / results.length) * 100);
+        const remainingCount = results.length - completedCount;
+        const avgTimePerRepo = batchDuration / batch.length;
+        const estimatedTimeRemaining = remainingCount > 0 ? Math.round((remainingCount * avgTimePerRepo) / 1000) : 0;
+
+        DebugLogger.debug(`✅ Batch ${batchNumber} completed in ${batchDuration}ms (${batchSuccess} success, ${batchFailed} failed)`);
+        DebugLogger.debug(`📊 Overall Progress: ${completedCount}/${results.length} (${progressPercent}%) | Success: ${success} | Failed: ${failed}`);
+
+        if (remainingCount > 0) {
+          DebugLogger.debug(`⏱️ Estimated time remaining: ~${estimatedTimeRemaining}s (${Math.ceil(remainingCount / BATCH_SIZE)} batches left)`);
+        }
+
+        // Wait before next batch (if more remain)
+        if (i + BATCH_SIZE < results.length) {
+          DebugLogger.debug(`⏳ Waiting ${DELAY_BETWEEN_BATCHES}ms before next batch...`);
+          await new Promise(resolve => setTimeout(resolve, DELAY_BETWEEN_BATCHES));
         }
       }
     } catch (error: any) {
-      console.log(`❌ Database validation failed: ${error.message}`);
+      DebugLogger.debug(`❌ Database validation failed: ${error.message}`);
       return {
         success: 0,
         failed: results.length,
@@ -310,7 +305,25 @@ export class GradingDatabaseService {
       };
     }
 
-    console.log(`📊 Save results: ${success} succeeded, ${failed} failed`);
+    // Final performance summary
+    const totalDuration = Date.now() - overallStartTime;
+    const totalDurationSeconds = Math.round(totalDuration / 1000);
+    const avgTimePerRepo = success > 0 ? Math.round(totalDuration / success) : 0;
+
+    console.log(`✅ Saved ${success} results to Notion database${failed > 0 ? ` (${failed} failed)` : ''}`);
+
+    DebugLogger.debug(`\n🏁 Batch processing completed in ${totalDurationSeconds}s!`);
+    DebugLogger.debug(`📊 Final Results: ${success} succeeded, ${failed} failed out of ${results.length} repositories`);
+
+    if (success > 0) {
+      DebugLogger.debug(`⚡ Performance: Processed ${success} repositories in ${totalDurationSeconds}s (${avgTimePerRepo}ms/repo avg)`);
+      DebugLogger.debug(`📈 Efficiency: ~3 repositories processed concurrently per batch with 1000ms delays`);
+    }
+
+    if (errors.length > 0) {
+      console.log(`⚠️ ${errors.length} repositories failed to save`);
+    }
+
     return { success, failed, errors };
   }
 
@@ -321,7 +334,7 @@ export class GradingDatabaseService {
     databaseId: string,
     processingMode: 'code' | 'browser' | 'both'
   ): Promise<void> {
-    console.log(`🔍 Validating database ${databaseId} for processing mode: ${processingMode}`);
+    DebugLogger.debug(`🔍 Validating database ${databaseId} for processing mode: ${processingMode}`);
 
     const databaseProperties = await this.notionService.getDatabaseProperties(databaseId);
     const missingProperties = NotionSchemaMapper.getMissingGradingProperties(
@@ -330,11 +343,68 @@ export class GradingDatabaseService {
     );
 
     if (Object.keys(missingProperties).length > 0) {
-      console.log(`❌ Database is missing required columns: ${Object.keys(missingProperties).join(', ')}`);
+      DebugLogger.debug(`❌ Database is missing required columns: ${Object.keys(missingProperties).join(', ')}`);
       throw new Error(`Database is missing required grading columns: ${Object.keys(missingProperties).join(', ')}. Please run the schema update step first.`);
     }
 
-    console.log(`✅ Database validation passed - all required columns present`);
+    DebugLogger.debug(`✅ Database validation passed - all required columns present`);
+  }
+
+  /**
+   * Process a single grading result for batched parallel processing
+   */
+  private async processSingleResult(
+    result: GradingResult,
+    databaseId: string,
+    titlePropertyName?: string,
+    githubUrlColumnName?: string,
+    availableProperties?: Set<string>,
+    browserTestResults?: any[],
+    processingMode: 'code' | 'browser' | 'both' = 'both',
+    index?: number,
+    total?: number
+  ): Promise<void> {
+    const isUpdate = !!result.pageId;
+
+    // Find matching browser test result for this repository
+    const matchingBrowserTest = browserTestResults?.find(browserTest =>
+      browserTest.pageId === result.pageId ||
+      browserTest.url?.includes(result.repositoryName.replace('/', '-'))
+    );
+
+    const allProperties = NotionSchemaMapper.transformGradingDataToNotionProperties(
+      result.gradingData,
+      result.repositoryName,
+      result.githubUrl,
+      titlePropertyName,
+      githubUrlColumnName,
+      isUpdate,
+      matchingBrowserTest,
+      result.error,
+      processingMode
+    );
+
+    // Only include properties that actually exist in the database
+    const filteredProperties: Record<string, any> = {};
+    if (availableProperties) {
+      for (const [key, value] of Object.entries(allProperties)) {
+        if (availableProperties.has(key)) {
+          filteredProperties[key] = value;
+        }
+      }
+    } else {
+      Object.assign(filteredProperties, allProperties);
+    }
+
+    const progressText = index && total ? ` (${index}/${total})` : '';
+
+    if (isUpdate && result.pageId) {
+      DebugLogger.debug(`🔄 Updating existing entry for ${result.repositoryName}${progressText}...`);
+      await this.notionService.updateDatabaseEntry(result.pageId, filteredProperties);
+    } else {
+      DebugLogger.debug(`✨ Creating new entry for ${result.repositoryName}${progressText}...`);
+      await this.notionService.createDatabaseEntry(databaseId, filteredProperties);
+    }
   }
 
   /**
@@ -429,15 +499,15 @@ export class GradingDatabaseService {
     databaseId: string,
     options: { skipGithubUrlColumn?: string; processingMode?: 'code' | 'browser' | 'both' } = {}
   ): Promise<{ databaseId: string; created: boolean; updated: boolean }> {
-    console.log(`🔧 Updating existing database ${databaseId} for processing mode: ${options.processingMode || 'both'}`);
+    DebugLogger.debug(`🔧 Updating existing database ${databaseId} for processing mode: ${options.processingMode || 'both'}`);
 
     try {
-      console.log(`📋 Getting existing database properties...`);
+      DebugLogger.debug(`📋 Getting existing database properties...`);
       const existingProperties = await this.notionService.getDatabaseProperties(
         databaseId
       );
 
-      console.log(`🔍 Checking for missing grading properties...`);
+      DebugLogger.debug(`🔍 Checking for missing grading properties...`);
       const missingProperties = NotionSchemaMapper.getMissingGradingProperties(
         existingProperties,
         {
@@ -447,7 +517,7 @@ export class GradingDatabaseService {
       );
 
       if (Object.keys(missingProperties).length > 0) {
-        console.log(`🔧 Updating database schema with ${Object.keys(missingProperties).length} missing properties`);
+        console.log(`🔧 Adding ${Object.keys(missingProperties).length} required database columns...`);
 
         // Update database with missing properties
         await this.notionService.updateDatabaseSchema(
@@ -455,12 +525,12 @@ export class GradingDatabaseService {
           missingProperties
         );
 
-        console.log(`✅ Database schema successfully updated`);
+        console.log(`✅ Database schema updated successfully`);
         return { databaseId, created: false, updated: true };
       }
 
       // Database already has all required properties
-      console.log(`✅ Database already has all required properties - no update needed`);
+      DebugLogger.debug(`✅ Database already has all required properties - no update needed`);
       return { databaseId, created: false, updated: false };
     } catch (error: any) {
       console.log(`❌ Failed to update database schema: ${error.message}`);
