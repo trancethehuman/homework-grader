@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import dotenv from "dotenv";
-import { InteractiveCSV } from "./interactive-csv.js";
+import { InteractiveCSV } from "./interactive-cli.js";
 import { safeRender, shouldUseInteractiveMode } from "./lib/ink-utils.js";
 import { GitHubService } from "./github/github-service.js";
 import { SandboxService } from "./lib/sandbox/index.js";
@@ -23,7 +23,7 @@ async function processGitHubUrlsWithGitHubAPI(
   aiProvider?: AIProvider
 ) {
   // Get max depth from environment variable, default to 5
-  const maxDepth = parseInt(process.env.GITHUB_MAX_DEPTH || '5', 10);
+  const maxDepth = parseInt(process.env.GITHUB_MAX_DEPTH || "5", 10);
   const githubService = new GitHubService(githubToken, undefined, maxDepth);
   const provider = aiProvider || DEFAULT_PROVIDER;
 
@@ -64,7 +64,7 @@ async function processGitHubUrlsWithGitHubAPI(
             `Fetching repository structure from ${repoInfo.owner}/${repoInfo.repo}...`
           );
           const result = await githubService.processGitHubUrl(url, provider);
-          
+
           await saveRepositoryFiles(repoInfo, result, url);
         }
       } catch (error) {
@@ -119,7 +119,7 @@ async function processGitHubUrlsWithE2BSandbox(
       console.log("\n" + "=".repeat(60));
       console.log("🚀 E2B SANDBOX PROCESSING MODE");
       console.log("=".repeat(60));
-      
+
       await sandboxService.initialize();
 
       console.log("\n" + "=".repeat(60));
@@ -162,19 +162,34 @@ async function processGitHubUrls(
   aiProvider?: AIProvider
 ) {
   // Default to E2B Sandbox, fallback to GitHub API if GITHUB_API_ONLY is set or no E2B key
-  const useGitHubAPI = process.env.GITHUB_API_ONLY === 'true' || !e2bApiKey;
+  const useGitHubAPI = process.env.GITHUB_API_ONLY === "true" || !e2bApiKey;
 
   if (useGitHubAPI) {
-    await processGitHubUrlsWithGitHubAPI(urls, columnName, githubToken, aiProvider);
+    await processGitHubUrlsWithGitHubAPI(
+      urls,
+      columnName,
+      githubToken,
+      aiProvider
+    );
   } else {
     try {
-      await processGitHubUrlsWithE2BSandbox(urls, columnName, e2bApiKey, aiProvider);
+      await processGitHubUrlsWithE2BSandbox(
+        urls,
+        columnName,
+        e2bApiKey,
+        aiProvider
+      );
     } catch (error) {
-      console.error('\n⚠️  E2B Sandbox processing failed:', error);
-      console.log('\n🔄 Falling back to GitHub API approach...\n');
-      
+      console.error("\n⚠️  E2B Sandbox processing failed:", error);
+      console.log("\n🔄 Falling back to GitHub API approach...\n");
+
       // Fallback to GitHub API
-      await processGitHubUrlsWithGitHubAPI(urls, columnName, githubToken, aiProvider);
+      await processGitHubUrlsWithGitHubAPI(
+        urls,
+        columnName,
+        githubToken,
+        aiProvider
+      );
     }
   }
 }
@@ -182,9 +197,8 @@ async function processGitHubUrls(
 async function main() {
   // Clear the terminal on startup
   console.clear();
-  
-  const args = process.argv.slice(2);
 
+  const args = process.argv.slice(2);
 
   // Check if a CSV file was provided as argument (legacy mode)
   if (args.length > 0 && !args[0].startsWith("--")) {
@@ -205,7 +219,7 @@ async function main() {
         process.env.E2B_API_KEY,
         DEFAULT_PROVIDER
       );
-      
+
       // Show update notification at the end
       updateChecker.showUpdateNotificationAtExit();
     } catch (error) {
@@ -219,9 +233,11 @@ async function main() {
   } else {
     // Interactive mode - check if environment supports it
     if (!shouldUseInteractiveMode()) {
-      console.error('\n❌ Interactive mode is not supported in this environment.');
-      console.error('Please use command-line arguments instead:');
-      console.error('   homework-grader <csv-file>');
+      console.error(
+        "\n❌ Interactive mode is not supported in this environment."
+      );
+      console.error("Please use command-line arguments instead:");
+      console.error("   homework-grader <csv-file>");
       updateChecker.showUpdateNotificationAtExit();
       process.exit(1);
     }
@@ -229,9 +245,22 @@ async function main() {
     try {
       const app = await safeRender(
         <InteractiveCSV
-          onComplete={async (filePath, columnName, urls, githubToken, e2bApiKey, aiProvider) => {
+          onComplete={async (
+            filePath,
+            columnName,
+            urls,
+            githubToken,
+            e2bApiKey,
+            aiProvider
+          ) => {
             app.unmount();
-            await processGitHubUrls(urls, columnName, githubToken, e2bApiKey, aiProvider);
+            await processGitHubUrls(
+              urls,
+              columnName,
+              githubToken,
+              e2bApiKey,
+              aiProvider
+            );
             // Show update notification at the end
             updateChecker.showUpdateNotificationAtExit();
           }}
@@ -245,17 +274,27 @@ async function main() {
       );
     } catch (inkError) {
       // If Ink completely fails, provide fallback instructions
-      console.error('\n❌ Interactive mode failed to initialize.');
-      console.error('   This usually happens when running in an unsupported environment.');
-      console.error('\n💡 Fallback options:');
-      console.error('   1. Use command-line mode: homework-grader <csv-file>');
-      console.error('   2. Try running in a different terminal');
-      console.error('   3. Check if you\'re running inside an IDE or script environment');
-      console.error('\n📄 For CSV processing, create a CSV file with GitHub URLs and run:');
-      console.error('   homework-grader your-file.csv');
-      console.error('\n🔗 For OAuth authentication, you can still authenticate manually by:');
-      console.error('   • Setting environment variables (GITHUB_TOKEN, E2B_API_KEY)');
-      console.error('   • Running in a proper terminal environment');
+      console.error("\n❌ Interactive mode failed to initialize.");
+      console.error(
+        "   This usually happens when running in an unsupported environment."
+      );
+      console.error("\n💡 Fallback options:");
+      console.error("   1. Use command-line mode: homework-grader <csv-file>");
+      console.error("   2. Try running in a different terminal");
+      console.error(
+        "   3. Check if you're running inside an IDE or script environment"
+      );
+      console.error(
+        "\n📄 For CSV processing, create a CSV file with GitHub URLs and run:"
+      );
+      console.error("   homework-grader your-file.csv");
+      console.error(
+        "\n🔗 For OAuth authentication, you can still authenticate manually by:"
+      );
+      console.error(
+        "   • Setting environment variables (GITHUB_TOKEN, E2B_API_KEY)"
+      );
+      console.error("   • Running in a proper terminal environment");
 
       updateChecker.showUpdateNotificationAtExit();
       process.exit(1);

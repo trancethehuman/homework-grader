@@ -38,11 +38,13 @@ This is a homework grading system repository with TypeScript URL loading functio
 **CRITICAL**: In the 2025-09-03 API version, the traditional `databases.query()` method is deprecated. Database content must be queried using the Data Source API.
 
 #### **API Endpoint**
+
 ```
 POST https://api.notion.com/v1/data_sources/{data_source_id}/query
 ```
 
 #### **Authentication & Headers**
+
 ```json
 {
   "Authorization": "Bearer {access_token}",
@@ -52,6 +54,7 @@ POST https://api.notion.com/v1/data_sources/{data_source_id}/query
 ```
 
 #### **Request Structure**
+
 ```json
 {
   "filter": {
@@ -75,6 +78,7 @@ POST https://api.notion.com/v1/data_sources/{data_source_id}/query
 ```
 
 #### **Response Structure**
+
 ```json
 {
   "object": "list",
@@ -97,30 +101,36 @@ POST https://api.notion.com/v1/data_sources/{data_source_id}/query
 #### **Key Implementation Requirements**
 
 1. **Data Source ID Discovery**: Each database has a `data_sources` array containing the data source IDs needed for querying
+
    ```typescript
    // Get database object first
    const database = await notion.databases.retrieve(databaseId);
    // Use the data source IDs from the database
-   const dataSourceIds = database.data_sources.map(ds => ds.id);
+   const dataSourceIds = database.data_sources.map((ds) => ds.id);
    ```
 
 2. **Individual Data Source Queries**: Query each data source separately and combine results
+
    ```typescript
    for (const dataSourceId of dataSourceIds) {
      const response = await notion.request({
        path: `data_sources/${dataSourceId}/query`,
-       method: 'POST',
-       body: { /* query parameters */ }
+       method: "POST",
+       body: {
+         /* query parameters */
+       },
      });
    }
    ```
 
 3. **Filtering**: Supports complex filters similar to Notion UI
+
    - Property-based filters (text, number, date, select, checkbox, etc.)
    - Logical operators: `and`, `or`
    - Comparison operators: `equals`, `contains`, `starts_with`, `is_empty`, etc.
 
 4. **Pagination**: Use `start_cursor` and `page_size` for large datasets
+
    - Default page size: 100 items
    - Maximum page size: 100 items
    - Use `next_cursor` from response for subsequent requests
@@ -131,17 +141,20 @@ POST https://api.notion.com/v1/data_sources/{data_source_id}/query
    - **400**: Invalid request structure or parameters
 
 #### **Permissions Requirements**
+
 - Integration must have **read content capabilities**
 - Parent database must be **shared with the integration**
 - For wiki data sources: may contain both pages and databases
 
 #### **Performance Considerations**
+
 - Each data source query is a separate API call
 - Implement proper rate limiting (3 requests per second)
 - Cache data source IDs to avoid repeated database.retrieve() calls
 - Use pagination for large datasets to avoid timeouts
 
 #### **Migration from Legacy API**
+
 ```typescript
 // OLD (deprecated in 2025-09-03):
 await notion.databases.query({ database_id: databaseId });
@@ -152,8 +165,10 @@ const results = [];
 for (const dataSource of database.data_sources) {
   const response = await notion.request({
     path: `data_sources/${dataSource.id}/query`,
-    method: 'POST',
-    body: { /* filters, sorts, pagination */ }
+    method: "POST",
+    body: {
+      /* filters, sorts, pagination */
+    },
   });
   results.push(...response.results);
 }
@@ -410,7 +425,7 @@ The codebase includes:
   - **Confidence Scoring**: Provides 0-100% confidence scores for URL column candidates
   - **Sample Preview**: Shows sample URLs for verification before testing begins
 
-- **Interactive CSV Component** (`src/interactive-csv.tsx`)
+- **Interactive CSV Component** (`src/interactive-cli.tsx`)
 
   - React/Ink based interactive CLI interface
   - Multi-step workflow: token setup → CSV input → column selection → processing
@@ -438,6 +453,7 @@ The codebase includes:
 ### Notion Data Conflict Protection
 
 - **ConflictDetector Class** (`src/lib/notion/conflict-detector.ts`)
+
   - **NEW**: Intelligent detection of existing grading data before updates
   - **Cell-Level Conflict Checking**: Checks if grading columns already contain data
   - **Batch Conflict Processing**: Efficiently processes multiple repository updates
@@ -446,6 +462,7 @@ The codebase includes:
   - **Override Decision Support**: Applies user choices for keep/replace/skip actions
 
 - **OverrideConfirmation Component** (`src/components/notion/override-confirmation.tsx`)
+
   - **NEW**: Interactive UI for resolving data conflicts
   - **Bulk Action Options**: Replace all, keep all, field-by-field review, or cancel
   - **Detailed Conflict View**: Shows existing vs new values for each field
@@ -627,6 +644,7 @@ The codebase includes:
 ### Notion API Development Rules
 
 **ALWAYS fetch and read the official Notion API documentation before writing or making any changes regarding Notion integration**. This is critical because:
+
 - The Notion API is actively evolving (especially the 2025-09-03 version)
 - Implementation details change between API versions
 - Official documentation provides the most accurate and up-to-date information
