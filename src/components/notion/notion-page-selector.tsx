@@ -9,6 +9,7 @@ import { SearchInput } from "../ui/search-input.js";
 import { NotionOAuthClient } from "../../lib/notion/oauth-client.js";
 import { NotionTokenStorage } from "../../lib/notion/notion-token-storage.js";
 import { BackButton, useBackNavigation } from "../ui/back-button.js";
+import { ApiTimeoutHandler, TimeoutError, CircuitBreakerError } from "../../lib/notion/api-timeout-handler.js";
 
 interface NotionPageSelectorProps {
   onSelect: (pageId: string, pageTitle: string, type: "page" | "database") => void;
@@ -86,44 +87,87 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
           return;
         }
 
-        // Otherwise fetch fresh data
+        // Otherwise fetch fresh data with enhanced timeout and error handling
         const oauth = new NotionOAuthClient();
-        await oauth.refreshIfPossible();
-        const token = await oauth.ensureAuthenticated();
+
+        // Refresh token if possible with timeout
+        await ApiTimeoutHandler.withTimeout(async () => {
+          await oauth.refreshIfPossible();
+          return Promise.resolve();
+        }, {
+          timeoutMs: 30000, // 30 seconds for token refresh
+          retries: 1,
+          operation: 'Token Refresh'
+        });
+
+        // Ensure authentication with extended timeout for cold proxy
+        const token = await ApiTimeoutHandler.withTimeout(async () => {
+          return await oauth.ensureAuthenticated();
+        }, {
+          timeoutMs: 120000, // 2 minutes for full OAuth flow (includes cold proxy startup)
+          retries: 1,
+          operation: 'OAuth Authentication'
+        });
+
         const notionService = new NotionService(token.access_token);
 
-        const [pagesData, databasesData] = await Promise.all([
-          notionService.getAllPages(),
-          notionService.getAllDatabases(),
-        ]);
+        // Fetch data with concurrent timeout handling
+        const [pagesData, databasesData] = await ApiTimeoutHandler.withConcurrentTimeout([
+          () => notionService.getAllPages(),
+          () => notionService.getAllDatabases()
+        ], {
+          timeoutMs: 45000, // 45 seconds total for data fetching
+          retries: 1,
+          operation: 'Notion Data Loading'
+        });
 
-        setPages(pagesData);
-        setDatabases(databasesData);
+        setPages(pagesData as NotionPage[]);
+        setDatabases(databasesData as NotionDatabase[]);
         setError(null);
 
         // Cache the data for future use
-        onDataLoaded?.(pagesData, databasesData);
+        onDataLoaded?.(pagesData as NotionPage[], databasesData as NotionDatabase[]);
       } catch (err) {
-        const errorMessage =
-          err instanceof Error ? err.message : "Failed to load Notion data";
+        let errorMessage = "Failed to load Notion data";
+        let shouldRetriggerAuth = false;
+
+        if (err instanceof TimeoutError) {
+          errorMessage = `Operation timed out: ${err.message}\n\nThis may be due to:\n• Slow network connection\n• Notion proxy server starting up (takes ~60s when idle)\n• Heavy load on Notion's API\n\nPlease try again in a moment.`;
+        } else if (err instanceof CircuitBreakerError) {
+          errorMessage = `Service temporarily unavailable: ${err.message}\n\nThe Notion API is experiencing issues. Please try again in a few minutes.`;
+        } else if (err instanceof Error) {
+          errorMessage = err.message;
+
+          // Check if this is an authentication error
+          if (err.message.includes("Token validation failed") ||
+              err.message.includes("API token is invalid") ||
+              err.message.includes("Unauthorized") ||
+              err.message.includes("401") ||
+              err.message.includes("403") ||
+              err.message.includes("expired") ||
+              err.message.includes("Invalid refresh token") ||
+              err.message.includes("OAuth")) {
+            shouldRetriggerAuth = true;
+            errorMessage = `Authentication failed: ${err.message}\n\nYour Notion token has expired or is invalid. Please re-authenticate.`;
+          } else if (err.message.includes("Failed to start OAuth") ||
+                     err.message.includes("OAuth polling failed") ||
+                     err.message.includes("OAuth timeout")) {
+            errorMessage = `Authentication service error: ${err.message}\n\nPossible causes:\n• Notion proxy server is starting up (~60s delay)\n• Network connectivity issues\n• Browser blocked the authentication popup\n\nTry again or check your network connection.`;
+          } else if (err.message.includes("fetch")) {
+            errorMessage = `Network error: ${err.message}\n\nPlease check your internet connection and try again.`;
+          }
+        }
+
         setError(errorMessage);
 
-        // Check if this is an authentication error
-        if (err instanceof Error && (
-          err.message.includes("Token validation failed") ||
-          err.message.includes("API token is invalid") ||
-          err.message.includes("Unauthorized") ||
-          err.message.includes("401") ||
-          err.message.includes("403") ||
-          err.message.includes("expired")
-        )) {
+        if (shouldRetriggerAuth && onAuthenticationRequired) {
           // Clear the invalid token and trigger re-authentication
-          if (onAuthenticationRequired) {
-            const tokenStorage = new NotionTokenStorage();
-            tokenStorage.clearToken();
+          const tokenStorage = new NotionTokenStorage();
+          tokenStorage.clearToken();
+          setTimeout(() => {
             onAuthenticationRequired();
-            return;
-          }
+          }, 1500); // Small delay to let user read the error message
+          return;
         }
 
         onError(errorMessage);

@@ -33,6 +33,17 @@ export const AI_PROVIDERS: AIProvider[] = [
     },
   },
   {
+    id: "gemini-pro",
+    name: "Gemini 2.5 Pro",
+    description: "Google Gemini's most capable model",
+    model: "gemini-2.5-pro",
+    contextWindowTokens: 1048576,
+    getModelInstance: async () => {
+      const { google } = await import("@ai-sdk/google");
+      return google("gemini-2.5-pro");
+    },
+  },
+  {
     id: "openai",
     name: "OpenAI GPT-4.1",
     description: "OpenAI's latest GPT-4.1 model",

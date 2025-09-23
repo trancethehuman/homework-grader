@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
 import dotenv from "dotenv";
-import { render } from "ink";
 import { InteractiveCSV } from "./interactive-csv.js";
+import { safeRender, shouldUseInteractiveMode } from "./lib/ink-utils.js";
 import { GitHubService } from "./github/github-service.js";
 import { SandboxService } from "./lib/sandbox/index.js";
 import { NUM_URLS_IN_PARALLEL } from "./consts/limits.js";
@@ -217,23 +217,49 @@ async function main() {
       process.exit(1);
     }
   } else {
-    // Interactive mode
-    const app = render(
-      <InteractiveCSV
-        onComplete={async (filePath, columnName, urls, githubToken, e2bApiKey, aiProvider) => {
-          app.unmount();
-          await processGitHubUrls(urls, columnName, githubToken, e2bApiKey, aiProvider);
-          // Show update notification at the end
-          updateChecker.showUpdateNotificationAtExit();
-        }}
-        onError={(error) => {
-          app.unmount();
-          console.error("Error:", error);
-          updateChecker.showUpdateNotificationAtExit();
-          process.exit(1);
-        }}
-      />
-    );
+    // Interactive mode - check if environment supports it
+    if (!shouldUseInteractiveMode()) {
+      console.error('\n❌ Interactive mode is not supported in this environment.');
+      console.error('Please use command-line arguments instead:');
+      console.error('   homework-grader <csv-file>');
+      updateChecker.showUpdateNotificationAtExit();
+      process.exit(1);
+    }
+
+    try {
+      const app = await safeRender(
+        <InteractiveCSV
+          onComplete={async (filePath, columnName, urls, githubToken, e2bApiKey, aiProvider) => {
+            app.unmount();
+            await processGitHubUrls(urls, columnName, githubToken, e2bApiKey, aiProvider);
+            // Show update notification at the end
+            updateChecker.showUpdateNotificationAtExit();
+          }}
+          onError={(error) => {
+            app.unmount();
+            console.error("Error:", error);
+            updateChecker.showUpdateNotificationAtExit();
+            process.exit(1);
+          }}
+        />
+      );
+    } catch (inkError) {
+      // If Ink completely fails, provide fallback instructions
+      console.error('\n❌ Interactive mode failed to initialize.');
+      console.error('   This usually happens when running in an unsupported environment.');
+      console.error('\n💡 Fallback options:');
+      console.error('   1. Use command-line mode: homework-grader <csv-file>');
+      console.error('   2. Try running in a different terminal');
+      console.error('   3. Check if you\'re running inside an IDE or script environment');
+      console.error('\n📄 For CSV processing, create a CSV file with GitHub URLs and run:');
+      console.error('   homework-grader your-file.csv');
+      console.error('\n🔗 For OAuth authentication, you can still authenticate manually by:');
+      console.error('   • Setting environment variables (GITHUB_TOKEN, E2B_API_KEY)');
+      console.error('   • Running in a proper terminal environment');
+
+      updateChecker.showUpdateNotificationAtExit();
+      process.exit(1);
+    }
   }
 }
 

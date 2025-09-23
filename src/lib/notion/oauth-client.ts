@@ -4,6 +4,7 @@ import {
   NotionOAuthToken,
 } from "./notion-token-storage.js";
 import { DebugLogger } from "../debug-logger.js";
+import { ApiTimeoutHandler, TimeoutConfig } from "./api-timeout-handler.js";
 
 const DEFAULT_PROXY_URL =
   process.env.NOTION_PROXY_URL || "https://notion-proxy-8xr3.onrender.com";
@@ -24,6 +25,14 @@ export class NotionOAuthClient {
     maxRetries: 3,
     baseDelayMs: 1000,
     maxDelayMs: 10000
+  };
+
+  // Timeout configurations for different OAuth operations
+  private readonly oauthTimeouts: Record<string, TimeoutConfig> = {
+    start: { timeoutMs: 10000, retries: 2, retryDelayMs: 1000, operation: 'OAuth Start' },
+    poll: { timeoutMs: 5000, retries: 1, retryDelayMs: 500, operation: 'OAuth Status Poll' },
+    refresh: { timeoutMs: 10000, retries: 2, retryDelayMs: 1000, operation: 'Token Refresh' },
+    browser: { timeoutMs: 5000, retries: 0, operation: 'Browser Open' }
   };
 
   constructor(proxyBaseUrl: string = DEFAULT_PROXY_URL) {
@@ -136,10 +145,16 @@ export class NotionOAuthClient {
       try {
         DebugLogger.debugAuth(`Attempting to refresh Notion token (${attempt}/${this.retryConfig.maxRetries})...`);
 
-        const res = await fetch(`${this.proxyBaseUrl}/refresh`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ refresh_token: existing.refresh_token }),
+        const res = await ApiTimeoutHandler.withTimeout(async () => {
+          return await fetch(`${this.proxyBaseUrl}/refresh`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ refresh_token: existing.refresh_token }),
+          });
+        }, {
+          timeoutMs: 60000, // 60 seconds to handle cold proxy startup
+          retries: 0, // We handle retries in the outer loop
+          operation: `Token Refresh Attempt ${attempt}`
         });
 
         if (!res.ok) {
@@ -150,6 +165,11 @@ export class NotionOAuthClient {
           if (res.status === 401 || res.status === 403) {
             // Invalid refresh token - don't retry
             DebugLogger.debugAuth("Invalid refresh token, clearing from storage");
+            this.storage.clearToken();
+            throw new Error("Refresh token is invalid or expired");
+          } else if (res.status === 500 && (errorText.includes("invalid_grant") || errorText.includes("unused token"))) {
+            // Special case: 500 error with invalid_grant for unused tokens - treat as invalid token
+            DebugLogger.debugAuth("Invalid grant error (unused token), clearing from storage");
             this.storage.clearToken();
             throw new Error("Refresh token is invalid or expired");
           } else if (res.status >= 500 && attempt < this.retryConfig.maxRetries) {
@@ -209,14 +229,127 @@ export class NotionOAuthClient {
   }
 
   private async performOAuth(): Promise<NotionOAuthToken> {
-    const startRes = await fetch(`${this.proxyBaseUrl}/auth/start`);
-    if (!startRes.ok) {
-      throw new Error(`Failed to start OAuth: ${startRes.status}`);
+    DebugLogger.debug('🔐 Starting OAuth authentication flow...');
+
+    // Start OAuth with extended timeout to handle cold proxy startup (up to 90 seconds)
+    const { authUrl, state } = await ApiTimeoutHandler.withTimeout(async () => {
+      DebugLogger.debug('🌐 Contacting OAuth proxy (may take up to 90s if server is cold)...');
+      const startRes = await fetch(`${this.proxyBaseUrl}/auth/start`);
+      if (!startRes.ok) {
+        const errorText = await startRes.text().catch(() => 'Unknown error');
+        throw new Error(`Failed to start OAuth (${startRes.status}): ${errorText}`);
+      }
+      return await startRes.json();
+    }, {
+      timeoutMs: 90000, // 90 seconds to handle cold proxy startup
+      retries: 1,
+      retryDelayMs: 2000,
+      operation: 'OAuth Start (with cold server handling)'
+    });
+
+    DebugLogger.debug('✅ OAuth flow initiated, opening browser...');
+
+    // Open browser with timeout (non-blocking fallback)
+    let browserOpened = false;
+    try {
+      await ApiTimeoutHandler.withTimeout(async () => {
+        await open(authUrl);
+        return Promise.resolve();
+      }, this.oauthTimeouts.browser);
+      browserOpened = true;
+      DebugLogger.debug('✅ Browser opened successfully');
+    } catch (error) {
+      DebugLogger.debug(`⚠️ Browser auto-open failed: ${error instanceof Error ? error.message : String(error)}`);
     }
-    const { authUrl, state } = await startRes.json();
-    await open(authUrl);
-    const token = await this.pollForToken(state, 120000, 2000);
+
+    // Always provide console instructions for manual OAuth
+    console.log('\n🔐 Notion OAuth Authentication Required');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    if (browserOpened) {
+      console.log('✅ Browser should have opened automatically');
+      console.log('🔗 If no browser opened, manually visit:');
+    } else {
+      console.log('🔗 Please manually open this URL in your browser:');
+    }
+    console.log(`\n   ${authUrl}\n`);
+    console.log('📋 Steps:');
+    console.log('   1. Open the URL above in your browser');
+    console.log('   2. Sign in to Notion and grant permissions');
+    console.log('   3. Wait for this CLI to detect the authorization');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+
+    // Poll for token with enhanced timeout handling
+    const token = await this.pollForTokenWithTimeout(state, 120000, 2000);
+    DebugLogger.debug('✅ OAuth authentication completed successfully');
     return token;
+  }
+
+  private async pollForTokenWithTimeout(
+    state: string,
+    totalTimeoutMs: number,
+    intervalMs: number
+  ): Promise<NotionOAuthToken> {
+    DebugLogger.debug(`🔄 Starting OAuth token polling (timeout: ${totalTimeoutMs}ms, interval: ${intervalMs}ms)...`);
+    const start = Date.now();
+    let attempts = 0;
+
+    while (Date.now() - start < totalTimeoutMs) {
+      attempts++;
+      try {
+        const token = await ApiTimeoutHandler.withTimeout(async () => {
+          const res = await fetch(`${this.proxyBaseUrl}/auth/status/${state}`);
+          if (!res.ok) {
+            const errorText = await res.text().catch(() => 'Unknown error');
+            throw new Error(`OAuth polling failed (${res.status}): ${errorText}`);
+          }
+          return await res.json();
+        }, {
+          timeoutMs: 8000, // 8 seconds per poll (allows for cold proxy)
+          retries: 0, // Don't retry individual polls, we'll poll again
+          operation: `OAuth Status Poll #${attempts}`
+        });
+
+        if (token.status === "complete" && token.token) {
+          DebugLogger.debug(`✅ OAuth token received after ${attempts} attempts in ${Date.now() - start}ms`);
+          return token.token as NotionOAuthToken;
+        }
+
+        if (token.status === "error") {
+          throw new Error(`OAuth failed: ${token.error || 'Unknown error'}`);
+        }
+
+        // Log progress every 10 seconds for better user feedback
+        const elapsed = Date.now() - start;
+        if (elapsed % 10000 < intervalMs) {
+          const remaining = Math.round((totalTimeoutMs - elapsed) / 1000);
+          console.log(`⏳ Waiting for OAuth completion... ${remaining}s remaining`);
+          if (elapsed > 30000) { // After 30 seconds, remind user
+            console.log('💡 If you haven\'t opened the browser yet, please visit the URL above');
+          }
+        }
+
+      } catch (error) {
+        DebugLogger.debug(`⚠️ OAuth poll attempt ${attempts} failed: ${error instanceof Error ? error.message : String(error)}`);
+
+        // If we're close to the total timeout, don't wait the full interval
+        const elapsed = Date.now() - start;
+        if (elapsed + intervalMs >= totalTimeoutMs) {
+          break;
+        }
+      }
+
+      await new Promise((r) => setTimeout(r, intervalMs));
+    }
+
+    throw new Error(`OAuth timeout after ${attempts} attempts (${Math.round(totalTimeoutMs/1000)}s).
+
+Possible solutions:
+• Make sure you opened the OAuth URL in your browser
+• Check if you completed the authorization in Notion
+• Verify your internet connection is stable
+• Try running the command again
+
+If the browser didn't open automatically, manually copy and paste the OAuth URL from above.`);
   }
 
   private async pollForToken(
@@ -224,18 +357,7 @@ export class NotionOAuthClient {
     timeoutMs: number,
     intervalMs: number
   ): Promise<NotionOAuthToken> {
-    const start = Date.now();
-    while (Date.now() - start < timeoutMs) {
-      const res = await fetch(`${this.proxyBaseUrl}/auth/status/${state}`);
-      if (!res.ok) {
-        throw new Error(`OAuth polling failed: ${res.status}`);
-      }
-      const data = await res.json();
-      if (data.status === "complete" && data.token) {
-        return data.token as NotionOAuthToken;
-      }
-      await new Promise((r) => setTimeout(r, intervalMs));
-    }
-    throw new Error("OAuth timeout");
+    // Redirect to the enhanced version
+    return this.pollForTokenWithTimeout(state, timeoutMs, intervalMs);
   }
 }

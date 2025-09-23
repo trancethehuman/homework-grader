@@ -3,6 +3,7 @@ import { config } from "dotenv";
 import { NotionTokenStorage } from "./notion-token-storage.js";
 import { NotionDataSourceService } from "./data-source-service.js";
 import { DebugLogger } from "../debug-logger.js";
+import { ApiTimeoutHandler, CircuitBreaker, TimeoutConfig } from "./api-timeout-handler.js";
 
 // Load environment variables
 config();
@@ -44,6 +45,19 @@ export class NotionService {
   private isUsingExplicitToken: boolean = false;
   private currentToken: string;
   private failedDataSources: Set<string> = new Set(); // Track data sources that consistently fail
+
+  // Circuit breakers for different operations
+  private readonly searchCircuitBreaker = new CircuitBreaker(3, 60000, 'Search API');
+  private readonly databaseCircuitBreaker = new CircuitBreaker(3, 60000, 'Database API');
+  private readonly pageCircuitBreaker = new CircuitBreaker(3, 60000, 'Page API');
+
+  // Default timeout configurations
+  private readonly defaultTimeouts: Record<string, TimeoutConfig> = {
+    search: { timeoutMs: 15000, retries: 2, retryDelayMs: 1000, operation: 'Notion Search' },
+    database: { timeoutMs: 20000, retries: 2, retryDelayMs: 1000, operation: 'Database Operation' },
+    page: { timeoutMs: 10000, retries: 1, retryDelayMs: 500, operation: 'Page Operation' },
+    validation: { timeoutMs: 5000, retries: 1, retryDelayMs: 500, operation: 'Token Validation' }
+  };
 
   constructor(accessToken?: string) {
     this.storage = new NotionTokenStorage();
@@ -224,92 +238,128 @@ export class NotionService {
 
   /**
    * Fetch all pages accessible to the integration
-   * Uses 2025-09-03 API search
+   * Uses 2025-09-03 API search with timeout and circuit breaker protection
    */
   async getAllPages(): Promise<NotionPage[]> {
     await this.ensureValidToken();
 
-    const pages: NotionPage[] = [];
-    let hasMore = true;
-    let nextCursor: string | undefined;
+    return await this.searchCircuitBreaker.execute(async () => {
+      return await ApiTimeoutHandler.withTimeout(async () => {
+        DebugLogger.debug('🔍 Starting to fetch all pages from Notion...');
+        const pages: NotionPage[] = [];
+        let hasMore = true;
+        let nextCursor: string | undefined;
+        let pageCount = 0;
 
-    while (hasMore) {
-      const response = await this.notion.search({
-        filter: {
-          property: "object",
-          value: "page",
-        },
-        start_cursor: nextCursor,
-        page_size: 100,
-      });
-
-      for (const page of response.results) {
-        if (page.object === "page" && "properties" in page) {
-          const title = this.extractTitle(page);
-          pages.push({
-            id: page.id,
-            title,
-            url: page.url,
-            lastEditedTime: page.last_edited_time,
-            parent: page.parent,
+        while (hasMore) {
+          const response = await ApiTimeoutHandler.withTimeout(async () => {
+            return await this.notion.search({
+              filter: {
+                property: "object",
+                value: "page",
+              },
+              start_cursor: nextCursor,
+              page_size: 100,
+            });
+          }, {
+            timeoutMs: 10000, // 10 seconds per search request
+            retries: 1,
+            operation: `Page search batch ${Math.floor(pageCount / 100) + 1}`
           });
+
+          for (const page of response.results) {
+            if (page.object === "page" && "properties" in page) {
+              const title = this.extractTitle(page);
+              pages.push({
+                id: page.id,
+                title,
+                url: page.url,
+                lastEditedTime: page.last_edited_time,
+                parent: page.parent,
+              });
+              pageCount++;
+            }
+          }
+
+          hasMore = response.has_more;
+          nextCursor = response.next_cursor || undefined;
+
+          if (hasMore) {
+            DebugLogger.debug(`📄 Fetched ${pageCount} pages so far, continuing...`);
+          }
         }
-      }
 
-      hasMore = response.has_more;
-      nextCursor = response.next_cursor || undefined;
-    }
-
-    return pages;
+        DebugLogger.debug(`✅ Successfully fetched ${pages.length} pages from Notion`);
+        return pages;
+      }, this.defaultTimeouts.search);
+    });
   }
 
   /**
    * Fetch all databases accessible to the integration
-   * Uses 2025-09-03 API with search
+   * Uses 2025-09-03 API with search, timeout and circuit breaker protection
    */
   async getAllDatabases(): Promise<NotionDatabase[]> {
     await this.ensureValidToken();
 
-    const databases: NotionDatabase[] = [];
-    let hasMore = true;
-    let nextCursor: string | undefined;
+    return await this.searchCircuitBreaker.execute(async () => {
+      return await ApiTimeoutHandler.withTimeout(async () => {
+        DebugLogger.debug('🗄️ Starting to fetch all databases from Notion...');
+        const databases: NotionDatabase[] = [];
+        let hasMore = true;
+        let nextCursor: string | undefined;
+        let batchCount = 0;
 
-    while (hasMore) {
-      const response = await this.notion.search({
-        filter: {
-          property: "object",
-          value: "data_source" as any,
-        },
-        start_cursor: nextCursor,
-        page_size: 100,
-      });
-
-      for (const dataSource of response.results) {
-        if ((dataSource as any).object === "data_source") {
-          const dsItem = dataSource as any;
-          const databaseId = dsItem.parent?.database_id;
-
-          if (databaseId) {
-            // Use data source information directly (no redundant API calls)
-            const title = this.extractTitle(dsItem) || 'Untitled Database';
-            databases.push({
-              id: databaseId, // Use database ID, not data source ID for UI compatibility
-              title,
-              url: `https://notion.so/${databaseId.replace(/-/g, '')}`,
-              lastEditedTime: dsItem.last_edited_time || new Date().toISOString(),
-              properties: dsItem.properties || {},
+        while (hasMore) {
+          const response = await ApiTimeoutHandler.withTimeout(async () => {
+            return await this.notion.search({
+              filter: {
+                property: "object",
+                value: "data_source" as any,
+              },
+              start_cursor: nextCursor,
+              page_size: 100,
             });
-          } else {
-            console.log(`⚠️ Data source has no parent database_id: ${dsItem.id}`);
+          }, {
+            timeoutMs: 10000, // 10 seconds per search request
+            retries: 1,
+            operation: `Database search batch ${batchCount + 1}`
+          });
+
+          for (const dataSource of response.results) {
+            if ((dataSource as any).object === "data_source") {
+              const dsItem = dataSource as any;
+              const databaseId = dsItem.parent?.database_id;
+
+              if (databaseId) {
+                // Use data source information directly (no redundant API calls)
+                const title = this.extractTitle(dsItem) || 'Untitled Database';
+                databases.push({
+                  id: databaseId, // Use database ID, not data source ID for UI compatibility
+                  title,
+                  url: `https://notion.so/${databaseId.replace(/-/g, '')}`,
+                  lastEditedTime: dsItem.last_edited_time || new Date().toISOString(),
+                  properties: dsItem.properties || {},
+                });
+              } else {
+                DebugLogger.debug(`⚠️ Data source has no parent database_id: ${dsItem.id}`);
+              }
+            }
+          }
+
+          hasMore = response.has_more;
+          nextCursor = response.next_cursor || undefined;
+          batchCount++;
+
+          if (hasMore) {
+            DebugLogger.debug(`🗄️ Processed batch ${batchCount}, found ${databases.length} databases so far, continuing...`);
           }
         }
-      }
 
-      hasMore = response.has_more;
-      nextCursor = response.next_cursor || undefined;
-    }
-
-    return databases;
+        DebugLogger.debug(`✅ Successfully fetched ${databases.length} databases from Notion`);
+        return databases;
+      }, this.defaultTimeouts.search);
+    });
   }
 
   /**

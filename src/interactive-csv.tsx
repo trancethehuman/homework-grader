@@ -7,7 +7,10 @@ import open from "open";
 import { TokenStorage } from "./lib/token-storage.js";
 import { E2BTokenStorage } from "./lib/e2b-token-storage.js";
 import { GitHubService } from "./github/github-service.js";
-import { GitHubUrlDetector, GitHubUrlDetectionResult } from "./lib/github-url-detector.js";
+import {
+  GitHubUrlDetector,
+  GitHubUrlDetectionResult,
+} from "./lib/github-url-detector.js";
 import { saveRepositoryFiles } from "./lib/file-saver.js";
 import { ProviderSelector } from "./components/provider-selector.js";
 import {
@@ -48,7 +51,10 @@ import { BrowserTestMode } from "./components/browser-test-mode.js";
 import { ComputerUseModelSelector } from "./components/computer-use-model-selector.js";
 import { SimpleOverrideConfirmation } from "./components/notion/simple-override-confirmation.js";
 import { PromptSelector } from "./components/prompt-selector.js";
-import { GradingPrompt, getDefaultGradingPrompt } from "./consts/grading-prompts.js";
+import {
+  GradingPrompt,
+  getDefaultGradingPrompt,
+} from "./consts/grading-prompts.js";
 
 export interface CSVColumn {
   name: string;
@@ -124,11 +130,14 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
   const [selectedProvider, setSelectedProvider] = useState<AIProvider | null>(
     null
   );
-  const [selectedComputerUseModel, setSelectedComputerUseModel] = useState<ComputerUseModel | null>(null);
-  const [selectedBrowserComputerUseModel, setSelectedBrowserComputerUseModel] = useState<ComputerUseModel | null>(null);
+  const [selectedComputerUseModel, setSelectedComputerUseModel] =
+    useState<ComputerUseModel | null>(null);
+  const [selectedBrowserComputerUseModel, setSelectedBrowserComputerUseModel] =
+    useState<ComputerUseModel | null>(null);
   const [selectedDataSource, setSelectedDataSource] =
     useState<DataSource | null>(null);
-  const [selectedGradingPrompt, setSelectedGradingPrompt] = useState<GradingPrompt>(getDefaultGradingPrompt());
+  const [selectedGradingPrompt, setSelectedGradingPrompt] =
+    useState<GradingPrompt>(getDefaultGradingPrompt());
   const [notionClient] = useState(new NotionMCPClient());
   const [notionOAuthClient] = useState(new NotionOAuthClient());
   const [notionDatabase, setNotionDatabase] = useState<NotionDatabase | null>(
@@ -151,7 +160,8 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
     Array<{ url: string; pageId: string }>
   >([]);
   const [selectedGitHubColumn, setSelectedGitHubColumn] = useState<string>("");
-  const [gitHubUrlDetectionResult, setGitHubUrlDetectionResult] = useState<GitHubUrlDetectionResult | null>(null);
+  const [gitHubUrlDetectionResult, setGitHubUrlDetectionResult] =
+    useState<GitHubUrlDetectionResult | null>(null);
   // Cache Notion data to avoid refetching on back navigation
   const [cachedNotionPages, setCachedNotionPages] = useState<any[]>([]);
   const [cachedNotionDatabases, setCachedNotionDatabases] = useState<any[]>([]);
@@ -168,10 +178,17 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
     results: Array<{ url: string; success: boolean; error?: string }>;
   }>({ processed: 0, total: 0, results: [] });
   const [gradingResults, setGradingResults] = useState<GradingResult[]>([]);
-  const [browserTestResults, setBrowserTestResults] = useState<BrowserTestResult[]>([]);
-  const [deployedUrls, setDeployedUrls] = useState<Array<{ url: string; pageId: string }>>([]);
-  const [selectedDeployedUrlColumn, setSelectedDeployedUrlColumn] = useState<string>("");
-  const [existingGradingFields, setExistingGradingFields] = useState<string[]>([]);
+  const [browserTestResults, setBrowserTestResults] = useState<
+    BrowserTestResult[]
+  >([]);
+  const [deployedUrls, setDeployedUrls] = useState<
+    Array<{ url: string; pageId: string }>
+  >([]);
+  const [selectedDeployedUrlColumn, setSelectedDeployedUrlColumn] =
+    useState<string>("");
+  const [existingGradingFields, setExistingGradingFields] = useState<string[]>(
+    []
+  );
   const [shouldOverrideData, setShouldOverrideData] = useState<boolean>(false);
   const [originalDatabaseId, setOriginalDatabaseId] = useState<
     string | undefined
@@ -182,11 +199,19 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
   const [e2bKeyValid, setE2BKeyValid] = useState<boolean | null>(null);
   const [skipGitHub, setSkipGitHub] = useState(false);
   const [loadingIconIndex, setLoadingIconIndex] = useState(0);
-  const [processingMode, setProcessingMode] = useState<"code" | "browser" | "both" | null>(null);
+  const [processingMode, setProcessingMode] = useState<
+    "code" | "browser" | "both" | null
+  >(null);
   const [selectedProcessingOption, setSelectedProcessingOption] = useState(0); // 0 = code only (default), 1 = browser only, 2 = both
-  const [chunkingPreference, setChunkingPreference] = useState<'allow' | 'skip'>('skip');
+  const [chunkingPreference, setChunkingPreference] = useState<
+    "allow" | "skip"
+  >("skip");
   const [selectedChunkingOption, setSelectedChunkingOption] = useState(1); // 0 = allow, 1 = skip (default)
-  const [notionSaveResult, setNotionSaveResult] = useState<{ success: number; failed: number; errors: string[] } | null>(null);
+  const [notionSaveResult, setNotionSaveResult] = useState<{
+    success: number;
+    failed: number;
+    errors: string[];
+  } | null>(null);
   const [selectedNavOption, setSelectedNavOption] = useState(0);
   const { exit } = useApp();
 
@@ -194,13 +219,13 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
   const navigateToStep = (newStep: Step) => {
     // Clear console when moving between major workflow steps for cleaner UX
     const majorSteps: Step[] = [
-      'data-source-select',
-      'notion-page-selector',
-      'notion-api-content-view',
-      'notion-github-column-select',
-      'processing-choice',
-      'notion-processing',
-      'complete'
+      "data-source-select",
+      "notion-page-selector",
+      "notion-api-content-view",
+      "notion-github-column-select",
+      "processing-choice",
+      "notion-processing",
+      "complete",
     ];
 
     if (majorSteps.includes(newStep) && newStep !== step) {
@@ -230,7 +255,11 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
 
   // Process GitHub URLs when entering notion-processing step
   useEffect(() => {
-    if (step === "notion-processing" && notionGitHubUrls.length > 0 && processingMode !== "browser") {
+    if (
+      step === "notion-processing" &&
+      notionGitHubUrls.length > 0 &&
+      processingMode !== "browser"
+    ) {
       const processGitHubUrls = async () => {
         setProcessingResults({
           processed: 0,
@@ -518,9 +547,10 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         }
 
         // Load saved chunking preference, default to 'skip' if not set
-        const savedChunkingPreference = preferences.gradingConfig?.chunkingPreference || 'skip';
+        const savedChunkingPreference =
+          preferences.gradingConfig?.chunkingPreference || "skip";
         setChunkingPreference(savedChunkingPreference);
-        setSelectedChunkingOption(savedChunkingPreference === 'skip' ? 1 : 0);
+        setSelectedChunkingOption(savedChunkingPreference === "skip" ? 1 : 0);
       } catch (error) {
         // Error loading saved preferences is handled gracefully
       }
@@ -610,7 +640,9 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
             const token = await notionOAuthClient.ensureAuthenticated();
 
             // Validate the token with a test API call
-            const { NotionService } = await import("./lib/notion/notion-service.js");
+            const { NotionService } = await import(
+              "./lib/notion/notion-service.js"
+            );
             const service = new NotionService(token.access_token);
             const validation = await service.validateToken();
 
@@ -618,7 +650,10 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
               console.log("✓ Notion authentication is valid");
               navigateToStep("notion-page-selector");
             } else {
-              console.log("❌ Notion token validation failed:", validation.error);
+              console.log(
+                "❌ Notion token validation failed:",
+                validation.error
+              );
               console.log("🔄 Auto-triggering OAuth re-authentication...");
 
               // Clear the invalid token
@@ -634,7 +669,9 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
                   console.log("✓ Re-authentication successful");
                   navigateToStep("notion-page-selector");
                 } else {
-                  throw new Error(revalidation.error || "Re-authentication failed");
+                  throw new Error(
+                    revalidation.error || "Re-authentication failed"
+                  );
                 }
               } catch (reauthError: any) {
                 setError(`Re-authentication failed: ${reauthError.message}`);
@@ -642,12 +679,19 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
               }
             }
           } catch (e: any) {
-            console.log("❌ Notion authentication error:", e.message || String(e));
+            console.log(
+              "❌ Notion authentication error:",
+              e.message || String(e)
+            );
 
             // Auto-trigger OAuth for authentication errors
-            if (e.message?.includes("API token is invalid") ||
-                e.message?.includes("unauthorized")) {
-              console.log("🔄 Auto-triggering OAuth due to authentication error...");
+            if (
+              e.message?.includes("API token is invalid") ||
+              e.message?.includes("unauthorized")
+            ) {
+              console.log(
+                "🔄 Auto-triggering OAuth due to authentication error..."
+              );
 
               // Clear the invalid token
               storage.clearToken();
@@ -662,7 +706,9 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
                   console.log("✓ Re-authentication successful");
                   navigateToStep("notion-page-selector");
                 } else {
-                  throw new Error(revalidation.error || "Re-authentication failed");
+                  throw new Error(
+                    revalidation.error || "Re-authentication failed"
+                  );
                 }
               } catch (reauthError: any) {
                 setError(`Re-authentication failed: ${reauthError.message}`);
@@ -681,7 +727,9 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
             const token = await notionOAuthClient.ensureAuthenticated();
 
             // Validate the new token
-            const { NotionService } = await import("./lib/notion/notion-service.js");
+            const { NotionService } = await import(
+              "./lib/notion/notion-service.js"
+            );
             const service = new NotionService(token.access_token);
             const validation = await service.validateToken();
 
@@ -689,15 +737,23 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
               console.log("✓ New Notion authentication successful");
               navigateToStep("notion-page-selector");
             } else {
-              throw new Error(validation.error || "Token validation failed after authentication");
+              throw new Error(
+                validation.error ||
+                  "Token validation failed after authentication"
+              );
             }
           } catch (e: any) {
-            console.log("❌ Notion authentication failed:", e.message || String(e));
+            console.log(
+              "❌ Notion authentication failed:",
+              e.message || String(e)
+            );
             let errorMessage = "Authentication failed";
             if (e.message?.includes("API token is invalid")) {
-              errorMessage = "The authentication process failed. Please try again.";
+              errorMessage =
+                "The authentication process failed. Please try again.";
             } else if (e.message?.includes("unauthorized")) {
-              errorMessage = "Access was denied. Please ensure you grant the necessary permissions.";
+              errorMessage =
+                "Access was denied. Please ensure you grant the necessary permissions.";
             } else if (e.message) {
               errorMessage = e.message;
             }
@@ -776,11 +832,15 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           const service = new GradingDatabaseService(accessToken);
 
           // Determine processing mode based on what was performed
-          const hasBrowserTests = browserTestResults && browserTestResults.length > 0;
+          const hasBrowserTests =
+            browserTestResults && browserTestResults.length > 0;
           const hasCodeGrading = gradingResults && gradingResults.length > 0;
-          const processingMode: 'code' | 'browser' | 'both' =
-            hasBrowserTests && hasCodeGrading ? 'both' :
-            hasBrowserTests ? 'browser' : 'code';
+          const processingMode: "code" | "browser" | "both" =
+            hasBrowserTests && hasCodeGrading
+              ? "both"
+              : hasBrowserTests
+              ? "browser"
+              : "code";
 
           // Save all grading results with simple override flag
           const result = await service.saveGradingResultsWithOverride(
@@ -811,14 +871,26 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
 
           // Provide specific error messages for common issues
           let errorMessage = `Failed to save to Notion: ${error.message}`;
-          if (error.message.includes("unauthorized") || error.message.includes("Token validation failed")) {
-            errorMessage = "Authentication failed. Please re-authenticate with Notion and try again.";
-          } else if (error.message.includes("database_not_found") || error.message.includes("object_not_found")) {
-            errorMessage = "Database not found. Please ensure you have access to the selected database.";
+          if (
+            error.message.includes("unauthorized") ||
+            error.message.includes("Token validation failed")
+          ) {
+            errorMessage =
+              "Authentication failed. Please re-authenticate with Notion and try again.";
+          } else if (
+            error.message.includes("database_not_found") ||
+            error.message.includes("object_not_found")
+          ) {
+            errorMessage =
+              "Database not found. Please ensure you have access to the selected database.";
           }
 
           // Store the error result for the completion step
-          setNotionSaveResult({ success: 0, failed: gradingResults.length, errors: [errorMessage] });
+          setNotionSaveResult({
+            success: 0,
+            failed: gradingResults.length,
+            errors: [errorMessage],
+          });
           setError(errorMessage);
           navigateToStep("notion-save-complete");
         }
@@ -826,7 +898,14 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
     };
 
     performNotionSave();
-  }, [step, gradingResults, browserTestResults, shouldOverrideData, originalDatabaseId, selectedGitHubColumn]);
+  }, [
+    step,
+    gradingResults,
+    browserTestResults,
+    shouldOverrideData,
+    originalDatabaseId,
+    selectedGitHubColumn,
+  ]);
 
   const validateAndAnalyzeCSV = async (
     filePath: string
@@ -1250,7 +1329,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         setSelectedChunkingOption((prev) => (prev < 1 ? prev + 1 : 0));
       } else if (key.return) {
         // Save the preference
-        const preference = selectedChunkingOption === 0 ? 'allow' : 'skip';
+        const preference = selectedChunkingOption === 0 ? "allow" : "skip";
         setChunkingPreference(preference);
 
         // Save to preferences storage
@@ -1294,6 +1373,23 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         // Skip browser testing and go directly to save options
         navigateToStep("grading-save-options");
       }
+    } else if (step === "notion-save-complete") {
+      if (key.upArrow && selectedNavOption > 0) {
+        setSelectedNavOption(selectedNavOption - 1);
+      } else if (key.downArrow && selectedNavOption < 2) {
+        setSelectedNavOption(selectedNavOption + 1);
+      } else if (key.return) {
+        if (selectedNavOption === 0) {
+          // Back to Save Options
+          navigateToStep("grading-save-options");
+        } else if (selectedNavOption === 1) {
+          // Choose Different Database
+          navigateToStep("notion-page-selector");
+        } else if (selectedNavOption === 2) {
+          // Exit
+          navigateToStep("complete");
+        }
+      }
     }
 
     if (key.ctrl && inputChar === "c") {
@@ -1327,11 +1423,15 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         const service = new GradingDatabaseService(accessToken);
 
         // Determine processing mode based on what was performed
-        const hasBrowserTests = browserTestResults && browserTestResults.length > 0;
+        const hasBrowserTests =
+          browserTestResults && browserTestResults.length > 0;
         const hasCodeGrading = gradingResults && gradingResults.length > 0;
-        const processingMode: 'code' | 'browser' | 'both' =
-          hasBrowserTests && hasCodeGrading ? 'both' :
-          hasBrowserTests ? 'browser' : 'code';
+        const processingMode: "code" | "browser" | "both" =
+          hasBrowserTests && hasCodeGrading
+            ? "both"
+            : hasBrowserTests
+            ? "browser"
+            : "code";
 
         // Ensure database has grading schema, but skip github_url column if we already have one
         await service.ensureGradingDatabase(databaseId, {
@@ -1360,10 +1460,18 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
 
       // Provide specific error messages for common issues
       let errorMessage = `Failed to prepare Notion save: ${error.message}`;
-      if (error.message.includes("unauthorized") || error.message.includes("Token validation failed")) {
-        errorMessage = "Authentication failed. Please re-authenticate with Notion and try again.";
-      } else if (error.message.includes("database_not_found") || error.message.includes("object_not_found")) {
-        errorMessage = "Database not found. Please ensure you have access to the selected database.";
+      if (
+        error.message.includes("unauthorized") ||
+        error.message.includes("Token validation failed")
+      ) {
+        errorMessage =
+          "Authentication failed. Please re-authenticate with Notion and try again.";
+      } else if (
+        error.message.includes("database_not_found") ||
+        error.message.includes("object_not_found")
+      ) {
+        errorMessage =
+          "Database not found. Please ensure you have access to the selected database.";
       }
 
       setError(errorMessage);
@@ -1384,12 +1492,17 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         </Text>
         <Text></Text>
         <Text>
-          The app works without a token (60 requests/hour). Optionally provide a token for higher limits (5,000 requests/hour):
+          The app works without a token (60 requests/hour). Optionally provide a
+          token for higher limits (5,000 requests/hour):
         </Text>
         <Text></Text>
-        <Text color="cyan">• Press Enter to skip and continue with 60 requests/hour</Text>
+        <Text color="cyan">
+          • Press Enter to skip and continue with 60 requests/hour
+        </Text>
         <Text color="yellow">• Press 's' to skip GitHub authentication</Text>
-        <Text dimColor>• Press 'o' to open GitHub token generation page in browser</Text>
+        <Text dimColor>
+          • Press 'o' to open GitHub token generation page in browser
+        </Text>
         <Text dimColor>• Generate a token with 'public_repo' scope</Text>
         <Text dimColor>• Press 'c' to clear stored token and start fresh</Text>
         <Text></Text>
@@ -1414,12 +1527,12 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           <Text color="gray">█</Text>
         </Box>
         <Text color="green">
-          Commands: Enter = skip and continue | 's' = skip | 'o' = open GitHub | 'c' = clear token | Ctrl+C = exit
+          Commands: Enter = skip and continue | 's' = skip | 'o' = open GitHub |
+          'c' = clear token | Ctrl+C = exit
         </Text>
       </Box>
     );
   }
-
 
   if (step === "e2b-api-key") {
     return (
@@ -1525,12 +1638,18 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           🤖 Select AI Provider or Test Mode
         </Text>
         <Text></Text>
-        <Text>Choose your preferred AI provider for grading, or test browser automation:</Text>
+        <Text>
+          Choose your preferred AI provider for grading, or test browser
+          automation:
+        </Text>
         <Text></Text>
         <Text color="yellow" bold>
           🧪 Press 't' for Browser Test Mode (Debug 3 URLs)
         </Text>
-        <Text dimColor>   Test browser automation with 3 sample URLs for debugging</Text>
+        <Text dimColor>
+          {" "}
+          Test browser automation with 3 sample URLs for debugging
+        </Text>
         <Text></Text>
         <Text>Or select an AI provider:</Text>
         <Text></Text>
@@ -1555,7 +1674,8 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         </Text>
         <Text></Text>
         <Text>
-          How should we handle repositories that exceed the AI model's context window?
+          How should we handle repositories that exceed the AI model's context
+          window?
         </Text>
         <Text></Text>
         <Text dimColor>
@@ -1564,23 +1684,31 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         <Text></Text>
         <Text color="cyan">Use ↑/↓ arrows to navigate, Enter to select:</Text>
         <Text></Text>
-        <Text color={selectedChunkingOption === 0 ? "green" : "white"} bold={selectedChunkingOption === 0}>
+        <Text
+          color={selectedChunkingOption === 0 ? "green" : "white"}
+          bold={selectedChunkingOption === 0}
+        >
           {selectedChunkingOption === 0 ? "→ " : "  "}Process with chunking
         </Text>
-        <Text dimColor>   • Split large repos into chunks for parallel processing</Text>
-        <Text dimColor>   • May take longer but processes entire codebase</Text>
-        <Text dimColor>   • Aggregates feedback from all chunks</Text>
-        <Text></Text>
-        <Text color={selectedChunkingOption === 1 ? "yellow" : "white"} bold={selectedChunkingOption === 1}>
-          {selectedChunkingOption === 1 ? "→ " : "  "}Skip large repositories {selectedChunkingOption === 1 ? "(recommended)" : ""}
-        </Text>
-        <Text dimColor>   • Skip repositories that exceed context limits</Text>
-        <Text dimColor>   • Faster processing for batches with large repos</Text>
-        <Text dimColor>   • Large repos will be marked as skipped</Text>
-        <Text></Text>
         <Text dimColor>
-          This preference will be saved for future sessions
+          {" "}
+          • Split large repos into chunks for parallel processing
         </Text>
+        <Text dimColor> • May take longer but processes entire codebase</Text>
+        <Text dimColor> • Aggregates feedback from all chunks</Text>
+        <Text></Text>
+        <Text
+          color={selectedChunkingOption === 1 ? "yellow" : "white"}
+          bold={selectedChunkingOption === 1}
+        >
+          {selectedChunkingOption === 1 ? "→ " : "  "}Skip large repositories{" "}
+          {selectedChunkingOption === 1 ? "(recommended)" : ""}
+        </Text>
+        <Text dimColor> • Skip repositories that exceed context limits</Text>
+        <Text dimColor> • Faster processing for batches with large repos</Text>
+        <Text dimColor> • Large repos will be marked as skipped</Text>
+        <Text></Text>
+        <Text dimColor>This preference will be saved for future sessions</Text>
       </Box>
     );
   }
@@ -1934,7 +2062,6 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
     );
   }
 
-
   if (step === "notion-page-selector") {
     return (
       <Box flexDirection="column">
@@ -1960,10 +2087,13 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
               setNotionApiContent(content);
 
               // Auto-detect GitHub URL column and extract URLs
-              const detectionResult = GitHubUrlDetector.detectGitHubUrls(content);
+              const detectionResult =
+                GitHubUrlDetector.detectGitHubUrls(content);
 
               if (detectionResult.candidates.length === 0) {
-                setError("No GitHub URL columns found in this database. Please ensure the database contains GitHub repository URLs.");
+                setError(
+                  "No GitHub URL columns found in this database. Please ensure the database contains GitHub repository URLs."
+                );
                 return;
               }
 
@@ -1983,7 +2113,9 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           onAuthenticationRequired={() => {
             // Clear error and trigger automatic OAuth re-authentication
             setError(null);
-            console.log("🔄 Authentication required, triggering automatic OAuth flow...");
+            console.log(
+              "🔄 Authentication required, triggering automatic OAuth flow..."
+            );
             navigateToStep("notion-auth-loading");
           }}
           onError={(error) => {
@@ -2037,10 +2169,13 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
               setNotionApiContent(content);
 
               // Auto-detect GitHub URL column and extract URLs
-              const detectionResult = GitHubUrlDetector.detectGitHubUrls(content);
+              const detectionResult =
+                GitHubUrlDetector.detectGitHubUrls(content);
 
               if (detectionResult.candidates.length === 0) {
-                setError("No GitHub URL columns found in this database. Please ensure the database contains GitHub repository URLs.");
+                setError(
+                  "No GitHub URL columns found in this database. Please ensure the database contains GitHub repository URLs."
+                );
                 return;
               }
 
@@ -2077,13 +2212,26 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
             if (Array.isArray(githubUrls) && githubUrls.length > 0) {
               if (typeof githubUrls[0] === "string") {
                 // Legacy string array format - no pageIds available
-                console.log("⚠️ Received string URLs without pageIds - new entries will be created");
-                urlsWithIds = (githubUrls as string[]).map((url) => ({ url, pageId: "" }));
-              } else if (typeof githubUrls[0] === "object" && githubUrls[0] !== null) {
+                console.log(
+                  "⚠️ Received string URLs without pageIds - new entries will be created"
+                );
+                urlsWithIds = (githubUrls as string[]).map((url) => ({
+                  url,
+                  pageId: "",
+                }));
+              } else if (
+                typeof githubUrls[0] === "object" &&
+                githubUrls[0] !== null
+              ) {
                 // Object format with pageIds - use for updating existing entries
-                const urlObjects = githubUrls as Array<{ url: string; pageId: string }>;
-                console.log(`✅ Received ${urlObjects.length} URLs with pageIds for updating existing entries:`,
-                  urlObjects.map(u => `${u.url} -> ${u.pageId}`));
+                const urlObjects = githubUrls as Array<{
+                  url: string;
+                  pageId: string;
+                }>;
+                console.log(
+                  `✅ Received ${urlObjects.length} URLs with pageIds for updating existing entries:`,
+                  urlObjects.map((u) => `${u.url} -> ${u.pageId}`)
+                );
                 urlsWithIds = urlObjects;
               }
             }
@@ -2133,15 +2281,6 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
               ({Math.round(progress)}%)
             </Text>
             <Text></Text>
-
-            {processingResults.currentUrl && !isComplete && (
-              <>
-                <Text color="yellow">
-                  Currently processing: {processingResults.currentUrl}
-                </Text>
-                <Text></Text>
-              </>
-            )}
 
             {processingResults.results.length > 0 && (
               <>
@@ -2255,25 +2394,6 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
   }
 
   if (step === "notion-save-complete") {
-    useInput((input, key) => {
-      if (key.upArrow && selectedNavOption > 0) {
-        setSelectedNavOption(selectedNavOption - 1);
-      } else if (key.downArrow && selectedNavOption < 2) {
-        setSelectedNavOption(selectedNavOption + 1);
-      } else if (key.return) {
-        if (selectedNavOption === 0) {
-          // Back to Save Options
-          navigateToStep("grading-save-options");
-        } else if (selectedNavOption === 1) {
-          // Choose Different Database
-          navigateToStep("notion-page-selector");
-        } else if (selectedNavOption === 2) {
-          // Exit
-          navigateToStep("complete");
-        }
-      }
-    });
-
     const wasSuccessful = notionSaveResult && notionSaveResult.success > 0;
     const hasFailures = notionSaveResult && notionSaveResult.failed > 0;
 
@@ -2293,14 +2413,15 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         {notionSaveResult && (
           <>
             <Text>
-              Results: {notionSaveResult.success} saved{hasFailures ? `, ${notionSaveResult.failed} failed` : ''}
+              Results: {notionSaveResult.success} saved
+              {hasFailures ? `, ${notionSaveResult.failed} failed` : ""}
             </Text>
             {hasFailures && notionSaveResult.errors.length > 0 && (
               <>
                 <Text></Text>
                 <Text color="red">
-                  Errors: {notionSaveResult.errors.slice(0, 2).join('; ')}
-                  {notionSaveResult.errors.length > 2 && '...'}
+                  Errors: {notionSaveResult.errors.slice(0, 2).join("; ")}
+                  {notionSaveResult.errors.length > 2 && "..."}
                 </Text>
               </>
             )}
@@ -2337,28 +2458,49 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         </Text>
         <Text></Text>
         <Text>
-          Found {notionGitHubUrls.length} GitHub repositories. What would you like to do?
+          Found {notionGitHubUrls.length} GitHub repositories. What would you
+          like to do?
         </Text>
         <Text></Text>
         <Text color="cyan">Use ↑/↓ arrows to navigate, Enter to select:</Text>
         <Text></Text>
-        <Text color={selectedProcessingOption === 0 ? "blue" : "white"} bold={selectedProcessingOption === 0}>
-          {selectedProcessingOption === 0 ? "→ " : "  "}Grade repository code only {selectedProcessingOption === 0 ? "(recommended)" : ""}
+        <Text
+          color={selectedProcessingOption === 0 ? "blue" : "white"}
+          bold={selectedProcessingOption === 0}
+        >
+          {selectedProcessingOption === 0 ? "→ " : "  "}Grade repository code
+          only {selectedProcessingOption === 0 ? "(recommended)" : ""}
         </Text>
-        <Text dimColor>   • Clone and analyze code quality, structure, best practices</Text>
-        <Text dimColor>   • Generate grading reports and save results</Text>
-        <Text></Text>
-        <Text color={selectedProcessingOption === 1 ? "magenta" : "white"} bold={selectedProcessingOption === 1}>
-          {selectedProcessingOption === 1 ? "→ " : "  "}Test deployed applications only
+        <Text dimColor>
+          {" "}
+          • Clone and analyze code quality, structure, best practices
         </Text>
-        <Text dimColor>   • Skip cloning - directly test deployed web applications</Text>
-        <Text dimColor>   • Capture screenshots and verify functionality</Text>
+        <Text dimColor> • Generate grading reports and save results</Text>
         <Text></Text>
-        <Text color={selectedProcessingOption === 2 ? "yellow" : "white"} bold={selectedProcessingOption === 2}>
+        <Text
+          color={selectedProcessingOption === 1 ? "magenta" : "white"}
+          bold={selectedProcessingOption === 1}
+        >
+          {selectedProcessingOption === 1 ? "→ " : "  "}Test deployed
+          applications only
+        </Text>
+        <Text dimColor>
+          {" "}
+          • Skip cloning - directly test deployed web applications
+        </Text>
+        <Text dimColor> • Capture screenshots and verify functionality</Text>
+        <Text></Text>
+        <Text
+          color={selectedProcessingOption === 2 ? "yellow" : "white"}
+          bold={selectedProcessingOption === 2}
+        >
           {selectedProcessingOption === 2 ? "→ " : "  "}Do both
         </Text>
-        <Text dimColor>   • Clone and grade code THEN test deployed applications</Text>
-        <Text dimColor>   • Comprehensive analysis with complete results</Text>
+        <Text dimColor>
+          {" "}
+          • Clone and grade code THEN test deployed applications
+        </Text>
+        <Text dimColor> • Comprehensive analysis with complete results</Text>
         <Text></Text>
         <Text color="cyan">Use ↑/↓ arrows to navigate, Enter to select</Text>
       </Box>
@@ -2373,7 +2515,8 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         </Text>
         <Text></Text>
         <Text>
-          Repository analysis complete! Would you like to test deployed applications?
+          Repository analysis complete! Would you like to test deployed
+          applications?
         </Text>
         <Text></Text>
         <Text color="green">
@@ -2381,8 +2524,8 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         </Text>
         <Text></Text>
         <Text>
-          Browser testing can automatically interact with deployed web applications
-          to verify functionality and capture screenshots.
+          Browser testing can automatically interact with deployed web
+          applications to verify functionality and capture screenshots.
         </Text>
         <Text></Text>
         <Text color="cyan">• Press 'y' to set up browser testing</Text>
@@ -2406,13 +2549,26 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
             if (Array.isArray(deployedAppUrls) && deployedAppUrls.length > 0) {
               if (typeof deployedAppUrls[0] === "string") {
                 // Legacy string array format - no pageIds available
-                console.log("⚠️ Received deployed URLs without pageIds - new entries will be created");
-                urlsWithIds = (deployedAppUrls as string[]).map((url) => ({ url, pageId: "" }));
-              } else if (typeof deployedAppUrls[0] === "object" && deployedAppUrls[0] !== null) {
+                console.log(
+                  "⚠️ Received deployed URLs without pageIds - new entries will be created"
+                );
+                urlsWithIds = (deployedAppUrls as string[]).map((url) => ({
+                  url,
+                  pageId: "",
+                }));
+              } else if (
+                typeof deployedAppUrls[0] === "object" &&
+                deployedAppUrls[0] !== null
+              ) {
                 // Object format with pageIds - use for updating existing entries
-                const urlObjects = deployedAppUrls as Array<{ url: string; pageId: string }>;
-                console.log(`✅ Received ${urlObjects.length} deployed URLs with pageIds for updating existing entries:`,
-                  urlObjects.map(u => `${u.url} -> ${u.pageId}`));
+                const urlObjects = deployedAppUrls as Array<{
+                  url: string;
+                  pageId: string;
+                }>;
+                console.log(
+                  `✅ Received ${urlObjects.length} deployed URLs with pageIds for updating existing entries:`,
+                  urlObjects.map((u) => `${u.url} -> ${u.pageId}`)
+                );
                 urlsWithIds = urlObjects;
               }
             }
@@ -2433,7 +2589,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
             }
           }}
           onBack={() => {
-            // Go back based on how user got here  
+            // Go back based on how user got here
             if (processingMode === "browser") {
               navigateToStep("processing-choice");
             } else {
@@ -2454,13 +2610,15 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           selectedModel={selectedBrowserComputerUseModel}
           onComplete={(results) => {
             setBrowserTestResults(results);
-            
+
             // Save browser test results to files
             if (results.length > 0) {
               saveBrowserTestResults(results, selectedDeployedUrlColumn);
             }
-            
-            console.log(`✓ Browser testing completed: ${results.length} URLs tested`);
+
+            console.log(
+              `✓ Browser testing completed: ${results.length} URLs tested`
+            );
             navigateToStep("grading-save-options");
           }}
           onError={(error) => {
