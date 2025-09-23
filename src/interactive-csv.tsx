@@ -638,7 +638,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
                 }
               } catch (reauthError: any) {
                 setError(`Re-authentication failed: ${reauthError.message}`);
-                navigateToStep("notion-oauth-info");
+                navigateToStep("notion-auth-loading");
               }
             }
           } catch (e: any) {
@@ -666,12 +666,12 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
                 }
               } catch (reauthError: any) {
                 setError(`Re-authentication failed: ${reauthError.message}`);
-                navigateToStep("notion-oauth-info");
+                navigateToStep("notion-auth-loading");
               }
             } else {
-              // For non-auth errors, show the info screen
+              // For non-auth errors, trigger automatic OAuth
               setError(e.message || "Authentication check failed");
-              navigateToStep("notion-oauth-info");
+              navigateToStep("notion-auth-loading");
             }
           }
         } else {
@@ -702,7 +702,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
               errorMessage = e.message;
             }
             setError(errorMessage);
-            navigateToStep("notion-oauth-info");
+            navigateToStep("notion-auth-loading");
           }
         }
       };
@@ -1981,10 +1981,10 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
             }
           }}
           onAuthenticationRequired={() => {
-            // Clear error and navigate to OAuth info page to trigger re-authentication
+            // Clear error and trigger automatic OAuth re-authentication
             setError(null);
-            console.log("🔄 Authentication required, triggering OAuth flow...");
-            navigateToStep("notion-oauth-info");
+            console.log("🔄 Authentication required, triggering automatic OAuth flow...");
+            navigateToStep("notion-auth-loading");
           }}
           onError={(error) => {
             setError(error);
