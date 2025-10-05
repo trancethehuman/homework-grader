@@ -107,7 +107,7 @@ async function processContentChunk(
 
   const generateObjectOptions: any = {
     model: modelInstance,
-    schemaName: "Chunk Grading feedback",
+    schemaName: "Chunk_Grading_feedback",
     schemaDescription: "Partial code homework feedback for content chunk",
     system: PROMPT_GRADER_CHUNK.replace(
       "{CHUNK_INDEX}",
@@ -178,7 +178,7 @@ async function aggregateChunkFeedbacks(
 
   const generateObjectOptions: any = {
     model: modelInstance,
-    schemaName: "Final Grading feedback",
+    schemaName: "Final_Grading_feedback",
     schemaDescription:
       "Comprehensive code homework feedback aggregated from chunks",
     system: PROMPT_GRADER_FINAL,
@@ -303,7 +303,7 @@ async function processStandardGrading(
 
   const generateObjectOptions: any = {
     model: modelInstance,
-    schemaName: "Grading feedback",
+    schemaName: "Grading_feedback",
     schemaDescription: "Comprehensive code homework feedback",
     system: promptToUse,
     prompt: repoContent,
