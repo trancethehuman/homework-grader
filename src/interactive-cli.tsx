@@ -297,7 +297,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         } else {
           try {
             const { SandboxService } = await import("./lib/sandbox/index.js");
-            sandboxService = new SandboxService();
+            sandboxService = new SandboxService({}, e2bApiKey);
             await sandboxService.initialize();
             console.log(
               `🚀 Using sandbox for processing ${notionGitHubUrls.length} repositories`
