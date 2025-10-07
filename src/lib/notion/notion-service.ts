@@ -822,10 +822,13 @@ export class NotionService {
         try {
           DebugLogger.debugDataSource(`🔧 Updating data source ${dataSourceId} (attempt ${attempt}/${maxRetries})`);
 
-          // Use the new Data Source API
-          const response = await this.notion.dataSources.update({
-            data_source_id: dataSourceId,
-            properties: properties
+          // Use the new Data Source API via request() until SDK adds native support
+          const response = await this.notion.request({
+            path: `data_sources/${dataSourceId}`,
+            method: 'patch',
+            body: {
+              properties: properties
+            }
           });
 
           DebugLogger.debugDataSource(`✅ Data source ${dataSourceId} schema updated successfully on attempt ${attempt}`);
@@ -987,9 +990,9 @@ export class NotionService {
         DebugLogger.debugDataSource(`📝 Creating page with data source parent: ${dataSourceId}`);
         const response = await this.notion.pages.create({
           parent: {
-            type: "data_source_id",
+            type: "data_source_id" as any,
             data_source_id: dataSourceId,
-          },
+          } as any,
           properties,
         });
         DebugLogger.debugDataSource(`✅ Page created successfully using data source API`);

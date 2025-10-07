@@ -532,10 +532,28 @@ The codebase includes:
   - Used by both GitHubService and SandboxService for consistent filtering
 
 - **Stagehand Test Configuration** (`src/consts/stagehand-test.ts`)
+
   - **NEW**: Constants for Stagehand/Browserbase testing
   - **STAGEHAND_TEST_URL**: Target website for all tests (Maven Agent Bootcamp)
   - **BROWSER_SESSION_KEEP_ALIVE_MS**: 15-second delay before browser cleanup
   - **COUNTDOWN_UPDATE_INTERVAL_MS**: 1-second interval for countdown display
+
+- **Grading Prompts** (`src/consts/grading-prompts.ts`)
+  - **Markdown-Based Prompts**: All prompts stored as `.md` files in `src/prompts/markdown/`
+  - **Prompt Loader** (`src/prompts/prompt-loader.ts`): Utility for loading and caching prompts
+  - **Prompt Fragments** (`src/prompts/markdown/fragments/`): Reusable prompt components for composition
+  - **Chaining Utilities**: `chainPrompts()` and `appendToPrompt()` for combining prompts
+  - **No Repetition**: Retry instructions and common fragments stored separately
+  - **Easy Maintenance**: Edit prompts in markdown files instead of TypeScript strings
+  - **Available Prompts**:
+    - `build-your-first-agent.md` - Main grading prompt
+    - `grader-chunk.md` - Chunk processing for large repositories
+    - `grader-final.md` - Final aggregation of chunk feedback
+  - **Available Fragments**:
+    - `schema-validation-retry.md` - Schema validation error instructions
+    - `json-format-retry.md` - JSON parsing error instructions
+    - `generic-retry.md` - Generic retry instructions
+  - **Usage Examples**: See `src/prompts/markdown/EXAMPLES.md` for detailed usage patterns
 
 ### Data Files
 

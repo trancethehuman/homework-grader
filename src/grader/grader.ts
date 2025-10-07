@@ -4,6 +4,8 @@ import {
   PROMPT_GRADER,
   PROMPT_GRADER_CHUNK,
   PROMPT_GRADER_FINAL,
+  RETRY_FRAGMENTS,
+  appendToPrompt,
 } from "../prompts/grader.js";
 import { getDefaultGradingPrompt } from "../consts/grading-prompts.js";
 import {
@@ -372,25 +374,22 @@ async function processStandardGrading(
 
         if (errorMsg.includes("Schema validation failed")) {
           // Schema validation error - provide more specific guidance
-          generateObjectOptions.system =
-            promptToUse +
-            "\n\nIMPORTANT: The previous attempt failed schema validation. Please ensure:\n" +
-            "- Your response contains a single 'feedbacks' field with comprehensive markdown-formatted feedback\n" +
-            "- The feedback should be detailed, well-structured, and cover all the specified areas\n" +
-            "- Use proper markdown formatting with headers, bullet points, and code examples where appropriate";
+          generateObjectOptions.system = appendToPrompt(
+            promptToUse,
+            RETRY_FRAGMENTS.SCHEMA_VALIDATION
+          );
         } else if (errorMsg.includes("JSON") || errorMsg.includes("parse")) {
           // JSON parsing error - focus on format
-          generateObjectOptions.system =
-            promptToUse +
-            "\n\nIMPORTANT: The previous attempt had JSON formatting issues. Please ensure:\n" +
-            "- Valid JSON syntax with proper brackets, quotes, and commas\n" +
-            "- The feedbacks field contains a properly escaped string\n" +
-            "- All special characters in the markdown are properly escaped for JSON";
+          generateObjectOptions.system = appendToPrompt(
+            promptToUse,
+            RETRY_FRAGMENTS.JSON_FORMAT
+          );
         } else {
           // Generic error - general improvement guidance
-          generateObjectOptions.system =
-            promptToUse +
-            "\n\nIMPORTANT: The previous attempt failed. Please ensure your response strictly follows the provided schema with a single 'feedbacks' field containing comprehensive, well-formatted feedback.";
+          generateObjectOptions.system = appendToPrompt(
+            promptToUse,
+            RETRY_FRAGMENTS.GENERIC
+          );
         }
 
         // Add a small delay between retries
