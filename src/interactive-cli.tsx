@@ -213,6 +213,10 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
     errors: string[];
   } | null>(null);
   const [selectedNavOption, setSelectedNavOption] = useState(0);
+  // Navigation stack to track Notion hierarchy for proper back navigation
+  const [notionNavigationStack, setNotionNavigationStack] = useState<
+    Array<{ pageId: string; pageTitle: string; contentType: string }>
+  >([]);
   const { exit } = useApp();
 
   // Helper function to navigate to a new step and clear any existing errors
@@ -802,6 +806,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
                     : String(oauthError)
                 }`
               );
+              setNotionNavigationStack([]);
               navigateToStep("data-source-select");
             }
           } else {
@@ -810,6 +815,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
                 error instanceof Error ? error.message : String(error)
               }`
             );
+            setNotionNavigationStack([]);
             navigateToStep("data-source-select");
           }
         }
@@ -1176,6 +1182,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         navigateToStep("notion-auth-loading");
       } else if (inputChar === "b") {
         // Go back to data source selection
+        setNotionNavigationStack([]);
         navigateToStep("data-source-select");
       }
     } else if (step === "notion-url-input") {
@@ -1798,6 +1805,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           }}
           onBack={() => {
             setError(null);
+            setNotionNavigationStack([]);
             navigateToStep("data-source-select");
           }}
           onClear={() => {
@@ -2067,6 +2075,8 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
       <Box flexDirection="column">
         <NotionPageSelector
           onSelect={(pageId, pageTitle, type) => {
+            // Clear navigation stack when selecting from top-level page selector
+            setNotionNavigationStack([]);
             setNotionApiSelectedPageId(pageId);
             setNotionApiSelectedPageTitle(pageTitle);
             setNotionApiContentType(type);
@@ -2120,9 +2130,14 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           }}
           onError={(error) => {
             setError(error);
+            setNotionNavigationStack([]);
             navigateToStep("data-source-select");
           }}
-          onBack={() => navigateToStep("data-source-select")}
+          onBack={() => {
+            // Clear navigation stack when returning to data source select
+            setNotionNavigationStack([]);
+            navigateToStep("data-source-select");
+          }}
           // Pass cached data to avoid refetching
           cachedPages={cachedNotionPages}
           cachedDatabases={cachedNotionDatabases}
@@ -2148,6 +2163,15 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
             navigateToStep("notion-github-column-select");
           }}
           onNavigate={(pageId, pageTitle, contentType) => {
+            // Push current page to navigation stack before navigating to new page
+            setNotionNavigationStack([
+              ...notionNavigationStack,
+              {
+                pageId: notionApiSelectedPageId,
+                pageTitle: notionApiSelectedPageTitle,
+                contentType: notionApiContentType,
+              },
+            ]);
             // Navigate to a new page/database
             setNotionApiSelectedPageId(pageId);
             setNotionApiSelectedPageTitle(pageTitle);
@@ -2192,7 +2216,20 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
               );
             }
           }}
-          onBack={() => navigateToStep("data-source-select")}
+          onBack={() => {
+            // Pop from navigation stack if not empty, otherwise return to page selector
+            if (notionNavigationStack.length > 0) {
+              const previousPage = notionNavigationStack[notionNavigationStack.length - 1];
+              setNotionNavigationStack(notionNavigationStack.slice(0, -1));
+              setNotionApiSelectedPageId(previousPage.pageId);
+              setNotionApiSelectedPageTitle(previousPage.pageTitle);
+              setNotionApiContentType(previousPage.contentType);
+              // Stay in same step to show the previous content
+            } else {
+              // At top level, return to page selector
+              navigateToStep("notion-page-selector");
+            }
+          }}
         />
       </Box>
     );

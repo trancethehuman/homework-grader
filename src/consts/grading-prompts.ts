@@ -7,7 +7,11 @@ export interface GradingPrompt {
 }
 
 export const BUILD_YOUR_FIRST_AGENT_PROMPT = loadPromptFromFile(
-  "build-your-first-agent.md"
+  "build-your-first-agent.ts"
+);
+
+export const MCP_CLIENT_PROMPT = loadPromptFromFile(
+  "mcp-client-implementation.ts"
 );
 
 export const GRADING_PROMPTS: GradingPrompt[] = [
@@ -16,6 +20,12 @@ export const GRADING_PROMPTS: GradingPrompt[] = [
     value: BUILD_YOUR_FIRST_AGENT_PROMPT,
     description:
       "Comprehensive code review focusing on technical decisions, critical improvements, and optional enhancements. Designed for agent development projects with modern AI model awareness.",
+  },
+  {
+    name: "MCP CLIENT IMPLEMENTATION",
+    value: MCP_CLIENT_PROMPT,
+    description:
+      "Specialized evaluation for MCP client implementations with AI SDK. Checks SSE transport setup, client lifecycle, tool integration, error handling, and common pitfalls like premature disconnection or strict typing issues.",
   },
 ];
 

@@ -1,33 +1,38 @@
-import { readFileSync } from "fs";
-import { join, dirname } from "path";
-import { fileURLToPath } from "url";
+import { PROMPT as BUILD_YOUR_FIRST_AGENT } from "./markdown/build-your-first-agent.js";
+import { PROMPT as MCP_CLIENT_IMPLEMENTATION } from "./markdown/mcp-client-implementation.js";
+import { PROMPT as GRADER_CHUNK } from "./markdown/grader-chunk.js";
+import { PROMPT as GRADER_FINAL } from "./markdown/grader-final.js";
+import { FRAGMENT as SCHEMA_VALIDATION_RETRY } from "./markdown/fragments/schema-validation-retry.js";
+import { FRAGMENT as JSON_FORMAT_RETRY } from "./markdown/fragments/json-format-retry.js";
+import { FRAGMENT as GENERIC_RETRY } from "./markdown/fragments/generic-retry.js";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const PROMPTS: Record<string, string> = {
+  "build-your-first-agent.ts": BUILD_YOUR_FIRST_AGENT,
+  "mcp-client-implementation.ts": MCP_CLIENT_IMPLEMENTATION,
+  "grader-chunk.ts": GRADER_CHUNK,
+  "grader-final.ts": GRADER_FINAL,
+};
 
-const promptCache: Map<string, string> = new Map();
+const FRAGMENTS: Record<string, string> = {
+  "schema-validation-retry.ts": SCHEMA_VALIDATION_RETRY,
+  "json-format-retry.ts": JSON_FORMAT_RETRY,
+  "generic-retry.ts": GENERIC_RETRY,
+};
 
 export function loadPromptFromFile(filename: string): string {
-  if (promptCache.has(filename)) {
-    return promptCache.get(filename)!;
+  const prompt = PROMPTS[filename];
+  if (!prompt) {
+    throw new Error(`Prompt not found: ${filename}`);
   }
-
-  try {
-    const filePath = join(__dirname, "markdown", filename);
-    const content = readFileSync(filePath, "utf-8");
-    promptCache.set(filename, content);
-    return content;
-  } catch (error) {
-    throw new Error(
-      `Failed to load prompt from ${filename}: ${
-        error instanceof Error ? error.message : String(error)
-      }`
-    );
-  }
+  return prompt;
 }
 
 export function loadFragment(fragmentName: string): string {
-  return loadPromptFromFile(`fragments/${fragmentName}`);
+  const fragment = FRAGMENTS[fragmentName];
+  if (!fragment) {
+    throw new Error(`Fragment not found: ${fragmentName}`);
+  }
+  return fragment;
 }
 
 export function chainPrompts(...prompts: string[]): string {
@@ -39,5 +44,5 @@ export function appendToPrompt(basePrompt: string, addition: string): string {
 }
 
 export function clearPromptCache(): void {
-  promptCache.clear();
+  // No-op since we're using imports now, not file reading with cache
 }

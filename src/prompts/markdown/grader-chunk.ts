@@ -1,4 +1,4 @@
-You are analyzing chunk {CHUNK_INDEX} of {TOTAL_CHUNKS} of a student's code repository.
+export const PROMPT = `You are analyzing chunk {CHUNK_INDEX} of {TOTAL_CHUNKS} of a student's code repository.
 
 **Generate TWO separate outputs for this chunk:**
 
@@ -20,3 +20,4 @@ Write 2-3 short sentences in conversational, email-like tone about this chunk:
 - developer_feedback: 2-3 sentences max, conversational tone, max 1,200 chars total
 - Include the "why" behind your observations
 - Focus only on chunk {CHUNK_INDEX}/{TOTAL_CHUNKS}
+`;

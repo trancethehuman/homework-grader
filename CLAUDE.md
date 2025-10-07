@@ -539,21 +539,21 @@ The codebase includes:
   - **COUNTDOWN_UPDATE_INTERVAL_MS**: 1-second interval for countdown display
 
 - **Grading Prompts** (`src/consts/grading-prompts.ts`)
-  - **Markdown-Based Prompts**: All prompts stored as `.md` files in `src/prompts/markdown/`
-  - **Prompt Loader** (`src/prompts/prompt-loader.ts`): Utility for loading and caching prompts
+  - **TypeScript Template Literals**: All prompts stored as template literal strings in `.ts` files in `src/prompts/markdown/`
+  - **Prompt Loader** (`src/prompts/prompt-loader.ts`): Imports and returns prompts via lookup
   - **Prompt Fragments** (`src/prompts/markdown/fragments/`): Reusable prompt components for composition
   - **Chaining Utilities**: `chainPrompts()` and `appendToPrompt()` for combining prompts
   - **No Repetition**: Retry instructions and common fragments stored separately
-  - **Easy Maintenance**: Edit prompts in markdown files instead of TypeScript strings
+  - **Easy Maintenance**: Edit prompts as template literals in TypeScript files
   - **Available Prompts**:
-    - `build-your-first-agent.md` - Main grading prompt
-    - `grader-chunk.md` - Chunk processing for large repositories
-    - `grader-final.md` - Final aggregation of chunk feedback
+    - `build-your-first-agent.ts` - Main grading prompt
+    - `mcp-client-implementation.ts` - MCP client evaluation with AI SDK patterns
+    - `grader-chunk.ts` - Chunk processing for large repositories
+    - `grader-final.ts` - Final aggregation of chunk feedback
   - **Available Fragments**:
-    - `schema-validation-retry.md` - Schema validation error instructions
-    - `json-format-retry.md` - JSON parsing error instructions
-    - `generic-retry.md` - Generic retry instructions
-  - **Usage Examples**: See `src/prompts/markdown/EXAMPLES.md` for detailed usage patterns
+    - `schema-validation-retry.ts` - Schema validation error instructions
+    - `json-format-retry.ts` - JSON parsing error instructions
+    - `generic-retry.ts` - Generic retry instructions
 
 ### Data Files
 

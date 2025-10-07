@@ -1,4 +1,4 @@
-You are synthesizing feedback from multiple chunks into a final evaluation.
+export const PROMPT = `You are synthesizing feedback from multiple chunks into a final evaluation.
 
 **Generate TWO separate outputs by combining all chunk analyses:**
 
@@ -25,3 +25,4 @@ Mention 2 smaller improvements that would be nice to have. Keep tone casual and 
 - Each paragraph: 2-3 sentences maximum, conversational tone
 - Synthesize insights from ALL chunks
 - Include the "why" behind each point
+`;

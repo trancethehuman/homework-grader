@@ -9,15 +9,15 @@ import {
 // Keep legacy export for backward compatibility
 export const PROMPT_GRADER = BUILD_YOUR_FIRST_AGENT_PROMPT;
 
-export const PROMPT_GRADER_CHUNK = loadPromptFromFile("grader-chunk.md");
+export const PROMPT_GRADER_CHUNK = loadPromptFromFile("grader-chunk.ts");
 
-export const PROMPT_GRADER_FINAL = loadPromptFromFile("grader-final.md");
+export const PROMPT_GRADER_FINAL = loadPromptFromFile("grader-final.ts");
 
 // Export fragment helpers for prompt composition
 export const RETRY_FRAGMENTS = {
-  SCHEMA_VALIDATION: loadFragment("schema-validation-retry.md"),
-  JSON_FORMAT: loadFragment("json-format-retry.md"),
-  GENERIC: loadFragment("generic-retry.md"),
+  SCHEMA_VALIDATION: loadFragment("schema-validation-retry.ts"),
+  JSON_FORMAT: loadFragment("json-format-retry.ts"),
+  GENERIC: loadFragment("generic-retry.ts"),
 };
 
 // Export chaining utilities for external use
