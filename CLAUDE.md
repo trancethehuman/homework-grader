@@ -19,11 +19,11 @@ This is a homework grading system repository with TypeScript URL loading functio
   - [Database Reference](https://developers.notion.com/reference/database) - Database object and data sources array
   - [Data Source Reference](https://developers.notion.com/reference/data-source) - Data source querying and structure
 - **SDK/API Compatibility**: Critical compatibility requirements:
-  - **SDK v5.1.0+**: Only compatible with API versions newer than 2025-09-03
-  - **No Legacy Fallback**: Cannot use older API versions (2022-06-28) with SDK v5+
-  - **Data Source Required**: Database operations require `data_source_id` discovery
-  - **Method Changes**: `databases.query()` replaced with `data_sources.query()` via HTTP requests
-  - **Transition Period**: Use `notion.request()` until `notion.dataSources.query()` method is available
+  - **SDK v5.1.0+**: Only compatible with API version 2025-09-03
+  - **Deprecated Methods**: `databases.query()` is deprecated in API 2025-09-03 and does not return results
+  - **Data Source API**: Primary method uses `dataSources.query()` with data source IDs
+  - **Search API Fallback**: When data sources unavailable, uses Search API to filter pages by database_id
+  - **No Legacy Support**: Cannot use `databases.query()` endpoint with API version 2025-09-03
 - **Documentation**: Key Notion API references:
   - [Working with Databases](https://developers.notion.com/docs/working-with-databases)
   - [Working with Page Content](https://developers.notion.com/docs/working-with-page-content)
@@ -174,6 +174,29 @@ for (const dataSource of database.data_sources) {
 }
 ```
 
+#### **Fallback Strategy for API 2025-09-03**
+
+When `database.data_sources` is empty or unavailable, the system uses **Search API** as a fallback instead of the deprecated `databases.query()` method:
+
+```typescript
+// Search API fallback (works with 2025-09-03)
+const response = await notion.search({
+  filter: {
+    property: "object",
+    value: "page"
+  },
+  page_size: 100
+});
+
+// Filter results to only include pages from the target database
+const pagesFromDatabase = response.results.filter(result => {
+  const parent = result.parent;
+  return parent?.type === 'database_id' && parent?.database_id === databaseId;
+});
+```
+
+**Important**: Never use `databases.query()` with API version 2025-09-03 as it will return no results.
+
 ## Development Setup
 
 ### Package Manager
@@ -288,6 +311,17 @@ pnpm start
 This helps improve performance and reduces token consumption when processing large codebases.
 
 ### Environment Variables
+
+#### **Environment Variable Loading**
+
+The application loads environment variables from both `.env` and `.env.local` files:
+
+- **`.env`**: Shared/default configuration (typically committed to version control)
+- **`.env.local`**: Local overrides (gitignored, takes precedence over `.env`)
+
+When both files exist, `.env.local` values override `.env` values.
+
+#### **Available Environment Variables**
 
 - **GITHUB_TOKEN**: Personal access token for GitHub API (when using GitHub API mode)
 - **GITHUB_MAX_DEPTH**: Maximum directory depth for GitHub API processing (default: 5)

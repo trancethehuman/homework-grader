@@ -221,8 +221,8 @@ export class NotionDataSourceService {
 
       if (!database.data_sources || database.data_sources.length === 0) {
         DebugLogger.debugDataSource(`❌ No data sources found for database ${databaseId}`);
-        DebugLogger.debugDataSource(`🔄 Falling back to legacy databases.query() method...`);
-        return await this.queryDatabaseLegacy(databaseId, filter, sorts, startTime);
+        DebugLogger.debugDataSource(`🔄 Falling back to Search API method...`);
+        return await this.queryDatabaseUsingSearch(databaseId, startTime);
       }
 
       DebugLogger.debugDataSource(`📋 Found ${database.data_sources.length} data source(s):`, database.data_sources.map((ds: any) => ds.id));
@@ -252,9 +252,18 @@ export class NotionDataSourceService {
           DebugLogger.debugDataSource(`✅ Data source ${dataSourceId} returned ${dataSourceResults.length} results`);
           allResults.push(...dataSourceResults);
         } catch (dataSourceError: any) {
-          DebugLogger.debugDataSource(`❌ Failed to process data source ${dataSourceId}: ${dataSourceError.message}`);
+          console.log(`❌ Failed to query data source ${dataSourceId}: ${dataSourceError.message}`);
+          DebugLogger.debugDataSource(`❌ Error code: ${dataSourceError.code}`);
+          DebugLogger.debugDataSource(`❌ Full error:`, dataSourceError);
           // Continue with other data sources instead of failing completely
         }
+      }
+
+      // If all data sources failed to return results, fall back to Search API
+      if (allResults.length === 0 && database.data_sources.length > 0) {
+        console.log(`⚠️ All ${database.data_sources.length} data source(s) returned 0 results or failed`);
+        console.log(`🔄 Falling back to Search API...`);
+        return await this.queryDatabaseUsingSearch(databaseId, startTime);
       }
 
       const duration = Date.now() - startTime;
@@ -267,13 +276,13 @@ export class NotionDataSourceService {
     } catch (error: any) {
       const duration = Date.now() - startTime;
       DebugLogger.debugDataSource(`❌ Database query failed after ${duration}ms:`, error.message);
-      DebugLogger.debugDataSource(`🔄 Attempting legacy fallback...`);
+      DebugLogger.debugDataSource(`🔄 Attempting Search API fallback...`);
 
-      // Final fallback to legacy method
+      // Final fallback to Search API
       try {
-        return await this.queryDatabaseLegacy(databaseId, filter, sorts, startTime);
-      } catch (legacyError: any) {
-        DebugLogger.debugDataSource(`❌ Legacy fallback also failed: ${legacyError.message}`);
+        return await this.queryDatabaseUsingSearch(databaseId, startTime);
+      } catch (searchError: any) {
+        DebugLogger.debugDataSource(`❌ Search API fallback also failed: ${searchError.message}`);
         throw new Error(`Failed to query database ${databaseId}: ${error.message}`);
       }
     }
@@ -402,16 +411,15 @@ export class NotionDataSourceService {
   }
 
   /**
-   * Legacy fallback method using the old databases.query() API
+   * Search API fallback method for API version 2025-09-03
+   * Uses search to find pages belonging to a specific database
    */
-  private async queryDatabaseLegacy(
+  private async queryDatabaseUsingSearch(
     databaseId: string,
-    filter?: any,
-    sorts?: any[],
     startTime?: number
   ): Promise<any[]> {
     try {
-      DebugLogger.debugDataSource(`🚀 Trying legacy databases.query() API for: ${databaseId}`);
+      DebugLogger.debugDataSource(`🔍 Using Search API fallback for database: ${databaseId}`);
 
       const results: any[] = [];
       let hasMore = true;
@@ -419,28 +427,37 @@ export class NotionDataSourceService {
       let pageCount = 0;
 
       while (hasMore) {
-        const response = await (this.notion as any).databases.query({
-          database_id: databaseId,
-          filter,
-          sorts,
+        const response = await this.notion.search({
+          filter: {
+            property: "object",
+            value: "page"
+          },
           page_size: 100,
           start_cursor: nextCursor
         });
 
-        DebugLogger.debugDataSource(`📥 Legacy API page ${pageCount + 1}: ${response.results.length} results`);
-        results.push(...response.results);
+        // Filter results to only include pages from this specific database
+        const pagesFromDatabase = response.results.filter(result => {
+          if (result.object !== 'page') return false;
+          const parent = (result as any).parent;
+          return parent && parent.type === 'database_id' && parent.database_id === databaseId;
+        });
 
-        hasMore = response.has_more || false;
-        nextCursor = response.next_cursor || undefined;
+        results.push(...pagesFromDatabase);
         pageCount++;
+
+        DebugLogger.debugDataSource(`📥 Search API page ${pageCount}: ${pagesFromDatabase.length} results from database`);
+
+        hasMore = response.has_more;
+        nextCursor = response.next_cursor || undefined;
       }
 
       const duration = startTime ? Date.now() - startTime : 0;
-      DebugLogger.debugDataSource(`✅ Legacy API query completed successfully in ${duration}ms. Total results: ${results.length}`);
+      DebugLogger.debugDataSource(`✅ Search API query completed successfully in ${duration}ms. Total results: ${results.length}`);
       return results;
 
     } catch (error: any) {
-      DebugLogger.debugDataSource(`❌ Legacy databases.query() failed: ${error.code} - ${error.message}`);
+      DebugLogger.debugDataSource(`❌ Search API fallback failed: ${error.code} - ${error.message}`);
       throw error;
     }
   }

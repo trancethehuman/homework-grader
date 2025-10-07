@@ -10,8 +10,11 @@ import { AIProvider, DEFAULT_PROVIDER } from "./consts/ai-providers.js";
 import { saveRepositoryFiles } from "./lib/file-saver.js";
 import { updateChecker } from "./lib/update-checker.js";
 
-// Load environment variables from .env file
-dotenv.config();
+// Load environment variables from .env and .env.local files
+// Load .env first (shared/committed config - if it exists)
+dotenv.config({ path: ".env" });
+// Load .env.local second (local overrides - takes precedence)
+dotenv.config({ path: ".env.local" });
 
 // Check for updates at startup (non-blocking)
 updateChecker.checkForUpdates();
