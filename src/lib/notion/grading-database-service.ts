@@ -189,6 +189,158 @@ export class GradingDatabaseService {
   }
 
   /**
+   * Save grading results to database with interactive row-by-row conflict checking
+   */
+  async saveGradingResultsWithConflictCheck(
+    databaseId: string,
+    results: GradingResult[],
+    githubUrlColumnName?: string,
+    browserTestResults?: any[],
+    processingMode: 'code' | 'browser' | 'both' = 'both',
+    onConflict?: (conflictInfo: {
+      repositoryName: string;
+      fieldsWithData: Array<{ fieldName: string; displayName: string; existingValue: string }>;
+      currentIndex: number;
+      totalRows: number;
+    }) => Promise<'override' | 'override-all' | 'skip' | 'skip-all'>
+  ): Promise<{ success: number; failed: number; skipped: number; errors: string[] }> {
+    console.log(`💾 Saving ${results.length} grading results to Notion database...`);
+    DebugLogger.debug(`🔧 Processing mode: ${processingMode}`);
+
+    const overallStartTime = Date.now();
+    const errors: string[] = [];
+    let success = 0;
+    let failed = 0;
+    let skipped = 0;
+    let overrideAll = false;
+    let skipAll = false;
+
+    try {
+      // Validate database has required columns before attempting saves
+      await this.validateDatabaseForSaving(databaseId, processingMode);
+
+      // Get the existing database properties
+      const databaseProperties = await this.notionService.getDatabaseProperties(databaseId);
+      const titlePropertyName = Object.keys(databaseProperties).find(
+        (key) => databaseProperties[key].type === "title"
+      );
+      const availableProperties = new Set(Object.keys(databaseProperties));
+
+      DebugLogger.debug(`📋 Available database properties: ${Array.from(availableProperties).join(', ')}`);
+
+      // Process rows one by one to allow for interactive conflict checking
+      for (let i = 0; i < results.length; i++) {
+        const result = results[i];
+        const isUpdate = !!result.pageId;
+
+        try {
+          // Check for conflict if this is an update and we haven't set override-all or skip-all
+          if (isUpdate && result.pageId && !overrideAll && !skipAll && onConflict) {
+            const conflictCheck = await this.conflictDetector.checkSingleRowConflict(
+              result.pageId,
+              result.repositoryName
+            );
+
+            if (conflictCheck.hasData) {
+              // Ask user what to do
+              const decision = await onConflict({
+                repositoryName: result.repositoryName,
+                fieldsWithData: conflictCheck.fieldsWithData,
+                currentIndex: i + 1,
+                totalRows: results.length
+              });
+
+              if (decision === 'override-all') {
+                overrideAll = true;
+              } else if (decision === 'skip-all') {
+                skipAll = true;
+                skipped++;
+                DebugLogger.debug(`⏭️ Skipping ${result.repositoryName} (skip-all selected)`);
+                continue;
+              } else if (decision === 'skip') {
+                skipped++;
+                DebugLogger.debug(`⏭️ Skipping ${result.repositoryName} (user selected skip)`);
+                continue;
+              }
+            }
+          }
+
+          // Skip if skip-all is active
+          if (isUpdate && skipAll) {
+            skipped++;
+            DebugLogger.debug(`⏭️ Skipping ${result.repositoryName} (skip-all active)`);
+            continue;
+          }
+
+          // Find matching browser test result
+          const matchingBrowserTest = browserTestResults?.find(browserTest =>
+            browserTest.pageId === result.pageId ||
+            browserTest.url?.includes(result.repositoryName.replace('/', '-'))
+          );
+
+          const allProperties = NotionSchemaMapper.transformGradingDataToNotionProperties(
+            result.gradingData,
+            result.repositoryName,
+            result.githubUrl,
+            titlePropertyName,
+            githubUrlColumnName,
+            isUpdate,
+            matchingBrowserTest,
+            result.error,
+            processingMode
+          );
+
+          // Only include properties that actually exist in the database
+          const filteredProperties: Record<string, any> = {};
+          for (const [key, value] of Object.entries(allProperties)) {
+            if (availableProperties.has(key)) {
+              filteredProperties[key] = value;
+            }
+          }
+
+          if (isUpdate && result.pageId) {
+            DebugLogger.debug(`🔄 Updating existing entry for ${result.repositoryName} (${i + 1}/${results.length})...`);
+            await this.notionService.updateDatabaseEntry(result.pageId, filteredProperties);
+          } else {
+            DebugLogger.debug(`✨ Creating new entry for ${result.repositoryName} (${i + 1}/${results.length})...`);
+            await this.notionService.createDatabaseEntry(databaseId, filteredProperties);
+          }
+
+          success++;
+        } catch (error: any) {
+          failed++;
+          const errorMessage = `Failed to save ${result.repositoryName}: ${error.message}`;
+          DebugLogger.debug(`❌ Error: ${errorMessage}`);
+          errors.push(errorMessage);
+        }
+      }
+    } catch (error: any) {
+      DebugLogger.debug(`❌ Database validation failed: ${error.message}`);
+      return {
+        success: 0,
+        failed: results.length,
+        skipped: 0,
+        errors: [`Database validation failed: ${error.message}`]
+      };
+    }
+
+    // Final performance summary
+    const totalDuration = Date.now() - overallStartTime;
+    const totalDurationSeconds = Math.round(totalDuration / 1000);
+
+    console.log(`✅ Saved ${success} results to Notion database${failed > 0 ? ` (${failed} failed)` : ''}${skipped > 0 ? ` (${skipped} skipped)` : ''}`);
+
+    DebugLogger.debug(`\n🏁 Processing completed in ${totalDurationSeconds}s!`);
+    DebugLogger.debug(`📊 Final Results: ${success} succeeded, ${failed} failed, ${skipped} skipped out of ${results.length} repositories`);
+
+    if (errors.length > 0) {
+      console.log(`⚠️ ${errors.length} repositories failed to save`);
+    }
+
+    return { success, failed, skipped, errors };
+  }
+
+  /**
    * Save grading results to database (legacy method - no conflict checking)
    */
   async saveGradingResults(

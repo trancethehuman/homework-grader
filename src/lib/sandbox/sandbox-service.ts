@@ -35,14 +35,14 @@ export class SandboxService {
 
     console.log("🚀 Initializing E2B Sandbox...");
     console.log(
-      `   Timeout: ${ms(this.config.timeout || ms("10m"), { long: true })}`
+      `   Timeout: ${ms(this.config.timeout || ms("5m"), { long: true })}`
     );
 
     try {
       const startTime = Date.now();
       this.sandbox = await Sandbox.create({
         apiKey: this.apiKey,
-        timeoutMs: this.config.timeout || ms("10m"),
+        timeoutMs: this.config.timeout || ms("5m"),
       });
 
       const initTime = Date.now() - startTime;

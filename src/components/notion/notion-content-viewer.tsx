@@ -8,6 +8,7 @@ import {
 } from "../../lib/notion/notion-formatter.js";
 import { BackButton, useBackNavigation } from "../ui/back-button.js";
 import { DebugLogger } from "../../lib/debug-logger.js";
+import { NotionDataLoading } from "./notion-data-loading.js";
 
 interface NotionContentViewerProps {
   pageId: string;
@@ -289,14 +290,10 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
 
   if (isLoading) {
     return (
-      <Box flexDirection="column">
-        <Text color="blue" bold>
-          Fetching Content...
-        </Text>
-        <Text></Text>
-        <Text>Loading content for: {pageTitle}</Text>
-        <Text dimColor>Page ID: {pageId}</Text>
-      </Box>
+      <NotionDataLoading
+        title="Fetching Content"
+        message={`Loading content for: ${pageTitle}`}
+      />
     );
   }
 

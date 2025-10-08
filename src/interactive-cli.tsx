@@ -29,6 +29,7 @@ import { NotionContentViewer } from "./components/notion/notion-content-viewer.j
 import { GitHubColumnSelector } from "./components/notion/github-column-selector.js";
 import { BackButton } from "./components/ui/back-button.js";
 import { NotionOAuthInfo } from "./components/notion/oauth-info.js";
+import { NotionDataLoading } from "./components/notion/notion-data-loading.js";
 import {
   AIProvider,
   DEFAULT_PROVIDER,
@@ -49,7 +50,7 @@ import { BrowserTesting } from "./components/browser-testing.js";
 import { BrowserTestResult } from "./lib/stagehand/browser-testing-service.js";
 import { BrowserTestMode } from "./components/browser-test-mode.js";
 import { ComputerUseModelSelector } from "./components/computer-use-model-selector.js";
-import { SimpleOverrideConfirmation } from "./components/notion/simple-override-confirmation.js";
+import { DatabaseFilter, DatabaseProperty, FilterCriteria } from "./components/notion/database-filter.js";
 import { PromptSelector } from "./components/prompt-selector.js";
 import {
   GradingPrompt,
@@ -99,6 +100,9 @@ type Step =
   | "notion-page-selector"
   | "notion-api-content-view"
   | "notion-oauth-info"
+  | "notion-database-filter"
+  | "notion-filter-confirmation"
+  | "notion-filter-loading"
   | "notion-github-column-select"
   | "notion-processing"
   | "processing-choice"
@@ -109,7 +113,6 @@ type Step =
   | "browser-testing"
   | "grading-save-options"
   | "notion-conflict-check"
-  | "notion-override-confirmation"
   | "notion-saving"
   | "notion-save-complete"
   | "input"
@@ -186,10 +189,8 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
   >([]);
   const [selectedDeployedUrlColumn, setSelectedDeployedUrlColumn] =
     useState<string>("");
-  const [existingGradingFields, setExistingGradingFields] = useState<string[]>(
-    []
-  );
-  const [shouldOverrideData, setShouldOverrideData] = useState<boolean>(false);
+  const [databaseFilterCriteria, setDatabaseFilterCriteria] = useState<FilterCriteria | null>(null);
+  const [databaseProperties, setDatabaseProperties] = useState<DatabaseProperty[]>([]);
   const [originalDatabaseId, setOriginalDatabaseId] = useState<
     string | undefined
   >();
@@ -198,7 +199,6 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
   const [validatingE2BKey, setValidatingE2BKey] = useState(false);
   const [e2bKeyValid, setE2BKeyValid] = useState<boolean | null>(null);
   const [skipGitHub, setSkipGitHub] = useState(false);
-  const [loadingIconIndex, setLoadingIconIndex] = useState(0);
   const [processingMode, setProcessingMode] = useState<
     "code" | "browser" | "both" | null
   >(null);
@@ -217,6 +217,8 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
   const [notionNavigationStack, setNotionNavigationStack] = useState<
     Array<{ pageId: string; pageTitle: string; contentType: string }>
   >([]);
+  // Track if we arrived at column selection from filtered workflow (vs view workflow)
+  const [isFilteredWorkflow, setIsFilteredWorkflow] = useState(false);
   const { exit } = useApp();
 
   // Helper function to navigate to a new step and clear any existing errors
@@ -240,22 +242,216 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
     setStep(newStep);
   };
 
-  // Loading animation for Notion auth
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
+  // Convert FilterCriteria to Notion API filter format
+  // Based on Notion Data Source API documentation (2025-09-03)
+  const convertFilterToNotionAPI = (criteria: FilterCriteria): any => {
+    const propertyName = criteria.propertyName;
 
-    if (step === "notion-auth-loading") {
-      interval = setInterval(() => {
-        setLoadingIconIndex((prev) => (prev + 1) % 6);
-      }, 2000);
+    switch (criteria.filterType) {
+      case 'include':
+        if (criteria.propertyType === 'select') {
+          const values = criteria.value as string[];
+          // Single value: return simple filter
+          if (values.length === 1) {
+            return {
+              property: propertyName,
+              select: { equals: values[0] }
+            };
+          }
+          // Multiple values: use OR compound filter
+          return {
+            or: values.map((val: string) => ({
+              property: propertyName,
+              select: { equals: val }
+            }))
+          };
+        } else if (criteria.propertyType === 'multi_select') {
+          const values = criteria.value as string[];
+          // For multi-select, use "contains" for each value with OR
+          if (values.length === 1) {
+            return {
+              property: propertyName,
+              multi_select: { contains: values[0] }
+            };
+          }
+          return {
+            or: values.map((val: string) => ({
+              property: propertyName,
+              multi_select: { contains: val }
+            }))
+          };
+        }
+        break;
+
+      case 'exclude':
+        if (criteria.propertyType === 'select') {
+          const values = criteria.value as string[];
+          // Use does_not_equal with AND for excluding multiple values
+          if (values.length === 1) {
+            return {
+              property: propertyName,
+              select: { does_not_equal: values[0] }
+            };
+          }
+          return {
+            and: values.map((val: string) => ({
+              property: propertyName,
+              select: { does_not_equal: val }
+            }))
+          };
+        } else if (criteria.propertyType === 'multi_select') {
+          const values = criteria.value as string[];
+          // Use does_not_contain with AND
+          if (values.length === 1) {
+            return {
+              property: propertyName,
+              multi_select: { does_not_contain: values[0] }
+            };
+          }
+          return {
+            and: values.map((val: string) => ({
+              property: propertyName,
+              multi_select: { does_not_contain: val }
+            }))
+          };
+        }
+        break;
+
+      case 'contains':
+        return {
+          property: propertyName,
+          rich_text: { contains: criteria.value as string }
+        };
+
+      case 'not_contains':
+        return {
+          property: propertyName,
+          rich_text: { does_not_contain: criteria.value as string }
+        };
+
+      case 'equals':
+        if (criteria.propertyType === 'checkbox') {
+          return {
+            property: propertyName,
+            checkbox: { equals: criteria.value as boolean }
+          };
+        } else if (criteria.propertyType === 'number') {
+          return {
+            property: propertyName,
+            number: { equals: criteria.value as number }
+          };
+        }
+        break;
+
+      case 'not_equals':
+        if (criteria.propertyType === 'checkbox') {
+          return {
+            property: propertyName,
+            checkbox: { equals: !(criteria.value as boolean) }
+          };
+        } else if (criteria.propertyType === 'number') {
+          return {
+            property: propertyName,
+            number: { does_not_equal: criteria.value as number }
+          };
+        }
+        break;
+
+      case 'greater_than':
+        return {
+          property: propertyName,
+          number: { greater_than: criteria.value as number }
+        };
+
+      case 'less_than':
+        return {
+          property: propertyName,
+          number: { less_than: criteria.value as number }
+        };
+
+      case 'is_empty':
+        if (criteria.propertyType === 'select') {
+          return {
+            property: propertyName,
+            select: { is_empty: true }
+          };
+        } else if (criteria.propertyType === 'multi_select') {
+          return {
+            property: propertyName,
+            multi_select: { is_empty: true }
+          };
+        } else if (criteria.propertyType === 'rich_text' || criteria.propertyType === 'title') {
+          return {
+            property: propertyName,
+            rich_text: { is_empty: true }
+          };
+        }
+        break;
+
+      case 'is_not_empty':
+        if (criteria.propertyType === 'select') {
+          return {
+            property: propertyName,
+            select: { is_not_empty: true }
+          };
+        } else if (criteria.propertyType === 'multi_select') {
+          return {
+            property: propertyName,
+            multi_select: { is_not_empty: true }
+          };
+        } else if (criteria.propertyType === 'rich_text' || criteria.propertyType === 'title') {
+          return {
+            property: propertyName,
+            rich_text: { is_not_empty: true }
+          };
+        }
+        break;
     }
 
-    return () => {
-      if (interval) {
-        clearInterval(interval);
-      }
-    };
-  }, [step]);
+    return undefined;
+  };
+
+
+  // Fetch filtered database content when filter is applied
+  useEffect(() => {
+    if (step === "notion-filter-loading" && notionApiSelectedPageId) {
+      const fetchFilteredContent = async () => {
+        try {
+          const token = await notionOAuthClient.ensureAuthenticated();
+          const notionService = new NotionService(token.access_token);
+
+          // Convert filter criteria to Notion API format (if filter is set)
+          const notionFilter = databaseFilterCriteria
+            ? convertFilterToNotionAPI(databaseFilterCriteria)
+            : undefined;
+
+          // Fetch database content with filter using enhanced schema
+          // This ensures GitHubUrlDetector gets complete property information
+          const databaseId = notionApiSelectedPageId;
+          const content = await notionService.queryDatabaseWithEnhancedSchema(
+            databaseId,
+            notionFilter,
+            undefined,
+            databaseFilterCriteria // Pass client filter for Search API fallback
+          );
+
+          setNotionApiContent(content);
+
+          // Navigate to confirmation screen
+          navigateToStep("notion-filter-confirmation");
+        } catch (error) {
+          setError(
+            `Failed to fetch filtered database content: ${
+              error instanceof Error ? error.message : String(error)
+            }`
+          );
+          navigateToStep("notion-database-filter");
+        }
+      };
+
+      fetchFilteredContent();
+    }
+  }, [step, notionApiSelectedPageId, databaseFilterCriteria]);
 
   // Process GitHub URLs when entering notion-processing step
   useEffect(() => {
@@ -848,11 +1044,10 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
               ? "browser"
               : "code";
 
-          // Save all grading results with simple override flag
-          const result = await service.saveGradingResultsWithOverride(
+          // Save all grading results (batch processing)
+          const result = await service.saveGradingResults(
             originalDatabaseId!,
             gradingResults,
-            shouldOverrideData,
             selectedGitHubColumn,
             browserTestResults,
             processingMode
@@ -908,7 +1103,6 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
     step,
     gradingResults,
     browserTestResults,
-    shouldOverrideData,
     originalDatabaseId,
     selectedGitHubColumn,
   ]);
@@ -1380,6 +1574,27 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         // Skip browser testing and go directly to save options
         navigateToStep("grading-save-options");
       }
+    } else if (step === "notion-filter-confirmation") {
+      if (key.upArrow && selectedNavOption > 0) {
+        setSelectedNavOption(selectedNavOption - 1);
+      } else if (key.downArrow && selectedNavOption < 1) {
+        setSelectedNavOption(selectedNavOption + 1);
+      } else if (key.return) {
+        if (selectedNavOption === 0) {
+          // Continue to column selection
+          setSelectedNavOption(0);
+          setIsFilteredWorkflow(true); // Mark that we're in filtered workflow
+          navigateToStep("notion-github-column-select");
+        } else if (selectedNavOption === 1) {
+          // Back to filter selection
+          setSelectedNavOption(0);
+          navigateToStep("notion-database-filter");
+        }
+      } else if (inputChar === 'b' || key.escape) {
+        // Go back to page selector
+        setSelectedNavOption(0);
+        navigateToStep("notion-page-selector");
+      }
     } else if (step === "notion-save-complete") {
       if (key.upArrow && selectedNavOption > 0) {
         setSelectedNavOption(selectedNavOption - 1);
@@ -1446,21 +1661,8 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           processingMode,
         });
 
-        // Check if grading fields already exist (simple schema check)
-        const existingFieldsCheck = await service.checkForExistingGradingFields(
-          databaseId,
-          processingMode
-        );
-
-        // If grading fields exist, ask user for override permission
-        if (existingFieldsCheck.hasExistingFields) {
-          // Store the existing fields for the simple override prompt
-          setExistingGradingFields(existingFieldsCheck.existingFields);
-          navigateToStep("notion-override-confirmation");
-        } else {
-          // No existing grading fields, proceed directly to saving
-          navigateToStep("notion-saving");
-        }
+        // Proceed directly to saving (conflict checking will happen row-by-row)
+        navigateToStep("notion-saving");
       }
     } catch (error: any) {
       console.error("Failed to prepare Notion save:", error);
@@ -1607,34 +1809,11 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
   }
 
   if (step === "notion-auth-loading") {
-    const loadingIcons = ["🔄", "⚡", "🚀", "✨", "🔮", "💫"];
-    const loadingMessages = [
-      "Connecting to Notion...",
-      "Authenticating your access...",
-      "Preparing your workspace...",
-      "Establishing secure connection...",
-      "Verifying permissions...",
-      "Almost ready...",
-    ];
-
     return (
-      <Box flexDirection="column" alignItems="center">
-        <Text bold color="blue">
-          Notion Authentication
-        </Text>
-        <Box marginTop={1} alignItems="center">
-          <Text>{loadingIcons[loadingIconIndex]}</Text>
-        </Box>
-        <Box marginTop={1}>
-          <Text color="cyan">{loadingMessages[loadingIconIndex]}</Text>
-        </Box>
-        <Box marginTop={2}>
-          <Text color="gray">
-            Because of a cold start, this may take a moment while we connect to
-            your Notion workspace...
-          </Text>
-        </Box>
-      </Box>
+      <NotionDataLoading
+        title="Notion Authentication"
+        message="Connecting to Notion and authenticating your access..."
+      />
     );
   }
 
@@ -1906,13 +2085,10 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
 
   if (step === "notion-fetching") {
     return (
-      <Box flexDirection="column">
-        <Text color="yellow">Fetching Notion database...</Text>
-        <Text>URL: {notionDatabaseUrl}</Text>
-        <Text dimColor>
-          Please wait while we retrieve database information...
-        </Text>
-      </Box>
+      <NotionDataLoading
+        title="Fetching Notion Database"
+        message="Connecting to database and retrieving information..."
+      />
     );
   }
 
@@ -2083,7 +2259,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
             navigateToStep("notion-api-content-view");
           }}
           onStartGrading={async (pageId, pageTitle) => {
-            // Start grading directly by fetching content silently and extracting GitHub URLs
+            // Start grading - first get schema for filtering, then fetch filtered data
             setNotionApiSelectedPageId(pageId);
             setNotionApiSelectedPageTitle(pageTitle);
             setNotionApiContentType("database"); // onStartGrading is only for databases
@@ -2092,29 +2268,25 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
               const token = await notionOAuthClient.ensureAuthenticated();
               const notionService = new NotionService(token.access_token);
 
-              // Fetch the content silently (don't show database pages)
-              const content = await notionService.getDatabaseContent(pageId);
-              setNotionApiContent(content);
+              // Get database properties for filtering (no data fetch yet)
+              const dbProperties = await notionService.getDatabaseProperties(pageId);
+              const filterableProps: DatabaseProperty[] = Object.entries(dbProperties)
+                .filter(([_, prop]) =>
+                  ['select', 'multi_select', 'rich_text', 'title', 'checkbox', 'number'].includes(prop.type)
+                )
+                .map(([name, prop]) => ({
+                  name,
+                  type: prop.type,
+                  options: (prop as any).select?.options || (prop as any).multi_select?.options
+                }));
 
-              // Auto-detect GitHub URL column and extract URLs
-              const detectionResult =
-                GitHubUrlDetector.detectGitHubUrls(content);
+              setDatabaseProperties(filterableProps);
 
-              if (detectionResult.candidates.length === 0) {
-                setError(
-                  "No GitHub URL columns found in this database. Please ensure the database contains GitHub repository URLs."
-                );
-                return;
-              }
-
-              // Store GitHub URL detection results for user confirmation
-              setGitHubUrlDetectionResult(detectionResult);
-
-              // Navigate to column selection for user confirmation
-              navigateToStep("notion-github-column-select");
+              // Navigate to database filter step FIRST (before fetching data)
+              navigateToStep("notion-database-filter");
             } catch (error) {
               setError(
-                `Failed to fetch content for grading: ${
+                `Failed to prepare database for grading: ${
                   error instanceof Error ? error.message : String(error)
                 }`
               );
@@ -2160,6 +2332,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           contentType={notionApiContentType}
           onComplete={(content) => {
             setNotionApiContent(content);
+            setIsFilteredWorkflow(false); // Mark that we're in view workflow
             navigateToStep("notion-github-column-select");
           }}
           onNavigate={(pageId, pageTitle, contentType) => {
@@ -2179,7 +2352,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
             // Stay in the same step to show the new content
           }}
           onStartGrading={async (pageId, pageTitle) => {
-            // Start grading directly from content viewer
+            // Start grading - first get schema for filtering, then fetch filtered data
             setNotionApiSelectedPageId(pageId);
             setNotionApiSelectedPageTitle(pageTitle);
             setNotionApiContentType("database"); // onStartGrading is only for databases
@@ -2188,29 +2361,25 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
               const token = await notionOAuthClient.ensureAuthenticated();
               const notionService = new NotionService(token.access_token);
 
-              // Fetch the content silently (don't show database pages)
-              const content = await notionService.getDatabaseContent(pageId);
-              setNotionApiContent(content);
+              // Get database properties for filtering (no data fetch yet)
+              const dbProperties = await notionService.getDatabaseProperties(pageId);
+              const filterableProps: DatabaseProperty[] = Object.entries(dbProperties)
+                .filter(([_, prop]) =>
+                  ['select', 'multi_select', 'rich_text', 'title', 'checkbox', 'number'].includes(prop.type)
+                )
+                .map(([name, prop]) => ({
+                  name,
+                  type: prop.type,
+                  options: (prop as any).select?.options || (prop as any).multi_select?.options
+                }));
 
-              // Auto-detect GitHub URL column and extract URLs
-              const detectionResult =
-                GitHubUrlDetector.detectGitHubUrls(content);
+              setDatabaseProperties(filterableProps);
 
-              if (detectionResult.candidates.length === 0) {
-                setError(
-                  "No GitHub URL columns found in this database. Please ensure the database contains GitHub repository URLs."
-                );
-                return;
-              }
-
-              // Store GitHub URL detection results for user confirmation
-              setGitHubUrlDetectionResult(detectionResult);
-
-              // Navigate to column selection for user confirmation
-              navigateToStep("notion-github-column-select");
+              // Navigate to database filter step FIRST (before fetching data)
+              navigateToStep("notion-database-filter");
             } catch (error) {
               setError(
-                `Failed to fetch content for grading: ${
+                `Failed to prepare database for grading: ${
                   error instanceof Error ? error.message : String(error)
                 }`
               );
@@ -2235,7 +2404,109 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
     );
   }
 
+  if (step === "notion-database-filter") {
+    return (
+      <DatabaseFilter
+        properties={databaseProperties}
+        onFilter={(criteria) => {
+          setDatabaseFilterCriteria(criteria);
+          // Navigate to loading step to fetch filtered data
+          navigateToStep("notion-filter-loading");
+        }}
+        onSkip={() => {
+          // No filter - process all rows
+          setDatabaseFilterCriteria(null);
+          // Navigate to loading step to fetch all data
+          navigateToStep("notion-filter-loading");
+        }}
+        onBack={() => {
+          navigateToStep("notion-page-selector");
+        }}
+      />
+    );
+  }
+
+  if (step === "notion-filter-loading") {
+    return (
+      <NotionDataLoading
+        title="Fetching Database Content"
+        message={databaseFilterCriteria
+          ? "Applying filters and loading entries..."
+          : "Loading all database entries..."}
+      />
+    );
+  }
+
+  if (step === "notion-filter-confirmation") {
+    const rowCount = notionApiContent?.entries?.length || 0;
+    const filterSummary = databaseFilterCriteria
+      ? `${databaseFilterCriteria.propertyName} - ${databaseFilterCriteria.filterType}`
+      : "No filter (all rows)";
+
+    const filterValue = databaseFilterCriteria?.value
+      ? Array.isArray(databaseFilterCriteria.value)
+        ? (databaseFilterCriteria.value as string[]).join(', ')
+        : String(databaseFilterCriteria.value)
+      : null;
+
+    return (
+      <Box flexDirection="column" marginY={1}>
+        <Text color="cyan" bold>
+          Filter Applied - Confirmation
+        </Text>
+        <Text></Text>
+        {error && (
+          <>
+            <Text color="red">Error: {error}</Text>
+            <Text></Text>
+          </>
+        )}
+        <Text color="yellow" bold>
+          Database: {notionApiSelectedPageTitle}
+        </Text>
+        <Text color="yellow" bold>
+          Rows to be graded: {rowCount}
+        </Text>
+        <Text></Text>
+        <Text bold>Filter Details:</Text>
+        <Text>  Property: {databaseFilterCriteria?.propertyName || "None"}</Text>
+        <Text>  Type: {databaseFilterCriteria?.filterType || "N/A"}</Text>
+        {filterValue && <Text>  Value: {filterValue}</Text>}
+        <Text></Text>
+        <Text color="gray" dimColor>
+          {rowCount === 0
+            ? "⚠️  No rows match the filter criteria. Please adjust your filter or go back."
+            : rowCount === 1
+            ? "1 row will be processed for grading."
+            : `${rowCount} rows will be processed for grading.`}
+        </Text>
+        <Text></Text>
+        <Box>
+          <Text color={selectedNavOption === 0 ? "cyan" : "white"} bold={selectedNavOption === 0}>
+            {selectedNavOption === 0 ? "→ " : "  "}Continue to Column Selection
+          </Text>
+        </Box>
+        <Box>
+          <Text color={selectedNavOption === 1 ? "cyan" : "white"} bold={selectedNavOption === 1}>
+            {selectedNavOption === 1 ? "→ " : "  "}Back to Filter
+          </Text>
+        </Box>
+        <Text></Text>
+        <Text color="gray" dimColor>
+          [Use arrow keys to navigate, Enter to select]
+        </Text>
+        <Text></Text>
+        <BackButton
+          onBack={() => navigateToStep("notion-page-selector")}
+          label="Page Selector"
+          isVisible={true}
+        />
+      </Box>
+    );
+  }
+
   if (step === "notion-github-column-select") {
+    // Data is already filtered at the API level, no need for client-side filtering
     return (
       <Box flexDirection="column">
         <GitHubColumnSelector
@@ -2280,10 +2551,15 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
             navigateToStep("processing-choice");
           }}
           onError={(error) => {
+            // Don't use navigateToStep since it clears errors
+            // Set step first, then set error so it persists
+            setStep(isFilteredWorkflow ? "notion-filter-confirmation" : "notion-api-content-view");
             setError(error);
-            navigateToStep("notion-api-content-view");
           }}
-          onBack={() => navigateToStep("notion-api-content-view")}
+          onBack={() => {
+            // Navigate back based on workflow path
+            navigateToStep(isFilteredWorkflow ? "notion-filter-confirmation" : "notion-api-content-view");
+          }}
         />
       </Box>
     );
@@ -2394,21 +2670,6 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           This will help prevent accidentally overwriting existing grading data.
         </Text>
       </Box>
-    );
-  }
-
-  if (step === "notion-override-confirmation") {
-    return (
-      <SimpleOverrideConfirmation
-        existingFields={existingGradingFields}
-        onDecision={(shouldOverride) => {
-          setShouldOverrideData(shouldOverride);
-          navigateToStep("notion-saving");
-        }}
-        onCancel={() => {
-          navigateToStep("grading-save-options");
-        }}
-      />
     );
   }
 

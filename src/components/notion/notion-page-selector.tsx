@@ -10,6 +10,7 @@ import { NotionOAuthClient } from "../../lib/notion/oauth-client.js";
 import { NotionTokenStorage } from "../../lib/notion/notion-token-storage.js";
 import { BackButton, useBackNavigation } from "../ui/back-button.js";
 import { ApiTimeoutHandler, TimeoutError, CircuitBreakerError } from "../../lib/notion/api-timeout-handler.js";
+import { NotionDataLoading } from "./notion-data-loading.js";
 
 interface NotionPageSelectorProps {
   onSelect: (pageId: string, pageTitle: string, type: "page" | "database") => void;
@@ -44,7 +45,6 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
   const [searchTerm, setSearchTerm] = useState("");
   const [isSearchFocused, setIsSearchFocused] = useState(true);
   const [isViewAllMode, setIsViewAllMode] = useState(false);
-  const [loadingIconIndex, setLoadingIconIndex] = useState(0);
   const [isStartingGrading, setIsStartingGrading] = useState(false);
   const [selectedDatabaseName, setSelectedDatabaseName] = useState("");
   const itemsPerPage = 10;
@@ -179,22 +179,6 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
     loadNotionData();
   }, [onError, cachedPages, cachedDatabases, onDataLoaded]);
 
-  // Loading animation effect
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
-
-    if (isLoading) {
-      interval = setInterval(() => {
-        setLoadingIconIndex((prev) => (prev + 1) % 6);
-      }, 2000);
-    }
-
-    return () => {
-      if (interval) {
-        clearInterval(interval);
-      }
-    };
-  }, [isLoading]);
 
   // Reset selection when search term changes
   useEffect(() => {
@@ -361,33 +345,11 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
   }
 
   if (isLoading) {
-    const loadingIcons = ["🔄", "⚡", "🚀", "✨", "🔮", "💫"];
-    const loadingMessages = [
-      "Connecting to your Notion workspace...",
-      "Fetching pages and databases...",
-      "Loading your content...",
-      "Organizing workspace data...",
-      "Preparing your workspace...",
-      "Almost ready...",
-    ];
-
     return (
-      <Box flexDirection="column" alignItems="center">
-        <Text bold color="blue">
-          Loading Notion Data...
-        </Text>
-        <Box marginTop={1} alignItems="center">
-          <Text>{loadingIcons[loadingIconIndex]}</Text>
-        </Box>
-        <Box marginTop={1}>
-          <Text color="cyan">{loadingMessages[loadingIconIndex]}</Text>
-        </Box>
-        <Box marginTop={2}>
-          <Text color="gray">
-            This may take a moment while we fetch your workspace data...
-          </Text>
-        </Box>
-      </Box>
+      <NotionDataLoading
+        title="Loading Notion Data"
+        message="Connecting to your workspace and fetching pages and databases..."
+      />
     );
   }
 

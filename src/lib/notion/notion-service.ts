@@ -8,6 +8,14 @@ import { ApiTimeoutHandler, CircuitBreaker, TimeoutConfig } from "./api-timeout-
 // Load environment variables
 config();
 
+// Import FilterCriteria type for client-side filtering
+export interface FilterCriteria {
+  propertyName: string;
+  propertyType: string;
+  filterType: 'include' | 'exclude' | 'contains' | 'not_contains' | 'equals' | 'not_equals' | 'greater_than' | 'less_than' | 'is_empty' | 'is_not_empty';
+  value?: string | string[] | number | boolean;
+}
+
 export interface NotionPage {
   id: string;
   title: string;
@@ -588,19 +596,99 @@ export class NotionService {
   }
 
   /**
+   * Apply client-side filtering to page results
+   * Used when Search API fallback is triggered (doesn't support property filters)
+   */
+  private applyClientSideFilter(pages: any[], criteria: FilterCriteria | null): any[] {
+    if (!criteria || !pages || pages.length === 0) {
+      return pages;
+    }
+
+    return pages.filter((page: any) => {
+      const property = page.properties?.[criteria.propertyName];
+      if (!property) return false;
+
+      // Extract value based on property type
+      let value: any = null;
+      switch (criteria.propertyType) {
+        case 'select':
+          value = property.select?.name;
+          break;
+        case 'multi_select':
+          value = property.multi_select?.map((opt: any) => opt.name) || [];
+          break;
+        case 'rich_text':
+        case 'title':
+          value = property.rich_text?.map((text: any) => text.plain_text).join('') ||
+                 property.title?.map((text: any) => text.plain_text).join('') || '';
+          break;
+        case 'checkbox':
+          value = property.checkbox;
+          break;
+        case 'number':
+          value = property.number;
+          break;
+      }
+
+      // Apply filter based on filter type
+      switch (criteria.filterType) {
+        case 'include':
+          if (Array.isArray(criteria.value)) {
+            const criteriaArray = criteria.value as string[];
+            return Array.isArray(value)
+              ? value.some(v => criteriaArray.includes(v))
+              : criteriaArray.includes(String(value));
+          }
+          return false;
+        case 'exclude':
+          if (Array.isArray(criteria.value)) {
+            const criteriaArray = criteria.value as string[];
+            return Array.isArray(value)
+              ? !value.some(v => criteriaArray.includes(v))
+              : !criteriaArray.includes(String(value));
+          }
+          return false;
+        case 'contains':
+          return typeof value === 'string' && value.includes(criteria.value as string);
+        case 'not_contains':
+          return typeof value === 'string' && !value.includes(criteria.value as string);
+        case 'equals':
+          return value === criteria.value;
+        case 'not_equals':
+          return value !== criteria.value;
+        case 'greater_than':
+          return typeof value === 'number' && value > (criteria.value as number);
+        case 'less_than':
+          return typeof value === 'number' && value < (criteria.value as number);
+        case 'is_empty':
+          return !value || value === '' || (Array.isArray(value) && value.length === 0);
+        case 'is_not_empty':
+          return !!value && value !== '' && (!Array.isArray(value) || value.length > 0);
+        default:
+          return true;
+      }
+    });
+  }
+
+  /**
    * Query a database
    * Uses 2025-09-03 API with data source query endpoint
    */
   async queryDatabase(
     databaseId: string,
     filter?: any,
-    sorts?: any[]
+    sorts?: any[],
+    clientFilter?: FilterCriteria | null
   ): Promise<any[]> {
     await this.ensureValidToken();
 
     // Helper function to query using search API as fallback
     const queryUsingSearchAPI = async (): Promise<any[]> => {
       DebugLogger.debug(`🔍 Using search API fallback for database ${databaseId}`);
+      if (clientFilter) {
+        DebugLogger.debug(`📋 Client-side filter will be applied: ${clientFilter.propertyName} (${clientFilter.filterType})`);
+      }
+
       const results: any[] = [];
       let hasMore = true;
       let nextCursor: string | undefined;
@@ -624,6 +712,14 @@ export class NotionService {
         results.push(...pagesFromDatabase);
         hasMore = response.has_more;
         nextCursor = response.next_cursor || undefined;
+      }
+
+      // Apply client-side filter if provided
+      if (clientFilter) {
+        const unfilteredCount = results.length;
+        const filteredResults = this.applyClientSideFilter(results, clientFilter);
+        DebugLogger.debug(`🔍 Client-side filter applied: ${unfilteredCount} → ${filteredResults.length} pages`);
+        return filteredResults;
       }
 
       return results;
@@ -662,32 +758,26 @@ export class NotionService {
         let pageCount = 0;
 
         while (hasMore) {
-          const requestBody = {
+          DebugLogger.debug(`🔍 Data source query request using SDK method:`, {
+            data_source_id: dataSourceId,
+            hasFilter: !!filter,
+            hasSorts: !!sorts,
+            page_size: 100
+          });
+
+          // Use SDK's dataSources.query method (available in SDK v5.1.0+ with API 2025-09-03)
+          const response = await (this.notion as any).dataSources.query({
+            data_source_id: dataSourceId,
             filter,
             sorts,
             page_size: 100,
             start_cursor: nextCursor
-          };
-
-          DebugLogger.debug(`🔍 Data source query request:`, {
-            path: `/v1/data_sources/${dataSourceId}/query`,
-            method: 'post',
-            dataSourceId,
-            bodyKeys: Object.keys(requestBody),
-            hasFilter: !!filter,
-            hasSorts: !!sorts
           });
 
-          const response = await this.notion.request({
-            path: `/v1/data_sources/${dataSourceId}/query`,
-            method: 'post',
-            body: requestBody
-          }) as any;
-
-          const pageResults = (response as any).results || [];
+          const pageResults = response.results || [];
           results.push(...pageResults);
-          hasMore = (response as any).has_more || false;
-          nextCursor = (response as any).next_cursor || undefined;
+          hasMore = response.has_more || false;
+          nextCursor = response.next_cursor || undefined;
           pageCount++;
 
           DebugLogger.debug(`✓ Retrieved page ${pageCount} with ${pageResults.length} results`);
@@ -739,6 +829,47 @@ export class NotionService {
       console.error(`❌ Failed to query database ${databaseId}:`, error.message);
       throw new Error(`Database query failed: ${error.message}`);
     }
+  }
+
+  /**
+   * Query database with enhanced schema (includes combined schema from data sources)
+   * This is used for filtered workflows to ensure GitHubUrlDetector gets complete property info
+   */
+  async queryDatabaseWithEnhancedSchema(
+    databaseId: string,
+    filter?: any,
+    sorts?: any[],
+    clientFilter?: FilterCriteria | null
+  ): Promise<{ database: any; entries: any[]; type: string }> {
+    await this.ensureValidToken();
+
+    // Get database metadata
+    const database = await this.getDatabaseMetadata(databaseId);
+
+    // Query entries with filter
+    const entries = await this.queryDatabase(databaseId, filter, sorts, clientFilter);
+
+    // Get combined schema from data sources and merge with database metadata
+    if (!this.dataSourceService) {
+      throw new Error('Data source service not initialized. Please ensure authentication is complete.');
+    }
+
+    const combinedSchema = await this.dataSourceService.getCombinedSchema(databaseId);
+
+    // Enhanced database metadata with combined schema
+    const enhancedDatabase = {
+      ...database,
+      properties: {
+        ...(database.properties || {}),
+        ...combinedSchema
+      }
+    };
+
+    return {
+      database: enhancedDatabase,
+      entries,
+      type: "database"
+    };
   }
 
   /**

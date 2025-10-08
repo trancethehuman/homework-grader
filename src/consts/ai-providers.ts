@@ -24,7 +24,8 @@ export const AI_PROVIDERS: AIProvider[] = [
   {
     id: "gemini-flash",
     name: "Gemini 2.5 Flash",
-    description: "Google Gemini's standard flash model with larger context window",
+    description:
+      "Google Gemini's standard flash model with larger context window",
     model: "gemini-2.5-flash",
     contextWindowTokens: 1000000,
     getModelInstance: async () => {
@@ -46,12 +47,34 @@ export const AI_PROVIDERS: AIProvider[] = [
   {
     id: "openai",
     name: "OpenAI GPT-4.1",
-    description: "OpenAI's latest GPT-4.1 model",
+    description: "OpenAI's GPT-4.1 model",
     model: "gpt-4.1",
     contextWindowTokens: 2000000,
     getModelInstance: async () => {
       const { openai } = await import("@ai-sdk/openai");
       return openai("gpt-4.1");
+    },
+  },
+  {
+    id: "gpt-5",
+    name: "OpenAI GPT-5",
+    description: "OpenAI's GPT-5 model with advanced reasoning capabilities",
+    model: "gpt-5",
+    contextWindowTokens: 272000,
+    getModelInstance: async () => {
+      const { openai } = await import("@ai-sdk/openai");
+      return openai("gpt-5");
+    },
+  },
+  {
+    id: "gpt-5-codex",
+    name: "OpenAI GPT-5 Codex",
+    description: "OpenAI's GPT-5 model optimized for agentic coding",
+    model: "gpt-5-codex",
+    contextWindowTokens: 400000,
+    getModelInstance: async () => {
+      const { openai } = await import("@ai-sdk/openai");
+      return openai("gpt-5-codex");
     },
   },
   {
@@ -83,29 +106,29 @@ export const COMPUTER_USE_MODELS: ComputerUseModel[] = [
     name: "OpenAI Computer Use Preview",
     provider: "openai",
     model: "computer-use-preview",
-    description: "OpenAI's latest computer use model"
+    description: "OpenAI's latest computer use model",
   },
   {
     id: "openai-computer-use-2025",
     name: "OpenAI Computer Use Preview 2025",
-    provider: "openai", 
+    provider: "openai",
     model: "computer-use-preview-2025-03-11",
-    description: "OpenAI's enhanced computer use model"
+    description: "OpenAI's enhanced computer use model",
   },
   {
     id: "claude-sonnet-latest",
     name: "Claude 3.7 Sonnet Latest",
     provider: "anthropic",
-    model: "claude-3-7-sonnet-latest", 
-    description: "Anthropic's latest Sonnet model"
+    model: "claude-3-7-sonnet-latest",
+    description: "Anthropic's latest Sonnet model",
   },
   {
     id: "claude-sonnet-4",
     name: "Claude Sonnet 4",
     provider: "anthropic",
     model: "claude-sonnet-4-20250514",
-    description: "Anthropic's Sonnet 4 model"
-  }
+    description: "Anthropic's Sonnet 4 model",
+  },
 ];
 
 export const DEFAULT_COMPUTER_USE_MODEL = COMPUTER_USE_MODELS[0];

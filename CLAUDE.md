@@ -6,196 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is a homework grading system repository with TypeScript URL loading functionality for processing homework submissions from CSV files and GitHub repositories. The project is licensed under GNU License.
 
-### OAuth/Proxy (short)
-
-- Notion auth uses a tiny Express proxy in `notion-proxy/` deployed to Render (free plan supported).
-- The proxy owns the Notion client secret and handles `/auth/start`, `/callback`, `/refresh`, and `/auth/status/:state`.
-- The CLI calls the proxy to start OAuth, opens a browser, and stores the returned access token locally.
-- Default proxy base points to the hosted instance; override with `NOTION_PROXY_URL` for local testing.
-- **Auto-reauth on Invalid Token**: When a Notion token becomes invalid/expired, the system automatically triggers OAuth flow instead of returning to the previous step, ensuring seamless re-authentication.
-- **API Version**: Uses Notion API 2025-09-03 with multi-source database support and enhanced data discovery features.
-- **Notion API Documentation**:
-  - [Upgrade Guide 2025-09-03](https://developers.notion.com/docs/upgrade-guide-2025-09-03) - Migration details for the new API
-  - [Database Reference](https://developers.notion.com/reference/database) - Database object and data sources array
-  - [Data Source Reference](https://developers.notion.com/reference/data-source) - Data source querying and structure
-- **SDK/API Compatibility**: Critical compatibility requirements:
-  - **SDK v5.1.0+**: Only compatible with API version 2025-09-03
-  - **Deprecated Methods**: `databases.query()` is deprecated in API 2025-09-03 and does not return results
-  - **Data Source API**: Primary method uses `dataSources.query()` with data source IDs
-  - **Search API Fallback**: When data sources unavailable, uses Search API to filter pages by database_id
-  - **No Legacy Support**: Cannot use `databases.query()` endpoint with API version 2025-09-03
-- **Documentation**: Key Notion API references:
-  - [Working with Databases](https://developers.notion.com/docs/working-with-databases)
-  - [Working with Page Content](https://developers.notion.com/docs/working-with-page-content)
-  - [Database API Reference](https://developers.notion.com/reference/database)
-  - [Data Source API Reference](https://developers.notion.com/reference/data-source)
-  - [Data Source Query API](https://developers.notion.com/reference/query-a-data-source) - **Critical for querying database content**
-  - [Page API Reference](https://developers.notion.com/reference/page)
-  - [API Changelog](https://developers.notion.com/page/changelog)
-
-### Notion Data Source Querying (2025-09-03 API)
-
-**CRITICAL**: In the 2025-09-03 API version, the traditional `databases.query()` method is deprecated. Database content must be queried using the Data Source API.
-
-#### **API Endpoint**
-
-```
-POST https://api.notion.com/v1/data_sources/{data_source_id}/query
-```
-
-#### **Authentication & Headers**
-
-```json
-{
-  "Authorization": "Bearer {access_token}",
-  "Content-Type": "application/json",
-  "Notion-Version": "2025-09-03"
-}
-```
-
-#### **Request Structure**
-
-```json
-{
-  "filter": {
-    "and": [
-      {
-        "property": "Status",
-        "select": { "equals": "Active" }
-      }
-    ]
-  },
-  "sorts": [
-    {
-      "property": "Created",
-      "direction": "descending"
-    }
-  ],
-  "start_cursor": "optional_pagination_cursor",
-  "page_size": 100,
-  "filter_properties": ["prop1", "prop2"]
-}
-```
-
-#### **Response Structure**
-
-```json
-{
-  "object": "list",
-  "results": [
-    {
-      "object": "page",
-      "id": "page-id",
-      "properties": { ... },
-      "parent": {
-        "type": "data_source_id",
-        "data_source_id": "data-source-id"
-      }
-    }
-  ],
-  "next_cursor": "optional_next_cursor",
-  "has_more": false
-}
-```
-
-#### **Key Implementation Requirements**
-
-1. **Data Source ID Discovery**: Each database has a `data_sources` array containing the data source IDs needed for querying
-
-   ```typescript
-   // Get database object first
-   const database = await notion.databases.retrieve(databaseId);
-   // Use the data source IDs from the database
-   const dataSourceIds = database.data_sources.map((ds) => ds.id);
-   ```
-
-2. **Individual Data Source Queries**: Query each data source separately and combine results
-
-   ```typescript
-   for (const dataSourceId of dataSourceIds) {
-     const response = await notion.request({
-       path: `data_sources/${dataSourceId}/query`,
-       method: "POST",
-       body: {
-         /* query parameters */
-       },
-     });
-   }
-   ```
-
-3. **Filtering**: Supports complex filters similar to Notion UI
-
-   - Property-based filters (text, number, date, select, checkbox, etc.)
-   - Logical operators: `and`, `or`
-   - Comparison operators: `equals`, `contains`, `starts_with`, `is_empty`, etc.
-
-4. **Pagination**: Use `start_cursor` and `page_size` for large datasets
-
-   - Default page size: 100 items
-   - Maximum page size: 100 items
-   - Use `next_cursor` from response for subsequent requests
-
-5. **Error Handling**:
-   - **404**: Data source not found or not accessible
-   - **403**: Insufficient permissions (need read content capabilities)
-   - **400**: Invalid request structure or parameters
-
-#### **Permissions Requirements**
-
-- Integration must have **read content capabilities**
-- Parent database must be **shared with the integration**
-- For wiki data sources: may contain both pages and databases
-
-#### **Performance Considerations**
-
-- Each data source query is a separate API call
-- Implement proper rate limiting (3 requests per second)
-- Cache data source IDs to avoid repeated database.retrieve() calls
-- Use pagination for large datasets to avoid timeouts
-
-#### **Migration from Legacy API**
-
-```typescript
-// OLD (deprecated in 2025-09-03):
-await notion.databases.query({ database_id: databaseId });
-
-// NEW (required in 2025-09-03):
-const database = await notion.databases.retrieve(databaseId);
-const results = [];
-for (const dataSource of database.data_sources) {
-  const response = await notion.request({
-    path: `data_sources/${dataSource.id}/query`,
-    method: "POST",
-    body: {
-      /* filters, sorts, pagination */
-    },
-  });
-  results.push(...response.results);
-}
-```
-
-#### **Fallback Strategy for API 2025-09-03**
-
-When `database.data_sources` is empty or unavailable, the system uses **Search API** as a fallback instead of the deprecated `databases.query()` method:
-
-```typescript
-// Search API fallback (works with 2025-09-03)
-const response = await notion.search({
-  filter: {
-    property: "object",
-    value: "page"
-  },
-  page_size: 100
-});
-
-// Filter results to only include pages from the target database
-const pagesFromDatabase = response.results.filter(result => {
-  const parent = result.parent;
-  return parent?.type === 'database_id' && parent?.database_id === databaseId;
-});
-```
-
-**Important**: Never use `databases.query()` with API version 2025-09-03 as it will return no results.
+**Notion Integration**: For Notion-specific documentation including OAuth, API details, data source querying, and filter formats, see `/src/lib/notion/CLAUDE.md`.
 
 ## Development Setup
 
@@ -259,12 +70,6 @@ npx homework-grader
 pnpm run build          # Build first
 pnpm start              # Interactive mode
 pnpm start sample.csv   # Legacy mode with CSV file
-
-### Notion in the CLI (very short)
-
-- Selecting "Notion Database" shows a brief screen, detects existing access, and provides a shortcut to clear.
-- We refresh tokens when possible and prompt for OAuth only when needed.
-- **Automatic Re-authentication**: If a Notion token is invalid or expired when accessing databases, the system automatically clears the invalid token and triggers the OAuth flow, eliminating the need for users to manually navigate back and re-authenticate.
 
 # Development workflow
 pnpm run dev            # Interactive mode (no build required)
@@ -380,7 +185,7 @@ The system now uses **E2B Sandbox** as the primary repository processing method,
 
 - **Runtime**: E2B cloud-based execution environment
 - **Isolation**: Each processing session runs in a dedicated sandbox
-- **Timeout**: 10 minutes default (configurable)
+- **Timeout**: 5 minutes default (configurable)
 - **Network**: Secure internet access for git repository cloning
 - **Storage**: Isolated temporary directory for repository processing
 - **Security**: API key-based authentication with local storage
@@ -484,33 +289,6 @@ The codebase includes:
   - File permission management (0o600 for token files)
   - Token validation and cleanup methods
 
-### Notion Data Conflict Protection
-
-- **ConflictDetector Class** (`src/lib/notion/conflict-detector.ts`)
-
-  - **NEW**: Intelligent detection of existing grading data before updates
-  - **Cell-Level Conflict Checking**: Checks if grading columns already contain data
-  - **Batch Conflict Processing**: Efficiently processes multiple repository updates
-  - **Field-Level Granularity**: Identifies specific fields with existing data
-  - **Property Value Extraction**: Handles all Notion property types (rich_text, select, etc.)
-  - **Override Decision Support**: Applies user choices for keep/replace/skip actions
-
-- **OverrideConfirmation Component** (`src/components/notion/override-confirmation.tsx`)
-
-  - **NEW**: Interactive UI for resolving data conflicts
-  - **Bulk Action Options**: Replace all, keep all, field-by-field review, or cancel
-  - **Detailed Conflict View**: Shows existing vs new values for each field
-  - **Repository-by-Repository Flow**: Guides users through each conflict systematically
-  - **Progress Tracking**: Displays conflict resolution progress
-  - **User-Friendly Interface**: Clear navigation with arrow keys and enter selection
-
-- **Enhanced GradingDatabaseService** (`src/lib/notion/grading-database-service.ts`)
-  - **NEW**: Conflict-aware Notion database operations
-  - **Pre-Save Conflict Detection**: Checks for existing data before updates
-  - **Conditional Override Processing**: Applies user decisions for partial updates
-  - **Legacy Support**: Maintains backward compatibility with existing save methods
-  - **Error Resilience**: Comprehensive error handling during conflict resolution
-
 ### CLI Interface
 
 - **Command Line Interface** (`src/cli.tsx`)
@@ -573,11 +351,11 @@ The codebase includes:
   - **COUNTDOWN_UPDATE_INTERVAL_MS**: 1-second interval for countdown display
 
 - **Grading Prompts** (`src/consts/grading-prompts.ts`)
-  - **TypeScript Template Literals**: All prompts stored as template literal strings in `.ts` files in `src/prompts/markdown/`
+  - **TypeScript Template Literals**: All prompts stored as template literal strings in `.ts` files in `src/prompts/content/`
   - **Prompt Loader** (`src/prompts/prompt-loader.ts`): Imports and returns prompts via lookup
-  - **Prompt Fragments** (`src/prompts/markdown/fragments/`): Reusable prompt components for composition
+  - **Prompt Fragments** (`src/prompts/content/fragments/`): Reusable prompt components for composition
   - **Chaining Utilities**: `chainPrompts()` and `appendToPrompt()` for combining prompts
-  - **No Repetition**: Retry instructions and common fragments stored separately
+  - **No Repetition**: Common sections extracted into shared fragments
   - **Easy Maintenance**: Edit prompts as template literals in TypeScript files
   - **Available Prompts**:
     - `build-your-first-agent.ts` - Main grading prompt
@@ -585,6 +363,11 @@ The codebase includes:
     - `grader-chunk.ts` - Chunk processing for large repositories
     - `grader-final.ts` - Final aggregation of chunk feedback
   - **Available Fragments**:
+    - `output-structure.ts` - Common output structure for REPO_EXPLAINED
+    - `feedback-structure.ts` - Common feedback structure (3 paragraphs)
+    - `format-requirements.ts` - Shared formatting requirements
+    - `general-guidelines.ts` - Common guidelines for all prompts
+    - `mcp-evaluation-checklist.ts` - Comprehensive MCP implementation evaluation (9 patterns + critical issues)
     - `schema-validation-retry.ts` - Schema validation error instructions
     - `json-format-retry.ts` - JSON parsing error instructions
     - `generic-retry.ts` - Generic retry instructions
@@ -692,20 +475,6 @@ The codebase includes:
 - **File Management**: Automatic deduplication and validation
 
 ## Important Instructions
-
-### Notion API Development Rules
-
-**ALWAYS fetch and read the official Notion API documentation before writing or making any changes regarding Notion integration**. This is critical because:
-
-- The Notion API is actively evolving (especially the 2025-09-03 version)
-- Implementation details change between API versions
-- Official documentation provides the most accurate and up-to-date information
-- **Key Migration Knowledge**: In 2025-09-03 API, `/v1/databases/{id}/query` is deprecated - use data source queries or search API instead
-- Always reference these key documentation sources:
-  - [Upgrade Guide 2025-09-03](https://developers.notion.com/docs/upgrade-guide-2025-09-03)
-  - [Database Reference](https://developers.notion.com/reference/database)
-  - [Data Source Reference](https://developers.notion.com/reference/data-source)
-  - [Changelog](https://developers.notion.com/page/changelog)
 
 ### General Development Rules
 

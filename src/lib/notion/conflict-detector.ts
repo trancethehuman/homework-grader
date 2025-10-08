@@ -83,6 +83,51 @@ export class ConflictDetector {
   }
 
   /**
+   * Check a single row for data conflicts (lightweight version for row-by-row checking)
+   * Only returns fields that already have data in them
+   */
+  async checkSingleRowConflict(
+    pageId: string,
+    repositoryName: string
+  ): Promise<{ hasData: boolean; fieldsWithData: Array<{ fieldName: string; displayName: string; existingValue: string }> }> {
+    try {
+      // Get current page properties
+      const page = await this.getPageProperties(pageId);
+      const existingProperties = page.properties;
+
+      // Get grading field mappings
+      const gradingFields = this.getGradingFieldMappings();
+
+      // Check each grading field for existing data
+      const fieldsWithData: Array<{ fieldName: string; displayName: string; existingValue: string }> = [];
+
+      for (const [fieldName, displayName] of Object.entries(gradingFields)) {
+        const existingProperty = existingProperties[fieldName];
+
+        if (existingProperty) {
+          const existingValue = this.extractPropertyValue(existingProperty);
+
+          // Only include fields that have actual data
+          if (existingValue.trim().length > 0) {
+            fieldsWithData.push({
+              fieldName,
+              displayName,
+              existingValue: existingValue.substring(0, 100) + (existingValue.length > 100 ? '...' : '')
+            });
+          }
+        }
+      }
+
+      return {
+        hasData: fieldsWithData.length > 0,
+        fieldsWithData
+      };
+    } catch (error: any) {
+      throw new Error(`Failed to check row conflict for ${repositoryName}: ${error.message}`);
+    }
+  }
+
+  /**
    * Check conflicts for multiple repositories
    */
   async checkBatchConflicts(

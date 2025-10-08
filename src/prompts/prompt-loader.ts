@@ -1,10 +1,10 @@
-import { PROMPT as BUILD_YOUR_FIRST_AGENT } from "./markdown/build-your-first-agent.js";
-import { PROMPT as MCP_CLIENT_IMPLEMENTATION } from "./markdown/mcp-client-implementation.js";
-import { PROMPT as GRADER_CHUNK } from "./markdown/grader-chunk.js";
-import { PROMPT as GRADER_FINAL } from "./markdown/grader-final.js";
-import { FRAGMENT as SCHEMA_VALIDATION_RETRY } from "./markdown/fragments/schema-validation-retry.js";
-import { FRAGMENT as JSON_FORMAT_RETRY } from "./markdown/fragments/json-format-retry.js";
-import { FRAGMENT as GENERIC_RETRY } from "./markdown/fragments/generic-retry.js";
+import { PROMPT as BUILD_YOUR_FIRST_AGENT } from "./content/build-your-first-agent.js";
+import { PROMPT as MCP_CLIENT_IMPLEMENTATION } from "./content/mcp-client-implementation.js";
+import { PROMPT as GRADER_CHUNK } from "./content/grader-chunk.js";
+import { PROMPT as GRADER_FINAL } from "./content/grader-final.js";
+import { FRAGMENT as SCHEMA_VALIDATION_RETRY } from "./content/fragments/schema-validation-retry.js";
+import { FRAGMENT as JSON_FORMAT_RETRY } from "./content/fragments/json-format-retry.js";
+import { FRAGMENT as GENERIC_RETRY } from "./content/fragments/generic-retry.js";
 
 const PROMPTS: Record<string, string> = {
   "build-your-first-agent.ts": BUILD_YOUR_FIRST_AGENT,

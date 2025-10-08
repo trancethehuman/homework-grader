@@ -127,6 +127,16 @@ async function processContentChunk(
     };
   }
 
+  if (provider.id === "gpt-5") {
+    generateObjectOptions.providerOptions = {
+      openai: {
+        reasoning_effort: "low",
+        textVerbosity: "low",
+        reasoningSummary: "detailed",
+      },
+    };
+  }
+
   if (provider.id === "gemini-pro") {
     generateObjectOptions.providerOptions = {
       google: {
@@ -192,6 +202,16 @@ async function aggregateChunkFeedbacks(
     generateObjectOptions.providerOptions = {
       openai: {
         structuredOutputs: true,
+      },
+    };
+  }
+
+  if (provider.id === "gpt-5") {
+    generateObjectOptions.providerOptions = {
+      openai: {
+        reasoning_effort: "low",
+        textVerbosity: "low",
+        reasoningSummary: "detailed",
       },
     };
   }
@@ -316,6 +336,16 @@ async function processStandardGrading(
     generateObjectOptions.providerOptions = {
       openai: {
         structuredOutputs: true,
+      },
+    };
+  }
+
+  if (provider.id === "gpt-5") {
+    generateObjectOptions.providerOptions = {
+      openai: {
+        reasoning_effort: "low",
+        textVerbosity: "low",
+        reasoningSummary: "detailed",
       },
     };
   }
