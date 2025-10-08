@@ -39,6 +39,7 @@ import {
 } from "./consts/ai-providers.js";
 import { SANDBOX_BATCH_SIZE } from "./consts/limits.js";
 import { PreferencesStorage } from "./lib/preferences-storage.js";
+import { RateLimiter } from "./lib/rate-limiter.js";
 import {
   GradingSaveOptions,
   SaveOption,
@@ -492,6 +493,8 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         let githubService: GitHubService | null = null;
         let sandboxService: any = null;
 
+        const rateLimiter = selectedProvider ? new RateLimiter(selectedProvider) : undefined;
+
         if (useGitHubAPI) {
           githubService = new GitHubService(githubToken, undefined, maxDepth);
         } else {
@@ -563,7 +566,8 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
                     url,
                     selectedProvider || DEFAULT_PROVIDER,
                     chunkingPreference,
-                    selectedGradingPrompt.value
+                    selectedGradingPrompt.value,
+                    rateLimiter
                   );
 
                   const gradingResult = await saveRepositoryFiles(
@@ -643,7 +647,8 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
                       url,
                       selectedProvider || DEFAULT_PROVIDER,
                       chunkingPreference,
-                      selectedGradingPrompt.value
+                      selectedGradingPrompt.value,
+                      rateLimiter
                     );
                   }
                 }

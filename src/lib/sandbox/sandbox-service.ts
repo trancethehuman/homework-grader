@@ -11,6 +11,7 @@ import {
 import { SandboxFileProcessor } from "./sandbox-file-processor.js";
 import { AIProvider } from "../../consts/ai-providers.js";
 import { getRepoScores } from "../../grader/grader.js";
+import { RateLimiter } from "../rate-limiter.js";
 
 export class SandboxService {
   private sandbox: Sandbox | null = null;
@@ -368,7 +369,7 @@ export class SandboxService {
    * This method is safe for concurrent use - multiple repositories can be processed
    * in parallel as each gets a unique clone path with UUID suffix.
    */
-  async processGitHubUrl(url: string, aiProvider?: AIProvider, chunkingPreference: 'allow' | 'skip' = 'allow', selectedPrompt?: string): Promise<any> {
+  async processGitHubUrl(url: string, aiProvider?: AIProvider, chunkingPreference: 'allow' | 'skip' = 'allow', selectedPrompt?: string, rateLimiter?: RateLimiter): Promise<any> {
     const repositoryInfo = this.parseGitHubUrl(url);
     if (!repositoryInfo) {
       throw new Error(`Invalid GitHub URL: ${url}`);
@@ -395,7 +396,8 @@ export class SandboxService {
           repositoryContent.formattedContent,
           aiProvider,
           chunkingPreference,
-          selectedPrompt
+          selectedPrompt,
+          rateLimiter
         )
           .then((result) => {
             const gradingTime = Date.now() - gradingStartTime;

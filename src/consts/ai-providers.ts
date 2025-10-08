@@ -4,6 +4,11 @@ export interface AIProvider {
   description: string;
   model: string;
   contextWindowTokens?: number;
+  rateLimitRpm?: number;
+  rateLimitTpm?: number;
+  rateLimitInputTpm?: number;
+  rateLimitOutputTpm?: number;
+  rateLimitMargin?: number;
   getModelInstance: () => Promise<any>;
 }
 
@@ -16,6 +21,8 @@ export const AI_PROVIDERS: AIProvider[] = [
     description: "Google Gemini's fastest model",
     model: "gemini-2.5-flash-lite",
     contextWindowTokens: 128000,
+    rateLimitRpm: 4000,
+    rateLimitTpm: 4000000,
     getModelInstance: async () => {
       const { google } = await import("@ai-sdk/google");
       return google("gemini-2.5-flash-lite");
@@ -28,6 +35,8 @@ export const AI_PROVIDERS: AIProvider[] = [
       "Google Gemini's standard flash model with larger context window",
     model: "gemini-2.5-flash",
     contextWindowTokens: 1000000,
+    rateLimitRpm: 1000,
+    rateLimitTpm: 1000000,
     getModelInstance: async () => {
       const { google } = await import("@ai-sdk/google");
       return google("gemini-2.5-flash");
@@ -39,6 +48,9 @@ export const AI_PROVIDERS: AIProvider[] = [
     description: "Google Gemini's most capable model",
     model: "gemini-2.5-pro",
     contextWindowTokens: 1048576,
+    rateLimitRpm: 150,
+    rateLimitTpm: 2000000,
+    rateLimitMargin: 0.15,
     getModelInstance: async () => {
       const { google } = await import("@ai-sdk/google");
       return google("gemini-2.5-pro");
@@ -50,6 +62,8 @@ export const AI_PROVIDERS: AIProvider[] = [
     description: "OpenAI's GPT-4.1 model",
     model: "gpt-4.1",
     contextWindowTokens: 2000000,
+    rateLimitRpm: 500,
+    rateLimitTpm: 90000,
     getModelInstance: async () => {
       const { openai } = await import("@ai-sdk/openai");
       return openai("gpt-4.1");
@@ -61,6 +75,8 @@ export const AI_PROVIDERS: AIProvider[] = [
     description: "OpenAI's GPT-5 model with advanced reasoning capabilities",
     model: "gpt-5",
     contextWindowTokens: 272000,
+    rateLimitRpm: 1000,
+    rateLimitTpm: 500000,
     getModelInstance: async () => {
       const { openai } = await import("@ai-sdk/openai");
       return openai("gpt-5");
@@ -72,6 +88,8 @@ export const AI_PROVIDERS: AIProvider[] = [
     description: "OpenAI's GPT-5 model optimized for agentic coding",
     model: "gpt-5-codex",
     contextWindowTokens: 400000,
+    rateLimitRpm: 1000,
+    rateLimitTpm: 500000,
     getModelInstance: async () => {
       const { openai } = await import("@ai-sdk/openai");
       return openai("gpt-5-codex");
@@ -83,6 +101,10 @@ export const AI_PROVIDERS: AIProvider[] = [
     description: "Anthropic's Claude Sonnet 4 model",
     model: "claude-sonnet-4-20250514",
     contextWindowTokens: 200000,
+    rateLimitRpm: 50,
+    rateLimitInputTpm: 30000,
+    rateLimitOutputTpm: 8000,
+    rateLimitMargin: 0.2,
     getModelInstance: async () => {
       const { anthropic } = await import("@ai-sdk/anthropic");
       return anthropic("claude-sonnet-4-20250514");

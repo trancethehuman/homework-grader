@@ -2,6 +2,7 @@ import { Octokit } from "@octokit/rest";
 import { DEFAULT_IGNORED_EXTENSIONS } from "../consts/ignored-extensions.js";
 import { getRepoScores } from "../grader/grader.js";
 import { AIProvider } from "../consts/ai-providers.js";
+import { RateLimiter } from "../lib/rate-limiter.js";
 
 interface GitHubRepoInfo {
   owner: string;
@@ -389,7 +390,8 @@ export class GitHubService {
     url: string,
     provider: AIProvider,
     chunkingPreference: 'allow' | 'skip' = 'allow',
-    selectedPrompt?: string
+    selectedPrompt?: string,
+    rateLimiter?: RateLimiter
   ): Promise<{ content: string; scores: Promise<any> }> {
     const totalStartTime = Date.now();
     const repoInfo = this.parseGitHubUrl(url);
@@ -415,7 +417,7 @@ export class GitHubService {
     console.log(`✓ Successfully processed ${repoInfo.owner}/${repoInfo.repo} via GitHub API - Content extraction: ${contentTime}ms`);
 
     const gradingStartTime = Date.now();
-    const scoresPromise = getRepoScores(concatenatedContent, provider, chunkingPreference, selectedPrompt).then(result => {
+    const scoresPromise = getRepoScores(concatenatedContent, provider, chunkingPreference, selectedPrompt, rateLimiter).then(result => {
       const gradingTime = Date.now() - gradingStartTime;
       const totalTime = Date.now() - totalStartTime;
       console.log(`✓ Grading completed for ${repoInfo.owner}/${repoInfo.repo} - Grading: ${gradingTime}ms, Total: ${totalTime}ms`);

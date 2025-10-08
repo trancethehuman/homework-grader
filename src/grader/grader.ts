@@ -12,6 +12,7 @@ import {
   AIProvider,
   DEFAULT_CONTEXT_WINDOW_TOKENS,
 } from "../consts/ai-providers.js";
+import { RateLimiter } from "../lib/rate-limiter.js";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -90,7 +91,8 @@ function splitRepositoryContent(
 async function processContentChunk(
   chunk: ContentChunk,
   provider: AIProvider,
-  previousFeedbacks: ChunkFeedback[] = []
+  previousFeedbacks: ChunkFeedback[] = [],
+  rateLimiter?: RateLimiter
 ): Promise<ChunkFeedback> {
   const modelInstance = await provider.getModelInstance();
 
@@ -147,7 +149,30 @@ async function processContentChunk(
     };
   }
 
+  if (rateLimiter) {
+    const estimatedInputTokens = estimateTokenCount(
+      generateObjectOptions.system + prompt
+    );
+    const estimatedOutputTokens = 2000;
+
+    const waitTime = rateLimiter.checkRateLimit(
+      estimatedInputTokens,
+      estimatedOutputTokens
+    );
+    if (waitTime > 0) {
+      console.log(`⏳ Rate limit: waiting ${Math.ceil(waitTime / 1000)}s before grading chunk ${chunk.chunkIndex}...`);
+      await new Promise((resolve) => setTimeout(resolve, waitTime));
+    }
+  }
+
   const result = await generateObject(generateObjectOptions);
+
+  if (rateLimiter && result.usage) {
+    rateLimiter.recordTokenUsage(
+      result.usage.inputTokens || 0,
+      result.usage.outputTokens || 0
+    );
+  }
 
   if (!result.object) {
     throw new Error("Generated object is null or invalid");
@@ -165,7 +190,8 @@ async function processContentChunk(
 async function aggregateChunkFeedbacks(
   chunkFeedbacks: ChunkFeedback[],
   provider: AIProvider,
-  originalContent: string
+  originalContent: string,
+  rateLimiter?: RateLimiter
 ): Promise<any> {
   const modelInstance = await provider.getModelInstance();
 
@@ -226,7 +252,30 @@ async function aggregateChunkFeedbacks(
     };
   }
 
+  if (rateLimiter) {
+    const estimatedInputTokens = estimateTokenCount(
+      generateObjectOptions.system + generateObjectOptions.prompt
+    );
+    const estimatedOutputTokens = 2000;
+
+    const waitTime = rateLimiter.checkRateLimit(
+      estimatedInputTokens,
+      estimatedOutputTokens
+    );
+    if (waitTime > 0) {
+      console.log(`⏳ Rate limit: waiting ${Math.ceil(waitTime / 1000)}s before aggregating feedback...`);
+      await new Promise((resolve) => setTimeout(resolve, waitTime));
+    }
+  }
+
   const result = await generateObject(generateObjectOptions);
+
+  if (rateLimiter && result.usage) {
+    rateLimiter.recordTokenUsage(
+      result.usage.inputTokens || 0,
+      result.usage.outputTokens || 0
+    );
+  }
 
   if (!result.object) {
     throw new Error("Generated object is null or invalid");
@@ -241,7 +290,8 @@ export async function getRepoScores(
   repoContent: string,
   provider: AIProvider,
   chunkingPreference: "allow" | "skip" = "allow",
-  selectedPrompt?: string
+  selectedPrompt?: string,
+  rateLimiter?: RateLimiter
 ): Promise<any> {
   const contextLimit =
     provider.contextWindowTokens || DEFAULT_CONTEXT_WINDOW_TOKENS;
@@ -254,7 +304,7 @@ export async function getRepoScores(
     console.log(
       `📊 Content size: ${estimatedTokens} tokens (within ${contextLimit} limit)`
     );
-    return await processStandardGrading(repoContent, provider, selectedPrompt);
+    return await processStandardGrading(repoContent, provider, selectedPrompt, rateLimiter);
   }
 
   console.log(
@@ -282,7 +332,7 @@ export async function getRepoScores(
     );
     try {
       // Note: We can't pass previous feedbacks in parallel mode, so each chunk is independent
-      const chunkFeedback = await processContentChunk(chunk, provider, []);
+      const chunkFeedback = await processContentChunk(chunk, provider, [], rateLimiter);
       console.log(`✓ Completed chunk ${chunk.chunkIndex}/${chunk.totalChunks}`);
       return chunkFeedback;
     } catch (error) {
@@ -310,13 +360,14 @@ export async function getRepoScores(
   console.log(
     `🔗 Aggregating feedback from ${chunkFeedbacks.length} chunks...`
   );
-  return await aggregateChunkFeedbacks(chunkFeedbacks, provider, repoContent);
+  return await aggregateChunkFeedbacks(chunkFeedbacks, provider, repoContent, rateLimiter);
 }
 
 async function processStandardGrading(
   repoContent: string,
   provider: AIProvider,
-  selectedPrompt?: string
+  selectedPrompt?: string,
+  rateLimiter?: RateLimiter
 ): Promise<any> {
   const modelInstance = await provider.getModelInstance();
 
@@ -361,12 +412,36 @@ async function processStandardGrading(
   }
 
   // Implement retry logic for generating comprehensive feedback
-  const maxRetries = 2;
+  let maxRetries = 2;
   let lastError: Error | null = null;
+  let isRateLimitError = false;
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
+      if (rateLimiter) {
+        const estimatedInputTokens = estimateTokenCount(
+          generateObjectOptions.system + generateObjectOptions.prompt
+        );
+        const estimatedOutputTokens = 2000;
+
+        const waitTime = rateLimiter.checkRateLimit(
+          estimatedInputTokens,
+          estimatedOutputTokens
+        );
+        if (waitTime > 0) {
+          console.log(`⏳ Rate limit: waiting ${Math.ceil(waitTime / 1000)}s before grading (attempt ${attempt})...`);
+          await new Promise((resolve) => setTimeout(resolve, waitTime));
+        }
+      }
+
       const result = await generateObject(generateObjectOptions);
+
+      if (rateLimiter && result.usage) {
+        rateLimiter.recordTokenUsage(
+          result.usage.inputTokens || 0,
+          result.usage.outputTokens || 0
+        );
+      }
 
       // Validate the result has the expected structure
       if (!result.object || typeof result.object !== "object") {
@@ -389,41 +464,73 @@ async function processStandardGrading(
       }
     } catch (error) {
       lastError = error as Error;
+      const errorMsg = error instanceof Error ? error.message : String(error);
+
+      // Check if this is a rate limit error
+      isRateLimitError =
+        errorMsg.includes("quota exceeded") ||
+        errorMsg.includes("rate limit") ||
+        errorMsg.includes("429") ||
+        errorMsg.includes("Too Many Requests");
+
       console.warn(
         `⚠️  Grading attempt ${attempt} failed:`,
-        error instanceof Error ? error.message : String(error)
+        errorMsg
       );
 
+      // For rate limit errors, allow more retries
+      if (isRateLimitError && maxRetries < 4) {
+        maxRetries = 4;
+      }
+
       if (attempt < maxRetries) {
-        console.log(
-          `🔄 Retrying grading (attempt ${attempt + 1}/${maxRetries})...`
-        );
+        let waitTime = 1000;
 
-        // Adapt the retry strategy based on the error type
-        const errorMsg = error instanceof Error ? error.message : String(error);
+        if (isRateLimitError) {
+          // Try to parse retry-after time from error message
+          if (rateLimiter) {
+            const parsedWait = rateLimiter.parseRetryAfter(lastError);
+            if (parsedWait) {
+              waitTime = parsedWait + 1000; // Add 1 second buffer
+              console.log(`⏳ Rate limit error: waiting ${Math.ceil(waitTime / 1000)}s as requested by API...`);
+            } else {
+              // Use exponential backoff for rate limit errors
+              waitTime = Math.min(20000, 5000 * Math.pow(2, attempt - 1));
+              console.log(`⏳ Rate limit error: waiting ${Math.ceil(waitTime / 1000)}s (exponential backoff)...`);
+            }
 
-        if (errorMsg.includes("Schema validation failed")) {
-          // Schema validation error - provide more specific guidance
-          generateObjectOptions.system = appendToPrompt(
-            promptToUse,
-            RETRY_FRAGMENTS.SCHEMA_VALIDATION
-          );
-        } else if (errorMsg.includes("JSON") || errorMsg.includes("parse")) {
-          // JSON parsing error - focus on format
-          generateObjectOptions.system = appendToPrompt(
-            promptToUse,
-            RETRY_FRAGMENTS.JSON_FORMAT
-          );
+            // Record rate limit hit to update internal tracking
+            rateLimiter.recordRateLimitHit(waitTime);
+          }
         } else {
-          // Generic error - general improvement guidance
-          generateObjectOptions.system = appendToPrompt(
-            promptToUse,
-            RETRY_FRAGMENTS.GENERIC
+          // Adapt the retry strategy based on the error type
+          console.log(
+            `🔄 Retrying grading (attempt ${attempt + 1}/${maxRetries})...`
           );
+
+          if (errorMsg.includes("Schema validation failed")) {
+            // Schema validation error - provide more specific guidance
+            generateObjectOptions.system = appendToPrompt(
+              promptToUse,
+              RETRY_FRAGMENTS.SCHEMA_VALIDATION
+            );
+          } else if (errorMsg.includes("JSON") || errorMsg.includes("parse")) {
+            // JSON parsing error - focus on format
+            generateObjectOptions.system = appendToPrompt(
+              promptToUse,
+              RETRY_FRAGMENTS.JSON_FORMAT
+            );
+          } else {
+            // Generic error - general improvement guidance
+            generateObjectOptions.system = appendToPrompt(
+              promptToUse,
+              RETRY_FRAGMENTS.GENERIC
+            );
+          }
         }
 
-        // Add a small delay between retries
-        await new Promise((resolve) => setTimeout(resolve, 1000));
+        // Wait before retrying
+        await new Promise((resolve) => setTimeout(resolve, waitTime));
       }
     }
   }

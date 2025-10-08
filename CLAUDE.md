@@ -289,6 +289,20 @@ The codebase includes:
   - File permission management (0o600 for token files)
   - Token validation and cleanup methods
 
+- **Rate Limiter Service** (`src/lib/rate-limiter.ts`)
+  - **Rolling Window Token Tracking**: Tracks API usage over 60-second rolling windows
+  - **Dual Limit Enforcement**: Handles both requests-per-minute (RPM) and tokens-per-minute (TPM) limits
+  - **Safety Margins**: Configurable buffers (10-20%) prevent hitting exact limits
+  - **Separate Input/Output Tracking**: Special handling for Claude's separate input/output token limits
+  - **Automatic Throttling**: Calculates wait times to prevent rate limit errors
+  - **Token Usage Recording**: Records actual token usage from API responses
+  - **Proactive Limit Checking**: Estimates token usage before making API calls
+  - **Error Message Parsing**: Extracts retry-after times from API error responses
+  - **Rate Limit Recovery**: Records rate limit hits and enforces cooldown periods
+  - **Exponential Backoff**: Implements smart retry strategy for rate limit errors
+  - **Real-time Status**: Provides current usage statistics and remaining capacity
+  - **Provider-Specific**: Configured per AI provider based on their specific rate limits
+
 ### CLI Interface
 
 - **Command Line Interface** (`src/cli.tsx`)
@@ -326,15 +340,21 @@ The codebase includes:
 
 - **AI Provider Configuration** (`src/consts/ai-providers.ts`)
 
-  - **NEW**: Context window limits for optimal chunking
-  - **AIProvider Interface**: Enhanced with `contextWindowTokens` field for token limits
+  - **Context window limits** for optimal chunking
+  - **Rate limit configuration** for API throttling (Tier 1 defaults)
+  - **AIProvider Interface**: Enhanced with `contextWindowTokens`, `rateLimitRpm`, `rateLimitTpm`, `rateLimitInputTpm`, `rateLimitOutputTpm` fields
   - **DEFAULT_CONTEXT_WINDOW_TOKENS**: 128,000 tokens default for unknown models
   - **Model-Specific Limits**:
-    - Gemini 2.5 Flash Lite: 128,000 tokens
-    - OpenAI GPT-4.1: 2,000,000 tokens
-    - Claude Sonnet 4: 200,000 tokens
+    - Gemini 2.5 Flash Lite: 128K tokens, 4,000 RPM, 4M TPM
+    - Gemini 2.5 Flash: 1M tokens, 1,000 RPM, 1M TPM
+    - Gemini 2.5 Pro: 1M tokens, 150 RPM, 2M TPM
+    - OpenAI GPT-4.1: 2M tokens, 500 RPM, 90K TPM
+    - OpenAI GPT-5: 272K tokens, 1,000 RPM, 500K TPM
+    - OpenAI GPT-5 Codex: 400K tokens, 1,000 RPM, 500K TPM
+    - Claude Sonnet 4: 200K tokens, 50 RPM, 30K input TPM, 8K output TPM
   - **Context Window Optimization**: Prevents API failures from oversized repositories
   - **Intelligent Chunking**: Automatic content splitting when limits exceeded
+  - **Rate Limit Management**: Automatic throttling to stay within API provider limits
 
 - **Ignored Extensions** (`src/consts/ignored-extensions.ts`)
 
@@ -438,6 +458,20 @@ The codebase includes:
   - **Comprehensive Aggregation**: Synthesizes chunk feedback into final cohesive review
   - **Seamless Fallback**: Transparent chunking when content exceeds context windows
   - **Token Estimation**: Proactive content size validation before processing
+- **Rate Limit Management**:
+  - **Automatic Throttling**: Intelligent rate limiting prevents API failures during batch processing
+  - **Safety Margins**: Configurable buffers (10-20%) trigger throttling before hitting limits
+  - **Rolling Window Tracking**: Monitors token and request usage over 60-second windows
+  - **Provider-Specific Limits**: Tier 1 rate limits configured for each AI provider
+  - **Dual Limit Handling**: Manages both RPM (requests per minute) and TPM (tokens per minute)
+  - **Claude Special Handling**: Separate tracking for input/output token limits
+  - **Proactive Wait Calculation**: Determines optimal wait times before API calls
+  - **Smart Error Recovery**: Parses retry-after times from API error messages
+  - **Exponential Backoff**: Intelligent retry strategy with 5s → 10s → 20s delays for rate limits
+  - **Extended Retries**: Up to 4 retry attempts for rate limit errors (vs 2 for other errors)
+  - **Real-time Monitoring**: Tracks cumulative usage across multiple repository gradings
+  - **Transparent Operation**: Automatically delays requests when approaching limits
+  - **Approaching Limit Warnings**: Logs warnings at 90% of limit thresholds
 - **Authentication Management**:
   - **GitHub**: Secure token storage, validation, browser integration for token generation
   - **E2B**: API key storage with format validation and secure local storage
