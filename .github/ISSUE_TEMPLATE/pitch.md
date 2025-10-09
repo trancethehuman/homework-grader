@@ -1,7 +1,7 @@
 ---
-name: Shape
-about: Quick Description of what this shape is for
-title: 'Shape: '
+name: Pitch
+about: Quick Description of what this pitch is for
+title: 'Pitch: '
 labels: ''
 assignees: trancethehuman
 
