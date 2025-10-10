@@ -14,6 +14,14 @@ import {
 import { saveRepositoryFiles } from "./lib/file-saver.js";
 import { ProviderSelector } from "./components/provider-selector.js";
 import {
+  WorkflowModeSelector,
+  WorkflowMode,
+} from "./components/workflow-mode-selector.js";
+import {
+  CodexMenuSelector,
+  CodexMenuOption,
+} from "./components/codex-menu-selector.js";
+import {
   DataSourceSelector,
   DataSource,
 } from "./components/data-source-selector.js";
@@ -87,6 +95,8 @@ type Step =
   | "github-token"
   | "e2b-api-key"
   | "validating-e2b-key"
+  | "workflow-mode-select"
+  | "codex-menu"
   | "provider-select"
   | "chunking-preference"
   | "computer-use-model-select"
@@ -138,6 +148,8 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
     useState<ComputerUseModel | null>(null);
   const [selectedBrowserComputerUseModel, setSelectedBrowserComputerUseModel] =
     useState<ComputerUseModel | null>(null);
+  const [selectedWorkflowMode, setSelectedWorkflowMode] =
+    useState<WorkflowMode | null>(null);
   const [selectedDataSource, setSelectedDataSource] =
     useState<DataSource | null>(null);
   const [selectedGradingPrompt, setSelectedGradingPrompt] =
@@ -810,7 +822,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           // Validate E2B API key format
           if (e2bTokenStorage.validateKeyFormat(key)) {
             setE2BKeyValid(true);
-            navigateToStep("provider-select");
+            navigateToStep("workflow-mode-select");
           } else {
             setE2BKeyValid(false);
             navigateToStep("e2b-api-key");
@@ -1325,7 +1337,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
                 }
                 setE2bApiKey(newKey);
                 setE2BKeyValid(true);
-                navigateToStep("provider-select");
+                navigateToStep("workflow-mode-select");
               } else {
                 setE2BKeyValid(false);
                 navigateToStep("e2b-api-key");
@@ -1340,8 +1352,8 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
             }
           })();
         } else {
-          // Skip E2B, proceed to provider selection
-          navigateToStep("provider-select");
+          // Skip E2B, proceed to workflow mode selection
+          navigateToStep("workflow-mode-select");
         }
         setInput("");
       } else if (key.backspace || key.delete) {
@@ -1359,7 +1371,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         console.log("✓ E2B API key cleared from storage");
       } else if (inputChar === "s" && !input) {
         // Skip E2B API key
-        navigateToStep("provider-select");
+        navigateToStep("workflow-mode-select");
       } else if (
         inputChar &&
         !key.ctrl &&
@@ -1550,6 +1562,9 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
 
         // Navigate to next step
         navigateToStep("data-source-select");
+      } else if (inputChar === "b" || key.escape) {
+        // Go back to provider selection
+        navigateToStep("provider-select");
       }
     } else if (step === "processing-choice") {
       if (key.upArrow) {
@@ -1822,6 +1837,45 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
     );
   }
 
+  if (step === "workflow-mode-select") {
+    return (
+      <Box flexDirection="column">
+        <WorkflowModeSelector
+          onSelect={(mode) => {
+            setSelectedWorkflowMode(mode);
+            if (mode === "llm") {
+              navigateToStep("provider-select");
+            } else if (mode === "codex") {
+              navigateToStep("codex-menu");
+            }
+          }}
+          onBack={() => {
+            navigateToStep("e2b-api-key");
+          }}
+        />
+      </Box>
+    );
+  }
+
+  if (step === "codex-menu") {
+    return (
+      <Box flexDirection="column">
+        <CodexMenuSelector
+          onSelect={(option) => {
+            if (option === "choose-database") {
+              navigateToStep("data-source-select");
+            } else if (option === "run-test") {
+              setError("Run test functionality is not yet implemented.");
+            }
+          }}
+          onBack={() => {
+            navigateToStep("workflow-mode-select");
+          }}
+        />
+      </Box>
+    );
+  }
+
   if (step === "provider-select") {
     return (
       <Box flexDirection="column">
@@ -1851,6 +1905,9 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           }}
           onTestMode={() => {
             navigateToStep("computer-use-model-select");
+          }}
+          onBack={() => {
+            navigateToStep("workflow-mode-select");
           }}
         />
       </Box>
@@ -1900,6 +1957,8 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         <Text dimColor> • Large repos will be marked as skipped</Text>
         <Text></Text>
         <Text dimColor>This preference will be saved for future sessions</Text>
+        <Text></Text>
+        <Text dimColor>Press 'b' or Escape to go back</Text>
       </Box>
     );
   }
@@ -1965,6 +2024,17 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
               navigateToStep("input");
             } else if (source === "notion") {
               navigateToStep("notion-auth-loading");
+            }
+          }}
+          onBack={() => {
+            // Go back based on which workflow mode was selected
+            if (selectedWorkflowMode === "codex") {
+              navigateToStep("codex-menu");
+            } else if (selectedWorkflowMode === "llm") {
+              navigateToStep("chunking-preference");
+            } else {
+              // Fallback: if workflow mode not set, go to chunking-preference
+              navigateToStep("chunking-preference");
             }
           }}
         />

@@ -6,11 +6,13 @@ import { PreferencesStorage } from "../lib/preferences-storage.js";
 interface ProviderSelectorProps {
   onSelect: (provider: AIProvider) => void;
   onTestMode?: () => void;
+  onBack?: () => void;
 }
 
 export const ProviderSelector: React.FC<ProviderSelectorProps> = ({
   onSelect,
   onTestMode,
+  onBack,
 }) => {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [preferencesStorage] = useState(new PreferencesStorage());
@@ -43,17 +45,19 @@ export const ProviderSelector: React.FC<ProviderSelectorProps> = ({
       setSelectedIndex((prev) => Math.min(AI_PROVIDERS.length - 1, prev + 1));
     } else if (key.return) {
       const selectedProvider = AI_PROVIDERS[selectedIndex];
-      
+
       // Save the selected provider to preferences
       preferencesStorage.savePreferences({
         selectedProvider: selectedProvider.id
       }).catch(error => {
         console.error('Error saving provider preference:', error);
       });
-      
+
       onSelect(selectedProvider);
     } else if (input === 't' && onTestMode) {
       onTestMode();
+    } else if ((input === 'b' || key.escape) && onBack) {
+      onBack();
     }
   });
 
@@ -87,7 +91,7 @@ export const ProviderSelector: React.FC<ProviderSelectorProps> = ({
       </Box>
       <Box marginTop={1}>
         <Text color="yellow">
-          Use ↑/↓ arrows to navigate, Enter to select, 't' for Browser Test Mode
+          Use ↑/↓ arrows to navigate, Enter to select, 't' for Browser Test Mode, 'b' to go back
         </Text>
       </Box>
     </Box>

@@ -1,29 +1,29 @@
 import React, { useState } from "react";
 import { Text, Box, useInput } from "ink";
 
-export type DataSource = "csv" | "notion";
+export type CodexMenuOption = "run-test" | "choose-database";
 
-interface DataSourceSelectorProps {
-  onSelect: (source: DataSource) => void;
-  onBack?: () => void;
+interface CodexMenuSelectorProps {
+  onSelect: (option: CodexMenuOption) => void;
+  onBack: () => void;
 }
 
-export const DataSourceSelector: React.FC<DataSourceSelectorProps> = ({
+export const CodexMenuSelector: React.FC<CodexMenuSelectorProps> = ({
   onSelect,
   onBack,
 }) => {
   const [selectedIndex, setSelectedIndex] = useState(0);
 
-  const options: { id: DataSource; name: string; description: string }[] = [
+  const options: { id: CodexMenuOption; name: string; description: string }[] = [
     {
-      id: "notion",
-      name: "Notion Database",
-      description: "Load GitHub URLs from a Notion database",
+      id: "run-test",
+      name: "Run test",
+      description: "Execute Codex test functionality",
     },
     {
-      id: "csv",
-      name: "CSV File",
-      description: "Load GitHub URLs from a CSV file",
+      id: "choose-database",
+      name: "Choose database",
+      description: "Select Notion or CSV data source",
     },
   ];
 
@@ -34,7 +34,7 @@ export const DataSourceSelector: React.FC<DataSourceSelectorProps> = ({
       setSelectedIndex((prev) => Math.min(options.length - 1, prev + 1));
     } else if (key.return) {
       onSelect(options[selectedIndex].id);
-    } else if ((input === 'b' || key.escape) && onBack) {
+    } else if (input === "b" || key.escape) {
       onBack();
     }
   });
@@ -42,10 +42,10 @@ export const DataSourceSelector: React.FC<DataSourceSelectorProps> = ({
   return (
     <Box flexDirection="column">
       <Text color="blue" bold>
-        Select Data Source
+        Codex Menu
       </Text>
       <Text></Text>
-      <Text>Choose where to load GitHub URLs from:</Text>
+      <Text>Choose an option:</Text>
       <Text dimColor>Use ↑/↓ arrows to navigate, Enter to select</Text>
       <Text></Text>
 
