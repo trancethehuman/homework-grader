@@ -105,6 +105,7 @@ type Step =
   | "grading-mode-select"
   | "local-tool-select"
   | "local-repo-path-input"
+  | "codex-prompt-select"
   | "codex-starting"
   | "github-token"
   | "e2b-api-key"
@@ -174,6 +175,8 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
   const [selectedDataSource, setSelectedDataSource] =
     useState<DataSource | null>(null);
   const [selectedGradingPrompt, setSelectedGradingPrompt] =
+    useState<GradingPrompt>(getDefaultGradingPrompt());
+  const [selectedCodexPrompt, setSelectedCodexPrompt] =
     useState<GradingPrompt>(getDefaultGradingPrompt());
   const [notionClient] = useState(new NotionMCPClient());
   const [notionOAuthClient] = useState(new NotionOAuthClient());
@@ -1771,7 +1774,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         <LocalRepoPathInput
           onSubmit={(repoPath) => {
             setLocalRepoPath(repoPath);
-            navigateToStep("codex-starting");
+            navigateToStep("codex-prompt-select");
           }}
           onBack={() => {
             navigateToStep("local-tool-select");
@@ -1782,10 +1785,24 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
     );
   }
 
+  if (step === "codex-prompt-select") {
+    return (
+      <Box flexDirection="column">
+        <PromptSelector
+          onSelect={(prompt) => {
+            setSelectedCodexPrompt(prompt);
+            navigateToStep("codex-starting");
+          }}
+          onBack={() => navigateToStep("local-repo-path-input")}
+        />
+      </Box>
+    );
+  }
+
   if (step === "codex-starting") {
     return (
       <Box flexDirection="column">
-        <CodexStarting repoPath={localRepoPath} />
+        <CodexStarting repoPath={localRepoPath} selectedPrompt={selectedCodexPrompt} />
       </Box>
     );
   }

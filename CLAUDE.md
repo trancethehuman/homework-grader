@@ -8,6 +8,8 @@ This is a homework grading system repository with TypeScript URL loading functio
 
 **Notion Integration**: For Notion-specific documentation including OAuth, API details, data source querying, and filter formats, see `/src/lib/notion/CLAUDE.md`.
 
+**Codex Integration**: For Codex SDK-specific documentation including initialization patterns, streaming, and structured output, see `/src/lib/codex/CLAUDE.md`.
+
 ## Development Setup
 
 ### Package Manager
@@ -264,14 +266,26 @@ The codebase includes:
   - **Confidence Scoring**: Provides 0-100% confidence scores for URL column candidates
   - **Sample Preview**: Shows sample URLs for verification before testing begins
 
+- **CodexService Class** (`src/lib/codex/codex-service.ts`)
+
+  - **NEW**: Local repository grading using OpenAI Codex SDK
+  - **Thread Management**: Start new threads or resume existing ones for continuous conversation
+  - **Streaming Support**: Real-time event handling with progress updates
+  - **Event Handling**: Callbacks for item updates, completions, and turn completions
+  - **Token Tracking**: Captures input/output token usage from Codex API
+  - **Error Handling**: Comprehensive error handling with graceful degradation
+  - **Git Repository Support**: Works with Git repositories (can skip check with configuration)
+  - **Flexible Integration**: Used by CodexStarting component for local grading workflow
+
 - **Interactive CSV Component** (`src/interactive-cli.tsx`)
 
   - React/Ink based interactive CLI interface
   - **NEW Initial Flow**: Grading mode selection → Local grading (Codex) OR Batch grading (CSV/Notion)
   - **Local Grading Workflow**:
     - Choose grading tool: Codex (active) / Claude Code (coming soon) / Cursor CLI (coming soon)
-    - Input local repository path with validation
-    - Codex starting placeholder screen (integration in progress)
+    - Input local repository path (or press Enter for current directory)
+    - Real-time Codex analysis with streaming progress updates
+    - Display results with token usage and comprehensive feedback
   - **Batch Grading Workflow**: Token setup → Data source selection → Column selection → Processing
   - GitHub token input and management with secure storage
   - Token validation step with loading indicator
@@ -429,6 +443,7 @@ The codebase includes:
 - **LocalRepoPathInput Component** (`src/components/local-repo-path-input.tsx`)
 
   - **NEW**: Local repository path input interface
+  - **Current Directory Default**: Press Enter without typing to use current directory (process.cwd())
   - **Path Validation**: Real-time validation for existence and directory type
   - **Current Directory Display**: Shows current working directory as reference
   - **Relative Path Support**: Accepts both absolute and relative paths (./foo, ../bar)
@@ -437,11 +452,14 @@ The codebase includes:
 
 - **CodexStarting Component** (`src/components/codex-starting.tsx`)
 
-  - **NEW**: Codex initialization placeholder screen
-  - **Animated Loading**: Dots animation to indicate processing
+  - **NEW**: Codex SDK integration for local repository grading
+  - **Real-time Status**: Displays initialization, running, completed, or error states
+  - **Streaming Updates**: Shows live progress updates during Codex analysis
+  - **Token Usage Display**: Reports input/output token consumption after completion
+  - **Comprehensive Error Handling**: User-friendly error messages with troubleshooting tips
+  - **Animated Progress**: Dots animation during active processing
   - **Repository Confirmation**: Displays the selected repository path
-  - **Coming Soon Notice**: Clear indication that Codex integration is in progress
-  - **Future Integration Point**: Placeholder for actual Codex grading implementation
+  - **Integration**: Uses CodexService to orchestrate Codex SDK for code review and analysis
 
 ### Test Components
 

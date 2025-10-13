@@ -18,11 +18,8 @@ export const LocalRepoPathInput: React.FC<LocalRepoPathInputProps> = ({
   const [error, setError] = useState<string | null>(null);
 
   const validatePath = (inputPath: string): { valid: boolean; error?: string } => {
-    if (!inputPath.trim()) {
-      return { valid: false, error: "Path cannot be empty" };
-    }
-
-    const resolvedPath = path.resolve(inputPath);
+    const pathToValidate = inputPath.trim() || currentDirectory;
+    const resolvedPath = path.resolve(pathToValidate);
 
     if (!fs.existsSync(resolvedPath)) {
       return { valid: false, error: "Path does not exist" };
@@ -38,9 +35,10 @@ export const LocalRepoPathInput: React.FC<LocalRepoPathInputProps> = ({
 
   useInput((char, key) => {
     if (key.return) {
+      const pathToSubmit = input.trim() || currentDirectory;
       const validation = validatePath(input);
       if (validation.valid) {
-        onSubmit(path.resolve(input));
+        onSubmit(path.resolve(pathToSubmit));
       } else {
         setError(validation.error || "Invalid path");
       }
@@ -79,7 +77,8 @@ export const LocalRepoPathInput: React.FC<LocalRepoPathInputProps> = ({
       )}
 
       <Text></Text>
-      <Text dimColor>Tip: You can use relative paths (e.g., ./my-repo or ../other-repo)</Text>
+      <Text dimColor>Tip: Press Enter without typing to use current directory</Text>
+      <Text dimColor>     You can also use relative paths (e.g., ./my-repo or ../other-repo)</Text>
       <Text dimColor>Press Enter to continue, 'b' to go back (when input is empty)</Text>
       <Text dimColor>Press Ctrl+C to exit</Text>
     </Box>
