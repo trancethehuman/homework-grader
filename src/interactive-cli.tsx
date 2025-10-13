@@ -14,6 +14,16 @@ import {
 import { saveRepositoryFiles } from "./lib/file-saver.js";
 import { ProviderSelector } from "./components/provider-selector.js";
 import {
+  GradingModeSelector,
+  GradingMode,
+} from "./components/grading-mode-selector.js";
+import {
+  LocalToolSelector,
+  LocalTool,
+} from "./components/local-tool-selector.js";
+import { LocalRepoPathInput } from "./components/local-repo-path-input.js";
+import { CodexStarting } from "./components/codex-starting.js";
+import {
   WorkflowModeSelector,
   WorkflowMode,
 } from "./components/workflow-mode-selector.js";
@@ -92,6 +102,10 @@ interface InteractiveCSVProps {
 }
 
 type Step =
+  | "grading-mode-select"
+  | "local-tool-select"
+  | "local-repo-path-input"
+  | "codex-starting"
   | "github-token"
   | "e2b-api-key"
   | "validating-e2b-key"
@@ -136,7 +150,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
   onComplete,
   onError,
 }) => {
-  const [step, setStep] = useState<Step>("github-token");
+  const [step, setStep] = useState<Step>("grading-mode-select");
   const [csvPath, setCsvPath] = useState("");
   const [input, setInput] = useState("");
   const [githubToken, setGithubToken] = useState<string | undefined>();
@@ -150,6 +164,13 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
     useState<ComputerUseModel | null>(null);
   const [selectedWorkflowMode, setSelectedWorkflowMode] =
     useState<WorkflowMode | null>(null);
+  const [selectedGradingMode, setSelectedGradingMode] = useState<
+    "local" | "batch" | null
+  >(null);
+  const [selectedLocalTool, setSelectedLocalTool] = useState<
+    "codex" | "claude-code" | "cursor" | null
+  >(null);
+  const [localRepoPath, setLocalRepoPath] = useState<string>("");
   const [selectedDataSource, setSelectedDataSource] =
     useState<DataSource | null>(null);
   const [selectedGradingPrompt, setSelectedGradingPrompt] =
@@ -747,6 +768,10 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
   // Initialize and validate token from storage or environment
   useEffect(() => {
     const initializeToken = async () => {
+      // Only initialize tokens when we reach the github-token step
+      // This prevents auto-navigation on initial mount
+      if (step !== "github-token") return;
+
       const savedToken = tokenStorage.getToken();
       const envToken = process.env.GITHUB_TOKEN;
       const token = savedToken || envToken;
@@ -786,23 +811,19 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
             navigateToStep("e2b-api-key");
           } else {
             setTokenValid(false);
-            navigateToStep("github-token");
-            // Token validation error is already captured in validation.error
+            // Stay on github-token step if validation fails
           }
         } catch (error) {
           setTokenValid(false);
-          navigateToStep("github-token");
-          // Token validation error is already handled in the catch block
+          // Stay on github-token step if validation fails
         } finally {
           setValidatingToken(false);
         }
-      } else {
-        navigateToStep("github-token");
       }
     };
 
     initializeToken();
-  }, [tokenStorage, preferencesStorage]);
+  }, [step, tokenStorage, preferencesStorage]);
 
   // Handle E2B API key initialization
   useEffect(() => {
@@ -1709,6 +1730,66 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
   };
 
   // All conditional rendering in a single return statement
+  if (step === "grading-mode-select") {
+    return (
+      <Box flexDirection="column">
+        <GradingModeSelector
+          onSelect={(mode) => {
+            setSelectedGradingMode(mode);
+            if (mode === "local") {
+              navigateToStep("local-tool-select");
+            } else if (mode === "batch") {
+              navigateToStep("github-token");
+            }
+          }}
+        />
+      </Box>
+    );
+  }
+
+  if (step === "local-tool-select") {
+    return (
+      <Box flexDirection="column">
+        <LocalToolSelector
+          onSelect={(tool) => {
+            setSelectedLocalTool(tool);
+            if (tool === "codex") {
+              navigateToStep("local-repo-path-input");
+            }
+          }}
+          onBack={() => {
+            navigateToStep("grading-mode-select");
+          }}
+        />
+      </Box>
+    );
+  }
+
+  if (step === "local-repo-path-input") {
+    return (
+      <Box flexDirection="column">
+        <LocalRepoPathInput
+          onSubmit={(repoPath) => {
+            setLocalRepoPath(repoPath);
+            navigateToStep("codex-starting");
+          }}
+          onBack={() => {
+            navigateToStep("local-tool-select");
+          }}
+          currentDirectory={process.cwd()}
+        />
+      </Box>
+    );
+  }
+
+  if (step === "codex-starting") {
+    return (
+      <Box flexDirection="column">
+        <CodexStarting repoPath={localRepoPath} />
+      </Box>
+    );
+  }
+
   if (step === "github-token") {
     return (
       <Box flexDirection="column">

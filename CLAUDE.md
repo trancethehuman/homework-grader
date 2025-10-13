@@ -267,7 +267,12 @@ The codebase includes:
 - **Interactive CSV Component** (`src/interactive-cli.tsx`)
 
   - React/Ink based interactive CLI interface
-  - Multi-step workflow: token setup → CSV input → column selection → processing
+  - **NEW Initial Flow**: Grading mode selection → Local grading (Codex) OR Batch grading (CSV/Notion)
+  - **Local Grading Workflow**:
+    - Choose grading tool: Codex (active) / Claude Code (coming soon) / Cursor CLI (coming soon)
+    - Input local repository path with validation
+    - Codex starting placeholder screen (integration in progress)
+  - **Batch Grading Workflow**: Token setup → Data source selection → Column selection → Processing
   - GitHub token input and management with secure storage
   - Token validation step with loading indicator
   - Browser integration for token generation
@@ -275,8 +280,8 @@ The codebase includes:
   - Automatic GitHub URL column suggestion
   - Arrow key navigation for column selection
   - Error handling with user-friendly messages
-  - **NEW**: Integrated browser testing workflow after repository processing
-  - **Browser Testing Prompt**: Optional step to test deployed applications after grading
+  - **Integrated browser testing**: Optional step to test deployed applications after grading
+  - **Browser Testing Prompt**: Test deployed applications after repository processing
   - **Deployed URL Detection**: Automatically detects columns containing deployed app URLs
   - **Multi-Tab Testing**: Tests up to 10 applications concurrently with real-time progress
   - **Results Integration**: Saves browser test results alongside grading data
@@ -402,6 +407,41 @@ The codebase includes:
 ### Examples
 
 - `src/example.ts` - Demonstrates TypeScript URLLoader usage
+
+### UI/Selector Components
+
+- **GradingModeSelector Component** (`src/components/grading-mode-selector.tsx`)
+
+  - **NEW**: Initial workflow selection interface
+  - **Two Options**: Grade my repo locally OR Grade several repos (batch)
+  - **Arrow Key Navigation**: Simple up/down navigation with Enter to select
+  - **Clean UI**: Blue highlighting for selected option with descriptive text
+  - **Entry Point**: First step in the interactive CLI workflow
+
+- **LocalToolSelector Component** (`src/components/local-tool-selector.tsx`)
+
+  - **NEW**: Local grading tool selection interface
+  - **Three Tools**: Codex (active), Claude Code (coming soon), Cursor CLI (coming soon)
+  - **Disabled Options**: Grayed-out "coming soon" tools with visual indication
+  - **Back Navigation**: Press 'b' or Escape to return to grading mode selection
+  - **Smart Selection**: Only allows selection of active tools (Codex)
+
+- **LocalRepoPathInput Component** (`src/components/local-repo-path-input.tsx`)
+
+  - **NEW**: Local repository path input interface
+  - **Path Validation**: Real-time validation for existence and directory type
+  - **Current Directory Display**: Shows current working directory as reference
+  - **Relative Path Support**: Accepts both absolute and relative paths (./foo, ../bar)
+  - **Error Display**: Clear error messages for invalid paths
+  - **Back Navigation**: Press 'b' when input is empty to go back
+
+- **CodexStarting Component** (`src/components/codex-starting.tsx`)
+
+  - **NEW**: Codex initialization placeholder screen
+  - **Animated Loading**: Dots animation to indicate processing
+  - **Repository Confirmation**: Displays the selected repository path
+  - **Coming Soon Notice**: Clear indication that Codex integration is in progress
+  - **Future Integration Point**: Placeholder for actual Codex grading implementation
 
 ### Test Components
 

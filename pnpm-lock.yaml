@@ -35,6 +35,9 @@ importers:
       '@octokit/rest':
         specifier: ^22.0.0
         version: 22.0.0
+      '@openai/codex-sdk':
+        specifier: ^0.46.0
+        version: 0.46.0
       '@types/react':
         specifier: ^19.1.8
         version: 19.1.8
@@ -350,6 +353,10 @@ packages:
 
   '@octokit/types@14.1.0':
     resolution: {integrity: sha512-1y6DgTy8Jomcpu33N+p5w58l6xyt55Ar2I91RPiIA0xCJBXyUAhXCcmZaDWSANiha7R9a6qJJ2CRomGPZ6f46g==}
+
+  '@openai/codex-sdk@0.46.0':
+    resolution: {integrity: sha512-xCjQnuV13rDqVf3EQa/2BD38qzelOofCFVKpexkO6LVnoYaZin/MTwzSNiAR7k8DTF7AHottgqwNOB8hbYVauA==}
+    engines: {node: '>=18'}
 
   '@opentelemetry/api@1.9.0':
     resolution: {integrity: sha512-3giAOQvZiH5F9bMlMiv8+GSPMeqg0dbaeo58/0SlA9sxSqZhnUtxzX9/2FzyhS9sWQf5S0GJE0AKBrFqjpeYcg==}
@@ -1930,6 +1937,8 @@ snapshots:
   '@octokit/types@14.1.0':
     dependencies:
       '@octokit/openapi-types': 25.1.0
+
+  '@openai/codex-sdk@0.46.0': {}
 
   '@opentelemetry/api@1.9.0': {}
 

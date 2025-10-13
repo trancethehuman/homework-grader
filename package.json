@@ -67,6 +67,7 @@
     "@modelcontextprotocol/sdk": "^1.15.1",
     "@notionhq/client": "^5.1.0",
     "@octokit/rest": "^22.0.0",
+    "@openai/codex-sdk": "^0.46.0",
     "@types/react": "^19.1.8",
     "ai": "^5.0.0",
     "csv-parser": "^3.2.0",
