@@ -11,36 +11,49 @@ interface CodexStartingProps {
 
 type Status = "initializing" | "running" | "completed" | "error";
 
-interface ItemsByType {
-  agentMessage: string;
-  reasoning: string[];
-  commands: Array<{ command: string; status: string }>;
-  fileChanges: Array<{ kind: string; path: string }>;
-  todos: Array<{ text: string; completed: boolean }>;
+interface ChronologicalItem {
+  id: string;
+  type: "reasoning" | "command" | "file_change" | "agent_message" | "todo_list";
+  timestamp: number;
+  data: any;
 }
 
-export const CodexStarting: React.FC<CodexStartingProps> = ({ repoPath, selectedPrompt }) => {
+export const CodexStarting: React.FC<CodexStartingProps> = ({
+  repoPath,
+  selectedPrompt,
+}) => {
   const [status, setStatus] = useState<Status>("initializing");
   const [currentUpdate, setCurrentUpdate] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
-  const [tokensUsed, setTokensUsed] = useState<{ input: number; cached: number; output: number } | null>(null);
-  const [dots, setDots] = useState("");
-  const [items, setItems] = useState<ItemsByType>({
-    agentMessage: "",
-    reasoning: [],
-    commands: [],
-    fileChanges: [],
-    todos: [],
-  });
+  const [tokensUsed, setTokensUsed] = useState<{
+    input: number;
+    cached: number;
+    output: number;
+  } | null>(null);
+  const [spinnerDots, setSpinnerDots] = useState("");
+  const [spinnerFrame, setSpinnerFrame] = useState(0);
+  const [items, setItems] = useState<ChronologicalItem[]>([]);
+  const [streamingAgentMessage, setStreamingAgentMessage] =
+    useState<string>("");
   const [finalFeedback, setFinalFeedback] = useState<string>("");
+
+  const spinnerFrames = ["⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"];
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setDots((prev) => {
+      setSpinnerDots((prev) => {
         if (prev.length >= 3) return "";
         return prev + ".";
       });
     }, 500);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setSpinnerFrame((prev) => (prev + 1) % spinnerFrames.length);
+    }, 100);
 
     return () => clearInterval(interval);
   }, []);
@@ -58,49 +71,64 @@ export const CodexStarting: React.FC<CodexStartingProps> = ({ repoPath, selected
         const result = await codexService.startGrading(selectedPrompt.value, {
           onItemUpdated: (item: ThreadItem) => {
             if (item.type === "agent_message") {
-              setItems((prev) => ({
-                ...prev,
-                agentMessage: item.text,
-              }));
+              setStreamingAgentMessage(item.text);
               const lines = item.text.split("\n").filter(Boolean);
-              const lastLine = lines[lines.length - 1] || "";
               setCurrentUpdate(`Streaming... (${lines.length} lines)`);
-            } else if (item.type === "todo_list") {
-              setItems((prev) => ({
-                ...prev,
-                todos: item.items || [],
-              }));
-              setCurrentUpdate("Updating todo list...");
             }
           },
           onItemCompleted: (item: ThreadItem) => {
+            const timestamp = Date.now();
+            const id = `${item.type}-${timestamp}-${Math.random()}`;
+
             if (item.type === "agent_message") {
-              setItems((prev) => ({
+              setStreamingAgentMessage("");
+              setItems((prev) => [
                 ...prev,
-                agentMessage: item.text,
-              }));
+                {
+                  id,
+                  type: "agent_message",
+                  timestamp,
+                  data: { text: item.text },
+                },
+              ]);
             } else if (item.type === "reasoning") {
-              setItems((prev) => ({
+              setItems((prev) => [
                 ...prev,
-                reasoning: [...prev.reasoning, item.text],
-              }));
+                { id, type: "reasoning", timestamp, data: { text: item.text } },
+              ]);
             } else if (item.type === "command_execution") {
-              setItems((prev) => ({
+              setItems((prev) => [
                 ...prev,
-                commands: [
-                  ...prev.commands,
-                  { command: item.command, status: item.status },
-                ],
-              }));
+                {
+                  id,
+                  type: "command",
+                  timestamp,
+                  data: { command: item.command, status: item.status },
+                },
+              ]);
             } else if (item.type === "file_change") {
               const changes = item.changes || [];
-              setItems((prev) => ({
+              changes.forEach((change: any, index: number) => {
+                setItems((prev) => [
+                  ...prev,
+                  {
+                    id: `${id}-${index}`,
+                    type: "file_change",
+                    timestamp: timestamp + index,
+                    data: { kind: change.kind, path: change.path },
+                  },
+                ]);
+              });
+            } else if (item.type === "todo_list") {
+              setItems((prev) => [
                 ...prev,
-                fileChanges: [
-                  ...prev.fileChanges,
-                  ...changes.map((c: any) => ({ kind: c.kind, path: c.path })),
-                ],
-              }));
+                {
+                  id,
+                  type: "todo_list",
+                  timestamp,
+                  data: { items: item.items || [] },
+                },
+              ]);
             }
           },
           onTurnCompleted: (usage) => {
@@ -120,9 +148,9 @@ export const CodexStarting: React.FC<CodexStartingProps> = ({ repoPath, selected
         if (result.success && result.feedback) {
           setFinalFeedback(result.feedback);
         }
-
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : "Unknown error occurred";
+        const errorMessage =
+          err instanceof Error ? err.message : "Unknown error occurred";
         setError(errorMessage);
         setStatus("error");
       }
@@ -131,94 +159,94 @@ export const CodexStarting: React.FC<CodexStartingProps> = ({ repoPath, selected
     startCodex();
   }, [repoPath, selectedPrompt]);
 
+  const renderItem = (item: ChronologicalItem) => {
+    switch (item.type) {
+      case "reasoning":
+        return (
+          <Text key={item.id} color="magenta">
+            {item.data.text}
+          </Text>
+        );
+      case "command":
+        return (
+          <Text key={item.id} color="blue">
+            $ {item.data.command} ({item.data.status})
+          </Text>
+        );
+      case "file_change":
+        return (
+          <Text key={item.id} color="green">
+            📝 {item.data.kind}: {item.data.path}
+          </Text>
+        );
+      case "agent_message":
+        return (
+          <Box key={item.id} flexDirection="column" marginY={1}>
+            <Text color="cyan" dimColor>
+              {item.data.text}
+            </Text>
+          </Box>
+        );
+      case "todo_list":
+        return (
+          <Box key={item.id} flexDirection="column" marginY={1}>
+            <Text color="yellow" bold>
+              📋 Tasks:
+            </Text>
+            {item.data.items.map((todo: any, i: number) => (
+              <Text key={i} dimColor>
+                {" "}
+                {todo.completed ? "✓" : "○"} {todo.text}
+              </Text>
+            ))}
+          </Box>
+        );
+      default:
+        return null;
+    }
+  };
+
   return (
     <Box flexDirection="column">
       <Text color="blue" bold>
-        Codex Local Grading{status === "running" ? dots : ""}
+        Codex Local Grading
       </Text>
       <Text></Text>
       <Text color="green">✓ Repository path: {repoPath}</Text>
       <Text color="cyan">✓ Prompt: {selectedPrompt.name}</Text>
       <Text></Text>
 
-      {status === "initializing" && (
-        <Text dimColor>Initializing Codex...</Text>
-      )}
+      {status === "initializing" && <Text dimColor>Initializing Codex...</Text>}
 
       {status === "running" && (
         <>
           <Text color="cyan">⚡ Analyzing repository...</Text>
-          {currentUpdate && (
-            <>
-              <Text></Text>
-              <Text dimColor>{currentUpdate}</Text>
-            </>
-          )}
+          <Text></Text>
 
-          {items.agentMessage && (
+          {items.map((item) => renderItem(item))}
+
+          {streamingAgentMessage && (
             <>
               <Text></Text>
-              <Box flexDirection="column" borderStyle="round" borderColor="cyan" paddingX={1}>
-                <Text color="cyan" bold>Streaming Output:</Text>
+              <Box
+                flexDirection="column"
+                borderStyle="round"
+                borderColor="cyan"
+                paddingX={1}
+              >
+                <Text color="cyan" bold>
+                  Streaming Output:
+                </Text>
                 <Text></Text>
-                <Text>{items.agentMessage}</Text>
+                <Text dimColor>{streamingAgentMessage}</Text>
               </Box>
             </>
           )}
 
-          {items.todos.length > 0 && (
-            <>
-              <Text></Text>
-              <Box flexDirection="column" borderStyle="round" borderColor="yellow" paddingX={1}>
-                <Text color="yellow" bold>Tasks:</Text>
-                {items.todos.map((todo, i) => (
-                  <Text key={i} dimColor>
-                    {todo.completed ? "✓" : "○"} {todo.text}
-                  </Text>
-                ))}
-              </Box>
-            </>
-          )}
-
-          {items.reasoning.length > 0 && (
-            <>
-              <Text></Text>
-              <Box flexDirection="column" borderStyle="round" borderColor="magenta" paddingX={1}>
-                <Text color="magenta" bold>Reasoning:</Text>
-                {items.reasoning.map((reason, i) => (
-                  <Text key={i} dimColor>{reason}</Text>
-                ))}
-              </Box>
-            </>
-          )}
-
-          {items.commands.length > 0 && (
-            <>
-              <Text></Text>
-              <Box flexDirection="column" borderStyle="round" borderColor="blue" paddingX={1}>
-                <Text color="blue" bold>Commands:</Text>
-                {items.commands.map((cmd, i) => (
-                  <Text key={i} dimColor>
-                    $ {cmd.command} ({cmd.status})
-                  </Text>
-                ))}
-              </Box>
-            </>
-          )}
-
-          {items.fileChanges.length > 0 && (
-            <>
-              <Text></Text>
-              <Box flexDirection="column" borderStyle="round" borderColor="green" paddingX={1}>
-                <Text color="green" bold>File Changes:</Text>
-                {items.fileChanges.map((change, i) => (
-                  <Text key={i} dimColor>
-                    {change.kind}: {change.path}
-                  </Text>
-                ))}
-              </Box>
-            </>
-          )}
+          <Text></Text>
+          <Text color="blue">
+            {spinnerFrames[spinnerFrame]} Loading{spinnerDots}
+          </Text>
         </>
       )}
 
@@ -230,8 +258,19 @@ export const CodexStarting: React.FC<CodexStartingProps> = ({ repoPath, selected
               <Text></Text>
               <Text dimColor>
                 Tokens used: {tokensUsed.input.toLocaleString()} input
-                {tokensUsed.cached > 0 && ` (${tokensUsed.cached.toLocaleString()} cached)`}, {tokensUsed.output.toLocaleString()} output
+                {tokensUsed.cached > 0 &&
+                  ` (${tokensUsed.cached.toLocaleString()} cached)`}
+                , {tokensUsed.output.toLocaleString()} output
               </Text>
+            </>
+          )}
+
+          {items.length > 0 && (
+            <>
+              <Text></Text>
+              <Text></Text>
+              <Text></Text>
+              {items.map((item) => renderItem(item))}
             </>
           )}
 
@@ -239,50 +278,17 @@ export const CodexStarting: React.FC<CodexStartingProps> = ({ repoPath, selected
             <>
               <Text></Text>
               <Text></Text>
-              <Box flexDirection="column" borderStyle="round" borderColor="green" paddingX={1}>
-                <Text color="green" bold>Final Results:</Text>
+              <Box
+                flexDirection="column"
+                borderStyle="round"
+                borderColor="green"
+                paddingX={1}
+              >
+                <Text color="green" bold>
+                  Final Results:
+                </Text>
                 <Text></Text>
                 <Text>{finalFeedback}</Text>
-              </Box>
-            </>
-          )}
-
-          {items.reasoning.length > 0 && (
-            <>
-              <Text></Text>
-              <Box flexDirection="column" borderStyle="round" borderColor="magenta" paddingX={1}>
-                <Text color="magenta" bold>Reasoning Steps ({items.reasoning.length}):</Text>
-                {items.reasoning.map((reason, i) => (
-                  <Text key={i} dimColor>{reason}</Text>
-                ))}
-              </Box>
-            </>
-          )}
-
-          {items.commands.length > 0 && (
-            <>
-              <Text></Text>
-              <Box flexDirection="column" borderStyle="round" borderColor="blue" paddingX={1}>
-                <Text color="blue" bold>Commands Executed ({items.commands.length}):</Text>
-                {items.commands.map((cmd, i) => (
-                  <Text key={i} dimColor>
-                    $ {cmd.command} ({cmd.status})
-                  </Text>
-                ))}
-              </Box>
-            </>
-          )}
-
-          {items.fileChanges.length > 0 && (
-            <>
-              <Text></Text>
-              <Box flexDirection="column" borderStyle="round" borderColor="green" paddingX={1}>
-                <Text color="green" bold>File Changes ({items.fileChanges.length}):</Text>
-                {items.fileChanges.map((change, i) => (
-                  <Text key={i} dimColor>
-                    {change.kind}: {change.path}
-                  </Text>
-                ))}
               </Box>
             </>
           )}

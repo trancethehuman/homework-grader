@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Text, Box, useInput } from "ink";
 
-export type DataSource = "csv" | "notion";
+export type DataSource = "csv" | "notion" | "manual";
 
 interface DataSourceSelectorProps {
   onSelect: (source: DataSource) => void;
@@ -24,6 +24,11 @@ export const DataSourceSelector: React.FC<DataSourceSelectorProps> = ({
       id: "csv",
       name: "CSV File",
       description: "Load GitHub URLs from a CSV file",
+    },
+    {
+      id: "manual",
+      name: "Manual Input",
+      description: "Enter comma-separated GitHub URLs directly",
     },
   ];
 
