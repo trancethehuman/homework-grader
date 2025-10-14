@@ -36,6 +36,11 @@ import {
   DataSource,
 } from "./components/data-source-selector.js";
 import {
+  GradingMethodSelector,
+  GradingMethod,
+} from "./components/grading-method-selector.js";
+import { ManualUrlInput } from "./components/manual-url-input.js";
+import {
   NotionMCPClient,
   NotionDatabase,
 } from "./lib/notion/notion-mcp-client.js";
@@ -117,6 +122,8 @@ type Step =
   | "computer-use-model-select"
   | "browser-test-mode"
   | "data-source-select"
+  | "grading-method-select"
+  | "manual-url-input"
   | "notion-auth"
   | "notion-auth-loading"
   | "notion-oauth-prompt"
@@ -174,6 +181,9 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
   const [localRepoPath, setLocalRepoPath] = useState<string>("");
   const [selectedDataSource, setSelectedDataSource] =
     useState<DataSource | null>(null);
+  const [selectedGradingMethod, setSelectedGradingMethod] =
+    useState<GradingMethod | null>(null);
+  const [manualUrls, setManualUrls] = useState<string[]>([]);
   const [selectedGradingPrompt, setSelectedGradingPrompt] =
     useState<GradingPrompt>(getDefaultGradingPrompt());
   const [selectedCodexPrompt, setSelectedCodexPrompt] =
@@ -1742,7 +1752,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
             if (mode === "local") {
               navigateToStep("local-tool-select");
             } else if (mode === "batch") {
-              navigateToStep("github-token");
+              navigateToStep("data-source-select");
             }
           }}
         />
@@ -2122,20 +2132,66 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
               navigateToStep("input");
             } else if (source === "notion") {
               navigateToStep("notion-auth-loading");
+            } else if (source === "manual") {
+              navigateToStep("manual-url-input");
             }
           }}
           onBack={() => {
-            // Go back based on which workflow mode was selected
-            if (selectedWorkflowMode === "codex") {
-              navigateToStep("codex-menu");
-            } else if (selectedWorkflowMode === "llm") {
-              navigateToStep("chunking-preference");
+            // Go back to grading mode selection
+            navigateToStep("grading-mode-select");
+          }}
+        />
+      </Box>
+    );
+  }
+
+  if (step === "manual-url-input") {
+    return (
+      <Box flexDirection="column">
+        <ManualUrlInput
+          onComplete={(urls) => {
+            setManualUrls(urls);
+            navigateToStep("grading-method-select");
+          }}
+          onBack={() => {
+            navigateToStep("data-source-select");
+          }}
+        />
+      </Box>
+    );
+  }
+
+  if (step === "grading-method-select") {
+    return (
+      <Box flexDirection="column">
+        <GradingMethodSelector
+          onSelect={(method) => {
+            setSelectedGradingMethod(method);
+            if (method === "sandbox-llm") {
+              navigateToStep("github-token");
+            } else if (method === "codex-local") {
+              setError("Codex local grading for batch processing is coming soon!");
+            }
+          }}
+          onBack={() => {
+            // Go back to appropriate step based on data source
+            if (selectedDataSource === "manual") {
+              navigateToStep("manual-url-input");
+            } else if (selectedDataSource === "csv") {
+              navigateToStep("select");
+            } else if (selectedDataSource === "notion") {
+              navigateToStep("notion-github-column-select");
             } else {
-              // Fallback: if workflow mode not set, go to chunking-preference
-              navigateToStep("chunking-preference");
+              navigateToStep("data-source-select");
             }
           }}
         />
+        {error && (
+          <>
+            <Text></Text>
+            <Text color="yellow">{error}</Text>
+          </>
+        )}
       </Box>
     );
   }
