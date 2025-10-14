@@ -856,7 +856,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           // Validate E2B API key format
           if (e2bTokenStorage.validateKeyFormat(key)) {
             setE2BKeyValid(true);
-            navigateToStep("workflow-mode-select");
+            navigateToStep("provider-select");
           } else {
             setE2BKeyValid(false);
             navigateToStep("e2b-api-key");
@@ -1371,7 +1371,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
                 }
                 setE2bApiKey(newKey);
                 setE2BKeyValid(true);
-                navigateToStep("workflow-mode-select");
+                navigateToStep("provider-select");
               } else {
                 setE2BKeyValid(false);
                 navigateToStep("e2b-api-key");
@@ -1386,8 +1386,8 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
             }
           })();
         } else {
-          // Skip E2B, proceed to workflow mode selection
-          navigateToStep("workflow-mode-select");
+          // Skip E2B, proceed to provider selection
+          navigateToStep("provider-select");
         }
         setInput("");
       } else if (key.backspace || key.delete) {
@@ -1405,7 +1405,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         console.log("✓ E2B API key cleared from storage");
       } else if (inputChar === "s" && !input) {
         // Skip E2B API key
-        navigateToStep("workflow-mode-select");
+        navigateToStep("provider-select");
       } else if (
         inputChar &&
         !key.ctrl &&
@@ -1559,19 +1559,11 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
             csvPath,
             analysis.columns[selectedColumn].name
           );
-          onComplete(
-            csvPath,
-            analysis.columns[selectedColumn].name,
-            urls,
-            skipGitHub ? undefined : githubToken,
-            e2bApiKey,
-            selectedProvider || DEFAULT_PROVIDER
-          );
-          navigateToStep("complete");
+          setManualUrls(urls);
+          navigateToStep("grading-method-select");
         } catch (err) {
           setError(err instanceof Error ? err.message : String(err));
-          onError(err instanceof Error ? err.message : String(err));
-          exit();
+          navigateToStep("select");
         }
       }
     } else if (step === "chunking-preference") {
@@ -1594,8 +1586,8 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           },
         });
 
-        // Navigate to next step
-        navigateToStep("data-source-select");
+        // Navigate to processing choice
+        navigateToStep("processing-choice");
       } else if (inputChar === "b" || key.escape) {
         // Go back to provider selection
         navigateToStep("provider-select");
@@ -2015,7 +2007,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
             navigateToStep("computer-use-model-select");
           }}
           onBack={() => {
-            navigateToStep("workflow-mode-select");
+            navigateToStep("e2b-api-key");
           }}
         />
       </Box>
@@ -2777,7 +2769,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
             setSelectedGitHubColumn(
               selectedProperty.name || selectedProperty.propertyName || ""
             );
-            navigateToStep("processing-choice");
+            navigateToStep("grading-method-select");
           }}
           onError={(error) => {
             // Don't use navigateToStep since it clears errors

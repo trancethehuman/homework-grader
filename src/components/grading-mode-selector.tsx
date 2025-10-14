@@ -15,13 +15,14 @@ export const GradingModeSelector: React.FC<GradingModeSelectorProps> = ({
   const options: { id: GradingMode; name: string; description: string }[] = [
     {
       id: "local",
-      name: "Generate Feedbacks for a repo on my machine",
+      name: "Repo on my machine",
       description: "Grade a single repository on your local machine",
     },
     {
       id: "batch",
-      name: "Generate Feedbacks for remote repo(s)",
-      description: "Grade multiple repositories from CSV, Notion, or manual input",
+      name: "Remote repo(s)",
+      description:
+        "Grade multiple repositories from CSV, Notion, or manual input",
     },
   ];
 

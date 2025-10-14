@@ -280,13 +280,18 @@ The codebase includes:
 - **Interactive CSV Component** (`src/interactive-cli.tsx`)
 
   - React/Ink based interactive CLI interface
-  - **NEW Initial Flow**: Grading mode selection → Local grading (Codex) OR Batch grading (CSV/Notion)
+  - **Revamped Initial Flow**: Choose between local single repo OR remote batch repos
   - **Local Grading Workflow**:
     - Choose grading tool: Codex (active) / Claude Code (coming soon) / Cursor CLI (coming soon)
     - Input local repository path (or press Enter for current directory)
     - Real-time Codex analysis with streaming progress updates
     - Display results with token usage and comprehensive feedback
-  - **Batch Grading Workflow**: Token setup → Data source selection → Column selection → Processing
+  - **Batch Grading Workflow**: Data source → URLs collection → Grading method → Setup → Processing
+    - **Step 1**: Data source selection (CSV / Notion / Manual Input)
+    - **Step 2**: Collect URLs based on selected source
+    - **Step 3**: Choose grading method (Sandbox LLMs OR Codex local - coming soon)
+    - **Step 4**: GitHub token + E2B API key setup (if Sandbox LLMs selected)
+    - **Step 5**: AI provider selection and processing
   - GitHub token input and management with secure storage
   - Token validation step with loading indicator
   - Browser integration for token generation
@@ -426,8 +431,8 @@ The codebase includes:
 
 - **GradingModeSelector Component** (`src/components/grading-mode-selector.tsx`)
 
-  - **NEW**: Initial workflow selection interface
-  - **Two Options**: Grade my repo locally OR Grade several repos (batch)
+  - **Initial workflow selection interface**
+  - **Two Options**: "Repo on my machine" OR "Remote repo(s)"
   - **Arrow Key Navigation**: Simple up/down navigation with Enter to select
   - **Clean UI**: Blue highlighting for selected option with descriptive text
   - **Entry Point**: First step in the interactive CLI workflow
@@ -460,6 +465,34 @@ The codebase includes:
   - **Animated Progress**: Dots animation during active processing
   - **Repository Confirmation**: Displays the selected repository path
   - **Integration**: Uses CodexService to orchestrate Codex SDK for code review and analysis
+
+- **DataSourceSelector Component** (`src/components/data-source-selector.tsx`)
+
+  - **Data source selection interface** for batch grading workflows
+  - **Three Options**: Notion Database, CSV File, or Manual Input
+  - **Manual Input**: Allows entering comma-separated GitHub URLs directly in terminal
+  - **Arrow Key Navigation**: Up/down navigation with Enter to select
+  - **Back Navigation**: Press 'b' or Escape to return to grading mode selection
+
+- **GradingMethodSelector Component** (`src/components/grading-method-selector.tsx`)
+
+  - **NEW**: Grading method selection interface for batch processing
+  - **Two Options**:
+    - "Homeworks cloned to sandbox and graded by LLMs" (active)
+    - "Homeworks are cloned locally and graded by Codex" (coming soon)
+  - **Disabled Options**: Grayed-out "coming soon" options with visual indication
+  - **Arrow Key Navigation**: Up/down navigation with Enter to select active options only
+  - **Back Navigation**: Press 'b' or Escape to return to previous step
+  - **Smart Back Navigation**: Returns to appropriate step based on data source (manual/csv/notion)
+
+- **ManualUrlInput Component** (`src/components/manual-url-input.tsx`)
+
+  - **NEW**: Manual URL input interface for batch grading
+  - **Comma-Separated Input**: Enter multiple GitHub URLs separated by commas
+  - **URL Validation**: Real-time validation of GitHub URL format
+  - **Error Display**: Clear error messages for invalid URLs
+  - **Back Navigation**: Press 'b' or Escape when input is empty to go back
+  - **Example Display**: Shows format example for user guidance
 
 ### Test Components
 

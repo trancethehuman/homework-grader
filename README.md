@@ -271,7 +271,7 @@ Everyday flow:
 
 ```bash
 # before pushing more changes after a prior push
-git up    # or: git pull --rebase
+git pull --rebase
 git push
 ```
 
