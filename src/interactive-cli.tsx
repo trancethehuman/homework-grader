@@ -23,6 +23,8 @@ import {
 } from "./components/local-tool-selector.js";
 import { LocalRepoPathInput } from "./components/local-repo-path-input.js";
 import { CodexStarting } from "./components/codex-starting.js";
+import { ParallelCodexTest } from "./components/parallel-codex-test.js";
+import { ParallelInstanceSelector } from "./components/parallel-instance-selector.js";
 import {
   WorkflowModeSelector,
   WorkflowMode,
@@ -108,6 +110,8 @@ interface InteractiveCSVProps {
 
 type Step =
   | "grading-mode-select"
+  | "parallel-instance-select"
+  | "parallel-codex-test"
   | "local-tool-select"
   | "local-repo-path-input"
   | "codex-prompt-select"
@@ -173,12 +177,13 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
   const [selectedWorkflowMode, setSelectedWorkflowMode] =
     useState<WorkflowMode | null>(null);
   const [selectedGradingMode, setSelectedGradingMode] = useState<
-    "local" | "batch" | null
+    GradingMode | null
   >(null);
   const [selectedLocalTool, setSelectedLocalTool] = useState<
     "codex" | "claude-code" | "cursor" | null
   >(null);
   const [localRepoPath, setLocalRepoPath] = useState<string>("");
+  const [parallelInstanceCount, setParallelInstanceCount] = useState<number>(4);
   const [selectedDataSource, setSelectedDataSource] =
     useState<DataSource | null>(null);
   const [selectedGradingMethod, setSelectedGradingMethod] =
@@ -1745,7 +1750,38 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
               navigateToStep("local-tool-select");
             } else if (mode === "batch") {
               navigateToStep("data-source-select");
+            } else if (mode === "parallel-test") {
+              navigateToStep("parallel-instance-select");
             }
+          }}
+        />
+      </Box>
+    );
+  }
+
+  if (step === "parallel-instance-select") {
+    return (
+      <Box flexDirection="column">
+        <ParallelInstanceSelector
+          onSubmit={(count) => {
+            setParallelInstanceCount(count);
+            navigateToStep("parallel-codex-test");
+          }}
+          onBack={() => {
+            navigateToStep("grading-mode-select");
+          }}
+        />
+      </Box>
+    );
+  }
+
+  if (step === "parallel-codex-test") {
+    return (
+      <Box flexDirection="column">
+        <ParallelCodexTest
+          instanceCount={parallelInstanceCount}
+          onBack={() => {
+            navigateToStep("parallel-instance-select");
           }}
         />
       </Box>

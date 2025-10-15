@@ -39,4 +39,27 @@ export interface CodexEventHandler {
   onError?: (error: Error) => void;
 }
 
+export interface ClonedTestRepo {
+  url: string;
+  owner: string;
+  repo: string;
+  localPath: string;
+}
+
+export interface ParallelGradingResult extends CodexGradingResult {
+  repoInfo: {
+    url: string;
+    owner: string;
+    repo: string;
+  };
+  duration?: number;
+}
+
+export interface ParallelTestResults {
+  results: ParallelGradingResult[];
+  totalDuration: number;
+  successCount: number;
+  failureCount: number;
+}
+
 export { ThreadEvent, ThreadItem, AgentMessageItem, CodexOptions, ThreadOptions, Usage };
