@@ -56,12 +56,23 @@ export const ParallelCodexTest: React.FC<ParallelCodexTestProps> = ({
   instanceCount,
 }) => {
   const [phase, setPhase] = useState<Phase>("cloning");
-  const [repoStatuses, setRepoStatuses] = useState<RepoStatus[]>([]);
+  const [repoStatuses, setRepoStatuses] = useState<RepoStatus[]>(() => {
+    const service = new ParallelCodexService(instanceCount);
+    const testRepoUrls = service.getTestRepoUrls();
+    return testRepoUrls.map((url) => {
+      const match = url.match(/github\.com\/([^\/]+)\/([^\/]+)/);
+      return {
+        owner: match?.[1] || "",
+        repo: match?.[2]?.replace(/\.git$/, "") || "",
+        status: "pending" as const,
+      };
+    });
+  });
   const [cloningProgress, setCloningProgress] = useState<{
     current: number;
     total: number;
     message: string;
-  }>({ current: 0, total: 4, message: "" });
+  }>({ current: 0, total: instanceCount, message: "" });
   const [results, setResults] = useState<ParallelTestResults | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [spinnerFrame, setSpinnerFrame] = useState(0);
@@ -81,26 +92,15 @@ export const ParallelCodexTest: React.FC<ParallelCodexTestProps> = ({
       const service = new ParallelCodexService(instanceCount);
 
       try {
-        const testRepoUrls = service.getTestRepoUrls();
-        const initialStatuses: RepoStatus[] = testRepoUrls.map((url) => {
-          const match = url.match(/github\.com\/([^\/]+)\/([^\/]+)/);
-          return {
-            owner: match?.[1] || "",
-            repo: match?.[2]?.replace(/\.git$/, "") || "",
-            status: "pending",
-          };
-        });
-        setRepoStatuses(initialStatuses);
-
         const clonedRepos = await service.cloneRepositories(
           (message, current, total) => {
             setCloningProgress({ current, total, message });
             setRepoStatuses((prev) =>
               prev.map((repo, idx) => {
                 if (idx < current - 1) {
-                  return { ...repo, status: "cloned" };
+                  return { ...repo, status: "cloned", currentActivity: undefined };
                 } else if (idx === current - 1) {
-                  return { ...repo, status: "cloning" };
+                  return { ...repo, status: "cloning", currentActivity: "🔄 Cloning repository..." };
                 }
                 return repo;
               })
@@ -339,6 +339,9 @@ export const ParallelCodexTest: React.FC<ParallelCodexTestProps> = ({
               <Box flexGrow={1}>
                 {repo.currentActivity && !repo.error && repo.status !== "completed" && (
                   <Text dimColor>{repo.currentActivity}</Text>
+                )}
+                {repo.status === "cloned" && !repo.currentActivity && (
+                  <Text color="green" dimColor>Ready for grading</Text>
                 )}
                 {repo.status === "error" && repo.error && (
                   <Text color="red" dimColor>Error: {repo.error}</Text>
