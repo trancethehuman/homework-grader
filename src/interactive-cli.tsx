@@ -23,7 +23,7 @@ import {
 } from "./components/local-tool-selector.js";
 import { LocalRepoPathInput } from "./components/local-repo-path-input.js";
 import { CodexStarting } from "./components/codex-starting.js";
-import { ParallelCodexTest } from "./components/parallel-codex-test.js";
+import { ParallelCodexBatch } from "./components/parallel-codex-batch.js";
 import { ParallelInstanceSelector } from "./components/parallel-instance-selector.js";
 import {
   WorkflowModeSelector,
@@ -1750,8 +1750,6 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
               navigateToStep("local-tool-select");
             } else if (mode === "batch") {
               navigateToStep("data-source-select");
-            } else if (mode === "parallel-test") {
-              navigateToStep("parallel-instance-select");
             }
           }}
         />
@@ -1768,7 +1766,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
             navigateToStep("parallel-codex-test");
           }}
           onBack={() => {
-            navigateToStep("grading-mode-select");
+            navigateToStep("grading-method-select");
           }}
         />
       </Box>
@@ -1776,10 +1774,19 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
   }
 
   if (step === "parallel-codex-test") {
+    const urlsToProcess =
+      selectedDataSource === "notion"
+        ? notionGitHubUrls.map((item) => item.url)
+        : manualUrls;
+
     return (
       <Box flexDirection="column">
-        <ParallelCodexTest
+        <ParallelCodexBatch
+          urls={urlsToProcess}
           instanceCount={parallelInstanceCount}
+          onComplete={(results) => {
+            console.log("Batch grading completed:", results);
+          }}
           onBack={() => {
             navigateToStep("parallel-instance-select");
           }}
@@ -2198,7 +2205,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
             if (method === "sandbox-llm") {
               navigateToStep("github-token");
             } else if (method === "codex-local") {
-              setError("Codex local grading for batch processing is coming soon!");
+              navigateToStep("parallel-instance-select");
             }
           }}
           onBack={() => {

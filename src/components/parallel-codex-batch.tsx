@@ -2,25 +2,27 @@ import React, { useState, useEffect } from "react";
 import { Text, Box } from "ink";
 import { ParallelCodexService, RepoEventData } from "../lib/codex/parallel-codex-service.js";
 import {
-  ClonedTestRepo,
   ParallelGradingResult,
   ParallelTestResults,
   ThreadItem,
 } from "../lib/codex/codex-types.js";
 import { getDefaultGradingPrompt } from "../consts/grading-prompts.js";
 
-interface ParallelCodexTestProps {
-  onBack: () => void;
+interface ParallelCodexBatchProps {
+  urls: string[];
   instanceCount: number;
+  onComplete?: (results: ParallelTestResults) => void;
+  onBack?: () => void;
 }
 
-type Phase = "cloning" | "grading" | "completed" | "error";
+type Phase = "cloning" | "grading" | "completed";
 
 interface RepoStatus {
   owner: string;
   repo: string;
   status: "pending" | "cloning" | "cloned" | "initializing" | "analyzing" | "streaming" | "completed" | "error";
   error?: string;
+  failureType?: "clone" | "grading";
   duration?: number;
   feedback?: string;
   currentActivity?: string;
@@ -51,15 +53,15 @@ const getActivityMessage = (item: ThreadItem): string => {
   }
 };
 
-export const ParallelCodexTest: React.FC<ParallelCodexTestProps> = ({
-  onBack,
+export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
+  urls,
   instanceCount,
+  onComplete,
+  onBack,
 }) => {
   const [phase, setPhase] = useState<Phase>("cloning");
   const [repoStatuses, setRepoStatuses] = useState<RepoStatus[]>(() => {
-    const service = new ParallelCodexService(instanceCount);
-    const testRepoUrls = service.getTestRepoUrls();
-    return testRepoUrls.map((url) => {
+    return urls.map((url) => {
       const match = url.match(/github\.com\/([^\/]+)\/([^\/]+)/);
       return {
         owner: match?.[1] || "",
@@ -72,9 +74,8 @@ export const ParallelCodexTest: React.FC<ParallelCodexTestProps> = ({
     current: number;
     total: number;
     message: string;
-  }>({ current: 0, total: instanceCount, message: "" });
+  }>({ current: 0, total: urls.length, message: "" });
   const [results, setResults] = useState<ParallelTestResults | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [spinnerFrame, setSpinnerFrame] = useState(0);
 
   const spinnerFrames = ["⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"];
@@ -88,34 +89,55 @@ export const ParallelCodexTest: React.FC<ParallelCodexTestProps> = ({
   }, []);
 
   useEffect(() => {
-    const runTest = async () => {
-      const service = new ParallelCodexService(instanceCount);
+    const runBatch = async () => {
+      const service = new ParallelCodexService(urls);
 
-      try {
-        const clonedRepos = await service.cloneRepositories(
-          (message, current, total) => {
-            setCloningProgress({ current, total, message });
-            setRepoStatuses((prev) =>
-              prev.map((repo, idx) => {
-                if (idx < current - 1) {
-                  return { ...repo, status: "cloned", currentActivity: undefined };
-                } else if (idx === current - 1) {
-                  return { ...repo, status: "cloning", currentActivity: "🔄 Cloning repository..." };
-                }
-                return repo;
-              })
-            );
+      const cloneResults = await service.cloneRepositories(
+        (message, current, total) => {
+          setCloningProgress({ current, total, message });
+          setRepoStatuses((prev) =>
+            prev.map((repo, idx) => {
+              if (idx < current - 1) {
+                return { ...repo, status: "cloned", currentActivity: undefined };
+              } else if (idx === current - 1) {
+                return { ...repo, status: "cloning", currentActivity: "🔄 Cloning repository..." };
+              }
+              return repo;
+            })
+          );
+        }
+      );
+
+      setRepoStatuses((prev) =>
+        prev.map((repo) => {
+          const cloneFailure = cloneResults.failed.find(
+            (f) => f.owner === repo.owner && f.repo === repo.repo
+          );
+          if (cloneFailure) {
+            return {
+              ...repo,
+              status: "error" as const,
+              error: cloneFailure.error,
+              failureType: "clone" as const,
+              currentActivity: undefined,
+            };
           }
-        );
+          const wasCloned = cloneResults.successful.find(
+            (c) => c.owner === repo.owner && c.repo === repo.repo
+          );
+          if (wasCloned) {
+            return { ...repo, status: "pending" as const };
+          }
+          return repo;
+        })
+      );
 
-        setRepoStatuses((prev) =>
-          prev.map((repo) => ({ ...repo, status: "pending" }))
-        );
+      if (cloneResults.successful.length > 0) {
         setPhase("grading");
 
         const defaultPrompt = getDefaultGradingPrompt();
 
-        const testResults = await service.runParallelGrading(
+        const batchResults = await service.runParallelGrading(
           defaultPrompt.value,
           (repoInfo) => {
             setRepoStatuses((prev) =>
@@ -135,6 +157,7 @@ export const ParallelCodexTest: React.FC<ParallelCodexTestProps> = ({
                       ...repo,
                       status: result.success ? "completed" : "error",
                       error: result.error,
+                      failureType: result.success ? undefined : ("grading" as const),
                       duration: result.duration,
                       feedback: result.feedback,
                       tokensUsed: result.tokensUsed,
@@ -197,20 +220,33 @@ export const ParallelCodexTest: React.FC<ParallelCodexTestProps> = ({
           }
         );
 
-        setResults(testResults);
+        setResults(batchResults);
         setPhase("completed");
-      } catch (err) {
-        const errorMessage =
-          err instanceof Error ? err.message : "Unknown error occurred";
-        setError(errorMessage);
-        setPhase("error");
-      } finally {
-        service.cleanup();
+
+        if (onComplete) {
+          onComplete(batchResults);
+        }
+      } else {
+        const emptyResults: ParallelTestResults = {
+          results: [],
+          cloneFailures: cloneResults.failed,
+          totalDuration: 0,
+          successCount: 0,
+          failureCount: 0,
+        };
+        setResults(emptyResults);
+        setPhase("completed");
+
+        if (onComplete) {
+          onComplete(emptyResults);
+        }
       }
+
+      service.cleanup();
     };
 
-    runTest();
-  }, []);
+    runBatch();
+  }, [urls, instanceCount]);
 
   const getStatusIcon = (status: RepoStatus["status"]) => {
     switch (status) {
@@ -261,7 +297,7 @@ export const ParallelCodexTest: React.FC<ParallelCodexTestProps> = ({
   return (
     <Box flexDirection="column">
       <Text color="blue" bold>
-        Parallel Codex Test (TEMPORARY)
+        Parallel Codex Batch Grading
       </Text>
       <Text></Text>
 
@@ -280,14 +316,13 @@ export const ParallelCodexTest: React.FC<ParallelCodexTestProps> = ({
       {phase === "grading" && (
         <>
           <Text color="cyan">
-            {spinnerFrames[spinnerFrame]} Running parallel grading...
+            {spinnerFrames[spinnerFrame]} Running parallel grading ({instanceCount} instances)...
           </Text>
           <Text></Text>
         </>
       )}
 
       <Box flexDirection="column" marginBottom={1}>
-        {/* Table Header */}
         <Box>
           <Box width={3}>
             <Text bold dimColor>St</Text>
@@ -306,13 +341,10 @@ export const ParallelCodexTest: React.FC<ParallelCodexTestProps> = ({
           </Box>
         </Box>
 
-        {/* Separator */}
         <Text dimColor>{"─".repeat(80)}</Text>
 
-        {/* Table Rows */}
         {repoStatuses.map((repo, idx) => (
           <Box key={idx} flexDirection="column">
-            {/* Main row */}
             <Box>
               <Box width={3}>
                 <Text color={getStatusColor(repo.status)}>
@@ -344,12 +376,14 @@ export const ParallelCodexTest: React.FC<ParallelCodexTestProps> = ({
                   <Text color="green" dimColor>Ready for grading</Text>
                 )}
                 {repo.status === "error" && repo.error && (
-                  <Text color="red" dimColor>Error: {repo.error}</Text>
+                  <Text color="red" dimColor>
+                    {repo.failureType === "clone" ? "Clone failed: " : "Grading failed: "}
+                    {repo.error}
+                  </Text>
                 )}
               </Box>
             </Box>
 
-            {/* Streaming message row (if present) */}
             {repo.streamingMessage && repo.status === "streaming" && (
               <Box marginLeft={3}>
                 <Text color="cyan" dimColor>
@@ -359,7 +393,6 @@ export const ParallelCodexTest: React.FC<ParallelCodexTestProps> = ({
               </Box>
             )}
 
-            {/* Feedback row (if completed) */}
             {repo.status === "completed" && repo.feedback && (
               <Box marginLeft={3} flexDirection="column">
                 <Text dimColor>
@@ -384,27 +417,42 @@ export const ParallelCodexTest: React.FC<ParallelCodexTestProps> = ({
           <Box
             flexDirection="column"
             borderStyle="round"
-            borderColor="green"
+            borderColor={
+              results.cloneFailures.length + results.failureCount === 0
+                ? "green"
+                : results.successCount > 0
+                ? "yellow"
+                : "red"
+            }
             paddingX={1}
           >
-            <Text color="green" bold>
-              Test Completed Successfully!
+            <Text
+              color={
+                results.cloneFailures.length + results.failureCount === 0
+                  ? "green"
+                  : results.successCount > 0
+                  ? "yellow"
+                  : "red"
+              }
+              bold
+            >
+              Batch Grading Completed!
             </Text>
             <Text></Text>
             <Text>
               Total Duration: {formatDuration(results.totalDuration)}
             </Text>
-            <Text color="green">Success: {results.successCount}</Text>
-            <Text color="red">Failures: {results.failureCount}</Text>
+            <Text color="green">Successfully Graded: {results.successCount}</Text>
+            {results.failureCount > 0 && (
+              <Text color="red">Grading Failures: {results.failureCount}</Text>
+            )}
+            {results.cloneFailures.length > 0 && (
+              <Text color="red">Clone Failures: {results.cloneFailures.length}</Text>
+            )}
+            <Text dimColor>
+              Total Processed: {results.successCount + results.failureCount + results.cloneFailures.length} repos
+            </Text>
           </Box>
-        </>
-      )}
-
-      {phase === "error" && error && (
-        <>
-          <Text color="red">✗ Test failed</Text>
-          <Text></Text>
-          <Text color="red">{error}</Text>
         </>
       )}
 

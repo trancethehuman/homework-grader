@@ -6,6 +6,8 @@ import { v4 as uuidv4 } from "uuid";
 import { CodexService } from "./codex-service.js";
 import {
   ClonedTestRepo,
+  CloneFailure,
+  CloneResults,
   ParallelGradingResult,
   ParallelTestResults,
   ThreadItem,
@@ -20,33 +22,14 @@ export interface RepoEventData {
 export class ParallelCodexService {
   private tempDir: string | null = null;
   private clonedRepos: ClonedTestRepo[] = [];
-  private repoCount: number;
+  private cloneFailures: CloneFailure[] = [];
+  private urls: string[];
 
-  private readonly TEST_REPOS = [
-    "https://github.com/microsoft/amplifier",
-    "https://github.com/karpathy/nanochat",
-    "https://github.com/obra/superpowers",
-    "https://github.com/electron/electron",
-    "https://github.com/vercel/next.js",
-    "https://github.com/facebook/react",
-    "https://github.com/microsoft/vscode",
-    "https://github.com/denoland/deno",
-    "https://github.com/nodejs/node",
-    "https://github.com/vuejs/vue",
-    "https://github.com/sveltejs/svelte",
-    "https://github.com/angular/angular",
-    "https://github.com/tailwindlabs/tailwindcss",
-    "https://github.com/vitejs/vite",
-    "https://github.com/webpack/webpack",
-    "https://github.com/expressjs/express",
-    "https://github.com/nestjs/nest",
-    "https://github.com/trpc/trpc",
-    "https://github.com/prisma/prisma",
-    "https://github.com/supabase/supabase",
-  ];
-
-  constructor(count: number = 4) {
-    this.repoCount = Math.max(1, count);
+  constructor(urls: string[]) {
+    if (!urls || urls.length === 0) {
+      throw new Error("At least one repository URL is required");
+    }
+    this.urls = urls;
   }
 
   private parseGitHubUrl(url: string): { owner: string; repo: string } {
@@ -62,31 +45,33 @@ export class ParallelCodexService {
 
   async cloneRepositories(
     onProgress?: (message: string, repoIndex: number, total: number) => void
-  ): Promise<ClonedTestRepo[]> {
+  ): Promise<CloneResults> {
     const tempDirBase = os.tmpdir();
-    this.tempDir = path.join(tempDirBase, `codex-parallel-test-${uuidv4()}`);
+    this.tempDir = path.join(tempDirBase, `codex-parallel-batch-${uuidv4()}`);
 
     if (!fs.existsSync(this.tempDir)) {
       fs.mkdirSync(this.tempDir, { recursive: true });
     }
 
     const clonedRepos: ClonedTestRepo[] = [];
+    const failures: CloneFailure[] = [];
 
-    for (let i = 0; i < this.repoCount; i++) {
-      const url = this.TEST_REPOS[i % this.TEST_REPOS.length];
-      const { owner, repo } = this.parseGitHubUrl(url);
-
-      if (onProgress) {
-        onProgress(
-          `Cloning ${owner}/${repo}...`,
-          i + 1,
-          this.repoCount
-        );
-      }
-
-      const localPath = path.join(this.tempDir, repo);
+    for (let i = 0; i < this.urls.length; i++) {
+      const url = this.urls[i];
 
       try {
+        const { owner, repo } = this.parseGitHubUrl(url);
+
+        if (onProgress) {
+          onProgress(
+            `Cloning ${owner}/${repo}...`,
+            i + 1,
+            this.urls.length
+          );
+        }
+
+        const localPath = path.join(this.tempDir, `${owner}-${repo}`);
+
         execSync(`git clone --depth 1 ${url} ${localPath}`, {
           stdio: "pipe",
           timeout: 60000,
@@ -101,14 +86,29 @@ export class ParallelCodexService {
       } catch (error) {
         const errorMessage =
           error instanceof Error ? error.message : "Unknown error";
-        throw new Error(
-          `Failed to clone ${owner}/${repo}: ${errorMessage}`
-        );
+
+        const match = url.match(/github\.com\/([^\/]+)\/([^\/]+)/);
+        const owner = match?.[1] || "unknown";
+        const repo = match?.[2]?.replace(/\.git$/, "") || "unknown";
+
+        console.warn(`⚠️  Failed to clone ${owner}/${repo}: ${errorMessage}`);
+
+        failures.push({
+          url,
+          owner,
+          repo,
+          error: errorMessage,
+        });
       }
     }
 
     this.clonedRepos = clonedRepos;
-    return clonedRepos;
+    this.cloneFailures = failures;
+
+    return {
+      successful: clonedRepos,
+      failed: failures,
+    };
   }
 
   async runParallelGrading(
@@ -117,13 +117,18 @@ export class ParallelCodexService {
     onRepoComplete?: (result: ParallelGradingResult) => void,
     onRepoEvent?: (repoInfo: { owner: string; repo: string }, event: RepoEventData) => void
   ): Promise<ParallelTestResults> {
-    if (this.clonedRepos.length === 0) {
-      throw new Error(
-        "No repositories cloned. Call cloneRepositories() first."
-      );
-    }
-
     const totalStartTime = Date.now();
+
+    if (this.clonedRepos.length === 0) {
+      console.warn("⚠️  No repositories successfully cloned. Skipping grading phase.");
+      return {
+        results: [],
+        cloneFailures: this.cloneFailures,
+        totalDuration: Date.now() - totalStartTime,
+        successCount: 0,
+        failureCount: 0,
+      };
+    }
 
     const gradingPromises = this.clonedRepos.map(async (repo) => {
       if (onRepoStart) {
@@ -222,6 +227,7 @@ export class ParallelCodexService {
 
     return {
       results,
+      cloneFailures: this.cloneFailures,
       totalDuration,
       successCount,
       failureCount,
@@ -242,11 +248,7 @@ export class ParallelCodexService {
     return this.tempDir;
   }
 
-  getTestRepoUrls(): string[] {
-    const urls: string[] = [];
-    for (let i = 0; i < this.repoCount; i++) {
-      urls.push(this.TEST_REPOS[i % this.TEST_REPOS.length]);
-    }
-    return urls;
+  getUrls(): string[] {
+    return this.urls;
   }
 }

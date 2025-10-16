@@ -21,16 +21,16 @@ export const GradingMethodSelector: React.FC<GradingMethodSelectorProps> = ({
     comingSoon?: boolean;
   }[] = [
     {
+      id: "codex-local",
+      name: "Homeworks are cloned locally and graded by Codex (recommended)",
+      description: "Clone repositories locally and grade with Codex",
+      comingSoon: false,
+    },
+    {
       id: "sandbox-llm",
       name: "Homeworks cloned to sandbox and graded by LLMs",
       description: "Clone repositories to E2B sandbox and grade with AI models",
       comingSoon: false,
-    },
-    {
-      id: "codex-local",
-      name: "Homeworks are cloned locally and graded by Codex",
-      description: "Clone repositories locally and grade with Codex",
-      comingSoon: true,
     },
   ];
 

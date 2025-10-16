@@ -46,6 +46,18 @@ export interface ClonedTestRepo {
   localPath: string;
 }
 
+export interface CloneFailure {
+  url: string;
+  owner: string;
+  repo: string;
+  error: string;
+}
+
+export interface CloneResults {
+  successful: ClonedTestRepo[];
+  failed: CloneFailure[];
+}
+
 export interface ParallelGradingResult extends CodexGradingResult {
   repoInfo: {
     url: string;
@@ -57,6 +69,7 @@ export interface ParallelGradingResult extends CodexGradingResult {
 
 export interface ParallelTestResults {
   results: ParallelGradingResult[];
+  cloneFailures: CloneFailure[];
   totalDuration: number;
   successCount: number;
   failureCount: number;

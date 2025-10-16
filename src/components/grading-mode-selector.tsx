@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Text, Box, useInput } from "ink";
 
-export type GradingMode = "local" | "batch" | "parallel-test";
+export type GradingMode = "local" | "batch";
 
 interface GradingModeSelectorProps {
   onSelect: (mode: GradingMode) => void;
@@ -23,11 +23,6 @@ export const GradingModeSelector: React.FC<GradingModeSelectorProps> = ({
       name: "Remote repo(s)",
       description:
         "Grade multiple repositories from CSV, Notion, or manual input",
-    },
-    {
-      id: "parallel-test",
-      name: "Test parallel Codex instances (TEMP)",
-      description: "Clone and grade 4 test repos in parallel using Codex",
     },
   ];
 
