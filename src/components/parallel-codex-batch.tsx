@@ -7,6 +7,10 @@ import {
   ThreadItem,
 } from "../lib/codex/codex-types.js";
 import { getDefaultGradingPrompt } from "../consts/grading-prompts.js";
+import { CODEX_GRADING_SCHEMA } from "../lib/codex/grading-schema.js";
+import { NotionSavePrompt } from "./notion-save-prompt.js";
+import { NotionDatabaseSelector } from "./notion-database-selector.js";
+import { NotionSaving } from "./notion-saving.js";
 
 interface ParallelCodexBatchProps {
   urls: string[];
@@ -15,7 +19,7 @@ interface ParallelCodexBatchProps {
   onBack?: () => void;
 }
 
-type Phase = "cloning" | "grading" | "completed";
+type Phase = "cloning" | "grading" | "completed" | "notion_prompt" | "notion_selecting" | "notion_saving" | "final";
 
 interface RepoStatus {
   owner: string;
@@ -77,6 +81,8 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
   }>({ current: 0, total: urls.length, message: "" });
   const [results, setResults] = useState<ParallelTestResults | null>(null);
   const [spinnerFrame, setSpinnerFrame] = useState(0);
+  const [selectedDatabaseId, setSelectedDatabaseId] = useState<string>("");
+  const [selectedDatabaseTitle, setSelectedDatabaseTitle] = useState<string>("");
 
   const spinnerFrames = ["⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"];
 
@@ -217,11 +223,12 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
                 return repo;
               })
             );
-          }
+          },
+          CODEX_GRADING_SCHEMA
         );
 
         setResults(batchResults);
-        setPhase("completed");
+        setPhase("notion_prompt");
 
         if (onComplete) {
           onComplete(batchResults);
@@ -294,6 +301,43 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
     return `${(ms / 1000).toFixed(1)}s`;
   };
 
+  if (phase === "notion_prompt") {
+    return (
+      <NotionSavePrompt
+        onYes={() => setPhase("notion_selecting")}
+        onNo={() => setPhase("final")}
+      />
+    );
+  }
+
+  if (phase === "notion_selecting") {
+    return (
+      <NotionDatabaseSelector
+        onSelect={(databaseId, databaseTitle) => {
+          setSelectedDatabaseId(databaseId);
+          setSelectedDatabaseTitle(databaseTitle);
+          setPhase("notion_saving");
+        }}
+        onBack={() => setPhase("notion_prompt")}
+      />
+    );
+  }
+
+  if (phase === "notion_saving" && results) {
+    return (
+      <NotionSaving
+        databaseId={selectedDatabaseId}
+        databaseTitle={selectedDatabaseTitle}
+        gradingResults={results.results}
+        onComplete={() => setPhase("final")}
+        onError={(error) => {
+          console.error("Error saving to Notion:", error);
+          setPhase("final");
+        }}
+      />
+    );
+  }
+
   return (
     <Box flexDirection="column">
       <Text color="blue" bold>
@@ -322,7 +366,8 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
         </>
       )}
 
-      <Box flexDirection="column" marginBottom={1}>
+      {(phase === "cloning" || phase === "grading" || phase === "completed" || phase === "final") && (
+        <Box flexDirection="column" marginBottom={1}>
         <Box>
           <Box width={3}>
             <Text bold dimColor>St</Text>
@@ -409,9 +454,10 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
             )}
           </Box>
         ))}
-      </Box>
+        </Box>
+      )}
 
-      {phase === "completed" && results && (
+      {(phase === "completed" || phase === "final") && results && (
         <>
           <Text></Text>
           <Box

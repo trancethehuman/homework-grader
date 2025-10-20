@@ -275,7 +275,19 @@ The codebase includes:
   - **Token Tracking**: Captures input/output token usage from Codex API
   - **Error Handling**: Comprehensive error handling with graceful degradation
   - **Git Repository Support**: Works with Git repositories (can skip check with configuration)
+  - **Structured Output Support**: Accepts optional JSON schema for structured responses
+  - **Notion Integration**: Results can be saved directly to Notion databases with structured format
   - **Flexible Integration**: Used by CodexStarting component for local grading workflow
+
+- **ParallelCodexService Class** (`src/lib/codex/parallel-codex-service.ts`)
+
+  - **Batch Repository Grading**: Clones and grades multiple repositories in parallel using Codex
+  - **Sequential Execution**: One Codex instance per repository, running concurrently
+  - **Structured Output Support**: Uses JSON schema to get consistent grading format
+  - **Real-time Progress**: Event callbacks for cloning, initialization, and grading progress
+  - **Comprehensive Results**: Returns success/failure counts, timing data, and individual results
+  - **Automatic Cleanup**: Removes temporary cloned repositories after processing
+  - **Notion Integration**: Results can be saved to Notion databases after batch completion
 
 - **Interactive CSV Component** (`src/interactive-cli.tsx`)
 
@@ -525,6 +537,37 @@ The codebase includes:
   - **Results Display**: Shows recent test results with screenshots and action counts
   - **Resource Management**: Handles browser session cleanup with user feedback
 
+- **NotionSavePrompt Component** (`src/components/notion-save-prompt.tsx`)
+  - **NEW**: User confirmation prompt for Notion database saving
+  - **Simple Yes/No Interface**: Arrow keys or Y/N hotkeys for quick selection
+  - **Post-Grading Workflow**: Appears after Codex batch grading completes
+  - **Non-intrusive**: Easy to skip if user doesn't want to save to Notion
+
+- **NotionDatabaseSelector Component** (`src/components/notion-database-selector.tsx`)
+  - **NEW**: Database selection interface for Codex grading results
+  - **Auto-Loading**: Fetches available Notion databases on mount
+  - **Arrow Key Navigation**: Simple up/down selection with Enter to confirm
+  - **OAuth Integration**: Uses Notion authentication with automatic token refresh
+  - **Back Navigation**: Press 'b' to return to previous step
+  - **Error Handling**: Displays helpful error messages with troubleshooting tips
+
+- **NotionSaving Component** (`src/components/notion-saving.tsx`)
+  - **NEW**: Handles saving Codex batch grading results to Notion
+  - **Structured Output Transform**: Converts Codex responses to Notion format
+  - **Database Schema Creation**: Automatically adds required columns if missing
+  - **Conflict Detection**: Uses conflict check workflow for existing data
+  - **Progress Display**: Shows saving status and completion stats
+  - **Automatic Completion**: Transitions to final view after successful save
+
+- **ParallelCodexBatch Component** (`src/components/parallel-codex-batch.tsx`)
+  - **Batch Grading Interface**: Manages parallel Codex grading workflow
+  - **Multi-Phase Workflow**: Cloning → Grading → Notion Prompt → Database Selection → Saving
+  - **Structured Output**: Uses JSON schema for consistent grading format
+  - **Real-time Status**: Live progress tracking for each repository
+  - **Comprehensive Results**: Success/failure counts, duration, token usage
+  - **Optional Notion Saving**: User can choose to save results to Notion database
+  - **Conflict Resolution**: Handles existing data with user confirmation
+
 ### Key Features
 
 - **TypeScript**: Full type safety and compilation
@@ -594,6 +637,17 @@ The codebase includes:
   - **Processing Mode Awareness**: Schema updates based on code/browser/both processing modes
   - **Detailed Logging**: Extensive logging throughout the database update process
   - **Validation Before Saving**: Pre-save validation ensures all required columns exist
+- **Codex to Notion Integration**:
+  - **Structured Output Schema**: JSON schema ensures consistent grading format
+  - **Automatic Format Conversion**: Transforms Codex responses to Notion-compatible format
+  - **Post-Grading Workflow**: Optional Notion saving after batch grading completes
+  - **User Confirmation**: Non-intrusive prompt allows users to choose whether to save
+  - **Database Selection**: Interactive interface for choosing target Notion database
+  - **Schema Management**: Automatically creates required columns (Repository Summary, Developer Feedback)
+  - **Conflict Detection**: Identifies and handles existing data with user choices
+  - **Progress Display**: Real-time feedback during save operation
+  - **Error Handling**: Comprehensive error messages with troubleshooting guidance
+  - **Dual Format**: Saves both raw feedback and structured output fields
 - **CSV Processing**: File validation, analysis, and URL extraction
 - **Error Handling**: Comprehensive error handling with automatic fallback mechanisms
 - **Resource Management**: Automatic sandbox and browser session cleanup

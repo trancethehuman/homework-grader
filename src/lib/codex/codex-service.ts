@@ -18,17 +18,19 @@ export class CodexService {
     this.codex = new Codex(config.codexOptions);
   }
 
-  async startGrading(
+  async startGrading<T = any>(
     prompt: string,
-    eventHandler?: CodexEventHandler
-  ): Promise<CodexGradingResult> {
+    eventHandler?: CodexEventHandler,
+    outputSchema?: any
+  ): Promise<CodexGradingResult<T>> {
     try {
       this.thread = this.codex.startThread({
         workingDirectory: this.config.repoPath,
         skipGitRepoCheck: this.config.skipGitRepoCheck ?? false,
       });
 
-      const { events } = await this.thread.runStreamed(prompt);
+      const runOptions = outputSchema ? { outputSchema } : undefined;
+      const { events } = await this.thread.runStreamed(prompt, runOptions);
 
       let lastItem = null;
       let tokensUsed = { input: 0, cached: 0, output: 0, total: 0 };
@@ -52,9 +54,12 @@ export class CodexService {
 
       const feedback = this.extractFeedbackFromItem(lastItem);
 
+      const structuredOutput = outputSchema ? this.parseStructuredOutput<T>(feedback) : undefined;
+
       return {
         success: true,
         feedback,
+        structuredOutput,
         tokensUsed,
       };
     } catch (error) {
@@ -109,17 +114,31 @@ export class CodexService {
     return JSON.stringify(item, null, 2);
   }
 
+  private parseStructuredOutput<T>(feedback: string): T | undefined {
+    try {
+      return JSON.parse(feedback) as T;
+    } catch (error) {
+      return undefined;
+    }
+  }
+
   getThreadId(): string | null {
     return this.thread?.id ?? null;
   }
 
-  async resumeThread(threadId: string, prompt: string): Promise<CodexGradingResult> {
+  async resumeThread<T = any>(
+    threadId: string,
+    prompt: string,
+    outputSchema?: any
+  ): Promise<CodexGradingResult<T>> {
     try {
       this.thread = this.codex.resumeThread(threadId, {
         workingDirectory: this.config.repoPath,
         skipGitRepoCheck: this.config.skipGitRepoCheck ?? false,
       });
-      const turn = await this.thread.run(prompt);
+
+      const runOptions = outputSchema ? { outputSchema } : undefined;
+      const turn = await this.thread.run(prompt, runOptions);
 
       const tokensUsed = turn.usage
         ? {
@@ -130,9 +149,12 @@ export class CodexService {
           }
         : undefined;
 
+      const structuredOutput = outputSchema ? this.parseStructuredOutput<T>(turn.finalResponse) : undefined;
+
       return {
         success: true,
         feedback: turn.finalResponse,
+        structuredOutput,
         tokensUsed,
       };
     } catch (error) {

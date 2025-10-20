@@ -19,9 +19,10 @@ export interface CodexThreadConfig {
   model?: string;
 }
 
-export interface CodexGradingResult {
+export interface CodexGradingResult<T = any> {
   success: boolean;
   feedback?: string;
+  structuredOutput?: T;
   grade?: number;
   error?: string;
   tokensUsed?: {
