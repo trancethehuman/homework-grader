@@ -6,6 +6,7 @@ import type {
   ThreadOptions,
   Usage,
 } from "@openai/codex-sdk";
+import type { CodexGradingStructuredOutput } from "./structured-output-schema.js";
 
 export interface CodexConfig {
   repoPath: string;
@@ -22,6 +23,7 @@ export interface CodexThreadConfig {
 export interface CodexGradingResult {
   success: boolean;
   feedback?: string;
+  structuredData?: CodexGradingStructuredOutput; // Structured output for Notion compatibility
   grade?: number;
   error?: string;
   tokensUsed?: {

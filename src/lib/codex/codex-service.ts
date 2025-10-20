@@ -7,6 +7,12 @@ import {
   ThreadEvent,
   AgentMessageItem,
 } from "./codex-types.js";
+import {
+  CODEX_GRADING_SCHEMA,
+  parseCodexStructuredOutput,
+  isStructuredOutput,
+  type CodexGradingStructuredOutput,
+} from "./structured-output-schema.js";
 
 export class CodexService {
   private codex: Codex;
@@ -20,7 +26,8 @@ export class CodexService {
 
   async startGrading(
     prompt: string,
-    eventHandler?: CodexEventHandler
+    eventHandler?: CodexEventHandler,
+    useStructuredOutput: boolean = true
   ): Promise<CodexGradingResult> {
     try {
       this.thread = this.codex.startThread({
@@ -28,7 +35,12 @@ export class CodexService {
         skipGitRepoCheck: this.config.skipGitRepoCheck ?? false,
       });
 
-      const { events } = await this.thread.runStreamed(prompt);
+      // Use structured output schema for consistent Notion-compatible responses
+      const runOptions = useStructuredOutput
+        ? { outputSchema: CODEX_GRADING_SCHEMA }
+        : {};
+
+      const { events } = await this.thread.runStreamed(prompt, runOptions as any);
 
       let lastItem = null;
       let tokensUsed = { input: 0, cached: 0, output: 0, total: 0 };
@@ -52,9 +64,20 @@ export class CodexService {
 
       const feedback = this.extractFeedbackFromItem(lastItem);
 
+      // Parse structured output if using schema
+      let structuredData: CodexGradingStructuredOutput | undefined;
+      if (useStructuredOutput && feedback && isStructuredOutput(feedback)) {
+        try {
+          structuredData = parseCodexStructuredOutput(feedback);
+        } catch (error) {
+          console.warn("Failed to parse structured output, falling back to raw feedback");
+        }
+      }
+
       return {
         success: true,
         feedback,
+        structuredData,
         tokensUsed,
       };
     } catch (error) {
