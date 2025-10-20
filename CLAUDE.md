@@ -277,6 +277,24 @@ The codebase includes:
   - **Git Repository Support**: Works with Git repositories (can skip check with configuration)
   - **Flexible Integration**: Used by CodexStarting component for local grading workflow
 
+- **ParallelCodexService Class** (`src/lib/codex/parallel-codex-service.ts`)
+
+  - **NEW**: Parallel batch grading service using Codex SDK
+  - **Repository Cloning**: Automated git clone with shallow depth for multiple repositories
+  - **Parallel Processing**: Runs multiple Codex instances simultaneously using Promise.all
+  - **Fault Tolerance**: Individual repository failures don't stop the batch process
+  - **Per-Repository Abort Controllers**: Individual abort control for each repository being processed
+  - **Skip/Stop Functionality**: skipRepo() and stopRepo() methods to cancel specific repositories
+  - **Global Abort**: abort() method to cancel all repositories at once
+  - **Clone Failure Tracking**: Separates clone failures from grading failures
+  - **Timeout Protection**: 5-minute timeout per repository with automatic cleanup
+  - **Event System**: Callbacks for repo start, completion, and real-time events (initializing, item_updated, item_completed, error)
+  - **Resource Management**: Individual cleanup of repository folders after processing
+  - **Temporary Directory Management**: Creates isolated temp directories for batch operations
+  - **Real-time Progress**: onProgress callback during cloning phase
+  - **Comprehensive Results**: Returns success/failure counts, durations, and detailed results per repository
+  - **Used By**: ParallelCodexBatch component for interactive batch grading workflows
+
 - **Interactive CSV Component** (`src/interactive-cli.tsx`)
 
   - React/Ink based interactive CLI interface
@@ -289,9 +307,9 @@ The codebase includes:
   - **Batch Grading Workflow**: Data source → URLs collection → Grading method → Setup → Processing
     - **Step 1**: Data source selection (CSV / Notion / Manual Input)
     - **Step 2**: Collect URLs based on selected source
-    - **Step 3**: Choose grading method (Sandbox LLMs OR Codex local - coming soon)
-    - **Step 4**: GitHub token + E2B API key setup (if Sandbox LLMs selected)
-    - **Step 5**: AI provider selection and processing
+    - **Step 3**: Choose grading method (Codex local - recommended OR Sandbox LLMs)
+    - **Step 4**: Instance count selection (if Codex local) OR GitHub token + E2B API key setup (if Sandbox LLMs)
+    - **Step 5**: Parallel batch processing with interactive navigation (Codex) OR AI provider selection and processing (LLMs)
   - GitHub token input and management with secure storage
   - Token validation step with loading indicator
   - Browser integration for token generation
@@ -466,6 +484,32 @@ The codebase includes:
   - **Repository Confirmation**: Displays the selected repository path
   - **Integration**: Uses CodexService to orchestrate Codex SDK for code review and analysis
 
+- **ParallelCodexBatch Component** (`src/components/parallel-codex-batch.tsx`)
+
+  - **NEW**: Parallel batch grading using Codex with interactive navigation
+  - **Three Phases**: Cloning → Grading → Completed with progress tracking
+  - **Interactive Row Navigation**: Arrow keys (↑/↓) to select individual repositories during processing
+  - **Per-Repository Actions**: Skip (s) or stop (x) selected repository without affecting others
+    - **Immediate Visual Feedback**: Pressing 's' or 'x' instantly shows "⏭️ Skipping..." or "🛑 Stopping..." with spinning icon
+    - **Status Tracking**: "cancelling" status with yellow color indicates action in progress
+    - **Clear Error Messages**: Shows "Skipped by user" or "Stopped by user" when cancellation completes
+  - **Global Abort**: Press 'a' to abort entire batch while keeping partial results
+  - **Visual Selection**: Selected row highlighted with → indicator and bold text
+  - **Smart Message Truncation**: Automatically truncates long messages for clean display
+    - Error messages: 50 characters when not selected, full text when selected
+    - Feedback: 100 characters when not selected, full text when selected
+    - Streaming messages: 80 characters when not selected, full text when selected
+    - Ellipsis (...) indicates truncated content that expands on selection
+  - **Real-time Updates**: Live streaming of Codex analysis progress for each repository
+  - **Comprehensive Status Display**: Shows duration, item count, and current activity per repo
+  - **Error Differentiation**: Clone failures vs grading failures with distinct messages
+  - **Timeout Handling**: 5-minute timeout per repository with yellow warning display
+  - **Token Tracking**: Displays input/output token usage for completed repositories
+  - **Fault Tolerance**: Individual repository failures don't stop the batch process
+  - **Progress Counter**: Shows "Processed: X/Y repos" during grading phase
+  - **Smart Resource Management**: Individual repo cleanup after processing completes
+  - **Service Integration**: Uses ParallelCodexService for orchestrating parallel Codex instances
+
 - **DataSourceSelector Component** (`src/components/data-source-selector.tsx`)
 
   - **Data source selection interface** for batch grading workflows
@@ -478,10 +522,10 @@ The codebase includes:
 
   - **NEW**: Grading method selection interface for batch processing
   - **Two Options**:
-    - "Homeworks cloned to sandbox and graded by LLMs" (active)
-    - "Homeworks are cloned locally and graded by Codex" (coming soon)
-  - **Disabled Options**: Grayed-out "coming soon" options with visual indication
-  - **Arrow Key Navigation**: Up/down navigation with Enter to select active options only
+    - "Homeworks are cloned locally and graded by Codex" (recommended, default selection)
+    - "Homeworks cloned to sandbox and graded by LLMs"
+  - **Default Choice**: Codex local is highlighted first as the recommended option
+  - **Arrow Key Navigation**: Up/down navigation with Enter to select
   - **Back Navigation**: Press 'b' or Escape to return to previous step
   - **Smart Back Navigation**: Returns to appropriate step based on data source (manual/csv/notion)
 

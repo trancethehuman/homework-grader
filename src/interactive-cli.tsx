@@ -76,7 +76,11 @@ import { BrowserTesting } from "./components/browser-testing.js";
 import { BrowserTestResult } from "./lib/stagehand/browser-testing-service.js";
 import { BrowserTestMode } from "./components/browser-test-mode.js";
 import { ComputerUseModelSelector } from "./components/computer-use-model-selector.js";
-import { DatabaseFilter, DatabaseProperty, FilterCriteria } from "./components/notion/database-filter.js";
+import {
+  DatabaseFilter,
+  DatabaseProperty,
+  FilterCriteria,
+} from "./components/notion/database-filter.js";
 import { PromptSelector } from "./components/prompt-selector.js";
 import {
   GradingPrompt,
@@ -176,9 +180,8 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
     useState<ComputerUseModel | null>(null);
   const [selectedWorkflowMode, setSelectedWorkflowMode] =
     useState<WorkflowMode | null>(null);
-  const [selectedGradingMode, setSelectedGradingMode] = useState<
-    GradingMode | null
-  >(null);
+  const [selectedGradingMode, setSelectedGradingMode] =
+    useState<GradingMode | null>(null);
   const [selectedLocalTool, setSelectedLocalTool] = useState<
     "codex" | "claude-code" | "cursor" | null
   >(null);
@@ -191,8 +194,9 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
   const [manualUrls, setManualUrls] = useState<string[]>([]);
   const [selectedGradingPrompt, setSelectedGradingPrompt] =
     useState<GradingPrompt>(getDefaultGradingPrompt());
-  const [selectedCodexPrompt, setSelectedCodexPrompt] =
-    useState<GradingPrompt>(getDefaultGradingPrompt());
+  const [selectedCodexPrompt, setSelectedCodexPrompt] = useState<GradingPrompt>(
+    getDefaultGradingPrompt()
+  );
   const [notionClient] = useState(new NotionMCPClient());
   const [notionOAuthClient] = useState(new NotionOAuthClient());
   const [notionDatabase, setNotionDatabase] = useState<NotionDatabase | null>(
@@ -241,8 +245,11 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
   >([]);
   const [selectedDeployedUrlColumn, setSelectedDeployedUrlColumn] =
     useState<string>("");
-  const [databaseFilterCriteria, setDatabaseFilterCriteria] = useState<FilterCriteria | null>(null);
-  const [databaseProperties, setDatabaseProperties] = useState<DatabaseProperty[]>([]);
+  const [databaseFilterCriteria, setDatabaseFilterCriteria] =
+    useState<FilterCriteria | null>(null);
+  const [databaseProperties, setDatabaseProperties] = useState<
+    DatabaseProperty[]
+  >([]);
   const [originalDatabaseId, setOriginalDatabaseId] = useState<
     string | undefined
   >();
@@ -300,161 +307,167 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
     const propertyName = criteria.propertyName;
 
     switch (criteria.filterType) {
-      case 'include':
-        if (criteria.propertyType === 'select') {
+      case "include":
+        if (criteria.propertyType === "select") {
           const values = criteria.value as string[];
           // Single value: return simple filter
           if (values.length === 1) {
             return {
               property: propertyName,
-              select: { equals: values[0] }
+              select: { equals: values[0] },
             };
           }
           // Multiple values: use OR compound filter
           return {
             or: values.map((val: string) => ({
               property: propertyName,
-              select: { equals: val }
-            }))
+              select: { equals: val },
+            })),
           };
-        } else if (criteria.propertyType === 'multi_select') {
+        } else if (criteria.propertyType === "multi_select") {
           const values = criteria.value as string[];
           // For multi-select, use "contains" for each value with OR
           if (values.length === 1) {
             return {
               property: propertyName,
-              multi_select: { contains: values[0] }
+              multi_select: { contains: values[0] },
             };
           }
           return {
             or: values.map((val: string) => ({
               property: propertyName,
-              multi_select: { contains: val }
-            }))
+              multi_select: { contains: val },
+            })),
           };
         }
         break;
 
-      case 'exclude':
-        if (criteria.propertyType === 'select') {
+      case "exclude":
+        if (criteria.propertyType === "select") {
           const values = criteria.value as string[];
           // Use does_not_equal with AND for excluding multiple values
           if (values.length === 1) {
             return {
               property: propertyName,
-              select: { does_not_equal: values[0] }
+              select: { does_not_equal: values[0] },
             };
           }
           return {
             and: values.map((val: string) => ({
               property: propertyName,
-              select: { does_not_equal: val }
-            }))
+              select: { does_not_equal: val },
+            })),
           };
-        } else if (criteria.propertyType === 'multi_select') {
+        } else if (criteria.propertyType === "multi_select") {
           const values = criteria.value as string[];
           // Use does_not_contain with AND
           if (values.length === 1) {
             return {
               property: propertyName,
-              multi_select: { does_not_contain: values[0] }
+              multi_select: { does_not_contain: values[0] },
             };
           }
           return {
             and: values.map((val: string) => ({
               property: propertyName,
-              multi_select: { does_not_contain: val }
-            }))
+              multi_select: { does_not_contain: val },
+            })),
           };
         }
         break;
 
-      case 'contains':
+      case "contains":
         return {
           property: propertyName,
-          rich_text: { contains: criteria.value as string }
+          rich_text: { contains: criteria.value as string },
         };
 
-      case 'not_contains':
+      case "not_contains":
         return {
           property: propertyName,
-          rich_text: { does_not_contain: criteria.value as string }
+          rich_text: { does_not_contain: criteria.value as string },
         };
 
-      case 'equals':
-        if (criteria.propertyType === 'checkbox') {
+      case "equals":
+        if (criteria.propertyType === "checkbox") {
           return {
             property: propertyName,
-            checkbox: { equals: criteria.value as boolean }
+            checkbox: { equals: criteria.value as boolean },
           };
-        } else if (criteria.propertyType === 'number') {
+        } else if (criteria.propertyType === "number") {
           return {
             property: propertyName,
-            number: { equals: criteria.value as number }
+            number: { equals: criteria.value as number },
           };
         }
         break;
 
-      case 'not_equals':
-        if (criteria.propertyType === 'checkbox') {
+      case "not_equals":
+        if (criteria.propertyType === "checkbox") {
           return {
             property: propertyName,
-            checkbox: { equals: !(criteria.value as boolean) }
+            checkbox: { equals: !(criteria.value as boolean) },
           };
-        } else if (criteria.propertyType === 'number') {
+        } else if (criteria.propertyType === "number") {
           return {
             property: propertyName,
-            number: { does_not_equal: criteria.value as number }
-          };
-        }
-        break;
-
-      case 'greater_than':
-        return {
-          property: propertyName,
-          number: { greater_than: criteria.value as number }
-        };
-
-      case 'less_than':
-        return {
-          property: propertyName,
-          number: { less_than: criteria.value as number }
-        };
-
-      case 'is_empty':
-        if (criteria.propertyType === 'select') {
-          return {
-            property: propertyName,
-            select: { is_empty: true }
-          };
-        } else if (criteria.propertyType === 'multi_select') {
-          return {
-            property: propertyName,
-            multi_select: { is_empty: true }
-          };
-        } else if (criteria.propertyType === 'rich_text' || criteria.propertyType === 'title') {
-          return {
-            property: propertyName,
-            rich_text: { is_empty: true }
+            number: { does_not_equal: criteria.value as number },
           };
         }
         break;
 
-      case 'is_not_empty':
-        if (criteria.propertyType === 'select') {
+      case "greater_than":
+        return {
+          property: propertyName,
+          number: { greater_than: criteria.value as number },
+        };
+
+      case "less_than":
+        return {
+          property: propertyName,
+          number: { less_than: criteria.value as number },
+        };
+
+      case "is_empty":
+        if (criteria.propertyType === "select") {
           return {
             property: propertyName,
-            select: { is_not_empty: true }
+            select: { is_empty: true },
           };
-        } else if (criteria.propertyType === 'multi_select') {
+        } else if (criteria.propertyType === "multi_select") {
           return {
             property: propertyName,
-            multi_select: { is_not_empty: true }
+            multi_select: { is_empty: true },
           };
-        } else if (criteria.propertyType === 'rich_text' || criteria.propertyType === 'title') {
+        } else if (
+          criteria.propertyType === "rich_text" ||
+          criteria.propertyType === "title"
+        ) {
           return {
             property: propertyName,
-            rich_text: { is_not_empty: true }
+            rich_text: { is_empty: true },
+          };
+        }
+        break;
+
+      case "is_not_empty":
+        if (criteria.propertyType === "select") {
+          return {
+            property: propertyName,
+            select: { is_not_empty: true },
+          };
+        } else if (criteria.propertyType === "multi_select") {
+          return {
+            property: propertyName,
+            multi_select: { is_not_empty: true },
+          };
+        } else if (
+          criteria.propertyType === "rich_text" ||
+          criteria.propertyType === "title"
+        ) {
+          return {
+            property: propertyName,
+            rich_text: { is_not_empty: true },
           };
         }
         break;
@@ -462,7 +475,6 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
 
     return undefined;
   };
-
 
   // Fetch filtered database content when filter is applied
   useEffect(() => {
@@ -544,7 +556,9 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         let githubService: GitHubService | null = null;
         let sandboxService: any = null;
 
-        const rateLimiter = selectedProvider ? new RateLimiter(selectedProvider) : undefined;
+        const rateLimiter = selectedProvider
+          ? new RateLimiter(selectedProvider)
+          : undefined;
 
         if (useGitHubAPI) {
           githubService = new GitHubService(githubToken, undefined, maxDepth);
@@ -1641,7 +1655,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           setSelectedNavOption(0);
           navigateToStep("notion-database-filter");
         }
-      } else if (inputChar === 'b' || key.escape) {
+      } else if (inputChar === "b" || key.escape) {
         // Go back to page selector
         setSelectedNavOption(0);
         navigateToStep("notion-page-selector");
@@ -1847,7 +1861,10 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
   if (step === "codex-starting") {
     return (
       <Box flexDirection="column">
-        <CodexStarting repoPath={localRepoPath} selectedPrompt={selectedCodexPrompt} />
+        <CodexStarting
+          repoPath={localRepoPath}
+          selectedPrompt={selectedCodexPrompt}
+        />
       </Box>
     );
   }
@@ -2533,15 +2550,28 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
               const notionService = new NotionService(token.access_token);
 
               // Get database properties for filtering (no data fetch yet)
-              const dbProperties = await notionService.getDatabaseProperties(pageId);
-              const filterableProps: DatabaseProperty[] = Object.entries(dbProperties)
+              const dbProperties = await notionService.getDatabaseProperties(
+                pageId
+              );
+              const filterableProps: DatabaseProperty[] = Object.entries(
+                dbProperties
+              )
                 .filter(([_, prop]) =>
-                  ['select', 'multi_select', 'rich_text', 'title', 'checkbox', 'number'].includes(prop.type)
+                  [
+                    "select",
+                    "multi_select",
+                    "rich_text",
+                    "title",
+                    "checkbox",
+                    "number",
+                  ].includes(prop.type)
                 )
                 .map(([name, prop]) => ({
                   name,
                   type: prop.type,
-                  options: (prop as any).select?.options || (prop as any).multi_select?.options
+                  options:
+                    (prop as any).select?.options ||
+                    (prop as any).multi_select?.options,
                 }));
 
               setDatabaseProperties(filterableProps);
@@ -2626,15 +2656,28 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
               const notionService = new NotionService(token.access_token);
 
               // Get database properties for filtering (no data fetch yet)
-              const dbProperties = await notionService.getDatabaseProperties(pageId);
-              const filterableProps: DatabaseProperty[] = Object.entries(dbProperties)
+              const dbProperties = await notionService.getDatabaseProperties(
+                pageId
+              );
+              const filterableProps: DatabaseProperty[] = Object.entries(
+                dbProperties
+              )
                 .filter(([_, prop]) =>
-                  ['select', 'multi_select', 'rich_text', 'title', 'checkbox', 'number'].includes(prop.type)
+                  [
+                    "select",
+                    "multi_select",
+                    "rich_text",
+                    "title",
+                    "checkbox",
+                    "number",
+                  ].includes(prop.type)
                 )
                 .map(([name, prop]) => ({
                   name,
                   type: prop.type,
-                  options: (prop as any).select?.options || (prop as any).multi_select?.options
+                  options:
+                    (prop as any).select?.options ||
+                    (prop as any).multi_select?.options,
                 }));
 
               setDatabaseProperties(filterableProps);
@@ -2652,7 +2695,8 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           onBack={() => {
             // Pop from navigation stack if not empty, otherwise return to page selector
             if (notionNavigationStack.length > 0) {
-              const previousPage = notionNavigationStack[notionNavigationStack.length - 1];
+              const previousPage =
+                notionNavigationStack[notionNavigationStack.length - 1];
               setNotionNavigationStack(notionNavigationStack.slice(0, -1));
               setNotionApiSelectedPageId(previousPage.pageId);
               setNotionApiSelectedPageTitle(previousPage.pageTitle);
@@ -2694,9 +2738,11 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
     return (
       <NotionDataLoading
         title="Fetching Database Content"
-        message={databaseFilterCriteria
-          ? "Applying filters and loading entries..."
-          : "Loading all database entries..."}
+        message={
+          databaseFilterCriteria
+            ? "Applying filters and loading entries..."
+            : "Loading all database entries..."
+        }
       />
     );
   }
@@ -2709,7 +2755,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
 
     const filterValue = databaseFilterCriteria?.value
       ? Array.isArray(databaseFilterCriteria.value)
-        ? (databaseFilterCriteria.value as string[]).join(', ')
+        ? (databaseFilterCriteria.value as string[]).join(", ")
         : String(databaseFilterCriteria.value)
       : null;
 
@@ -2733,9 +2779,9 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         </Text>
         <Text></Text>
         <Text bold>Filter Details:</Text>
-        <Text>  Property: {databaseFilterCriteria?.propertyName || "None"}</Text>
-        <Text>  Type: {databaseFilterCriteria?.filterType || "N/A"}</Text>
-        {filterValue && <Text>  Value: {filterValue}</Text>}
+        <Text> Property: {databaseFilterCriteria?.propertyName || "None"}</Text>
+        <Text> Type: {databaseFilterCriteria?.filterType || "N/A"}</Text>
+        {filterValue && <Text> Value: {filterValue}</Text>}
         <Text></Text>
         <Text color="gray" dimColor>
           {rowCount === 0
@@ -2746,12 +2792,18 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         </Text>
         <Text></Text>
         <Box>
-          <Text color={selectedNavOption === 0 ? "cyan" : "white"} bold={selectedNavOption === 0}>
+          <Text
+            color={selectedNavOption === 0 ? "cyan" : "white"}
+            bold={selectedNavOption === 0}
+          >
             {selectedNavOption === 0 ? "→ " : "  "}Continue to Column Selection
           </Text>
         </Box>
         <Box>
-          <Text color={selectedNavOption === 1 ? "cyan" : "white"} bold={selectedNavOption === 1}>
+          <Text
+            color={selectedNavOption === 1 ? "cyan" : "white"}
+            bold={selectedNavOption === 1}
+          >
             {selectedNavOption === 1 ? "→ " : "  "}Back to Filter
           </Text>
         </Box>
@@ -2800,10 +2852,6 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
                   url: string;
                   pageId: string;
                 }>;
-                console.log(
-                  `✅ Received ${urlObjects.length} URLs with pageIds for updating existing entries:`,
-                  urlObjects.map((u) => `${u.url} -> ${u.pageId}`)
-                );
                 urlsWithIds = urlObjects;
               }
             }
@@ -2817,12 +2865,20 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           onError={(error) => {
             // Don't use navigateToStep since it clears errors
             // Set step first, then set error so it persists
-            setStep(isFilteredWorkflow ? "notion-filter-confirmation" : "notion-api-content-view");
+            setStep(
+              isFilteredWorkflow
+                ? "notion-filter-confirmation"
+                : "notion-api-content-view"
+            );
             setError(error);
           }}
           onBack={() => {
             // Navigate back based on workflow path
-            navigateToStep(isFilteredWorkflow ? "notion-filter-confirmation" : "notion-api-content-view");
+            navigateToStep(
+              isFilteredWorkflow
+                ? "notion-filter-confirmation"
+                : "notion-api-content-view"
+            );
           }}
         />
       </Box>
@@ -3127,10 +3183,6 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
                   url: string;
                   pageId: string;
                 }>;
-                console.log(
-                  `✅ Received ${urlObjects.length} deployed URLs with pageIds for updating existing entries:`,
-                  urlObjects.map((u) => `${u.url} -> ${u.pageId}`)
-                );
                 urlsWithIds = urlObjects;
               }
             }

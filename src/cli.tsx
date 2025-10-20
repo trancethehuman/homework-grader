@@ -47,11 +47,6 @@ async function processGitHubUrlsWithGitHubAPI(
   console.log(`✓ Using AI provider: ${provider.name}`);
   console.log(`✓ Using parsing method: GitHub API`);
 
-  console.log(`\nLoaded ${urls.length} GitHub URLs from column: ${columnName}`);
-  urls.forEach((url, index) => {
-    console.log(`${index + 1}. ${url}`);
-  });
-
   if (urls.length > 0) {
     console.log("\nProcessing GitHub repositories...");
 
@@ -110,11 +105,6 @@ async function processGitHubUrlsWithE2BSandbox(
 
   console.log(`✓ Using AI provider: ${provider.name}`);
   console.log(`✓ Using parsing method: E2B Sandbox`);
-
-  console.log(`\nLoaded ${urls.length} GitHub URLs from column: ${columnName}`);
-  urls.forEach((url, index) => {
-    console.log(`${index + 1}. ${url}`);
-  });
 
   if (urls.length > 0) {
     try {

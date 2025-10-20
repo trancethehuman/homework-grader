@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { Text, Box } from "ink";
+import React, { useState, useEffect, useRef } from "react";
+import { Text, Box, useInput } from "ink";
 import { ParallelCodexService, RepoEventData } from "../lib/codex/parallel-codex-service.js";
 import {
   ParallelGradingResult,
@@ -20,9 +20,10 @@ type Phase = "cloning" | "grading" | "completed";
 interface RepoStatus {
   owner: string;
   repo: string;
-  status: "pending" | "cloning" | "cloned" | "initializing" | "analyzing" | "streaming" | "completed" | "error";
+  status: "pending" | "cloning" | "cloned" | "initializing" | "analyzing" | "streaming" | "cancelling" | "completed" | "error";
   error?: string;
   failureType?: "clone" | "grading";
+  isTimeout?: boolean;
   duration?: number;
   feedback?: string;
   currentActivity?: string;
@@ -75,8 +76,19 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
     total: number;
     message: string;
   }>({ current: 0, total: urls.length, message: "" });
+  const [gradingProgress, setGradingProgress] = useState<{
+    completed: number;
+    total: number;
+  }>({ completed: 0, total: 0 });
   const [results, setResults] = useState<ParallelTestResults | null>(null);
   const [spinnerFrame, setSpinnerFrame] = useState(0);
+  const [isAborting, setIsAborting] = useState(false);
+  const [selectedRowIndex, setSelectedRowIndex] = useState(0);
+  const [scrollOffset, setScrollOffset] = useState(0);
+  const [cancellingRepos, setCancellingRepos] = useState<Map<string, 'skip' | 'stop'>>(new Map());
+  const serviceRef = useRef<ParallelCodexService | null>(null);
+
+  const VIEWPORT_SIZE = 7;
 
   const spinnerFrames = ["⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"];
 
@@ -88,9 +100,65 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
     return () => clearInterval(interval);
   }, []);
 
+  useInput((input, key) => {
+    if (phase !== 'grading' || isAborting) {
+      return;
+    }
+
+    if (key.upArrow) {
+      setSelectedRowIndex((prev) => {
+        const newIndex = Math.max(0, prev - 1);
+        // Auto-scroll up if selection goes above viewport
+        if (newIndex < scrollOffset) {
+          setScrollOffset(newIndex);
+        }
+        return newIndex;
+      });
+    } else if (key.downArrow) {
+      setSelectedRowIndex((prev) => {
+        const newIndex = Math.min(repoStatuses.length - 1, prev + 1);
+        // Auto-scroll down if selection goes below viewport
+        if (newIndex >= scrollOffset + VIEWPORT_SIZE) {
+          setScrollOffset(newIndex - VIEWPORT_SIZE + 1);
+        }
+        return newIndex;
+      });
+    } else if (input === 's' && serviceRef.current) {
+      const selectedRepo = repoStatuses[selectedRowIndex];
+      if (selectedRepo && !['completed', 'error', 'cancelling'].includes(selectedRepo.status)) {
+        setRepoStatuses((prev) =>
+          prev.map((repo) =>
+            repo.owner === selectedRepo.owner && repo.repo === selectedRepo.repo
+              ? { ...repo, status: "cancelling", currentActivity: "⏭️ Skipping..." }
+              : repo
+          )
+        );
+        setCancellingRepos((prev) => new Map(prev).set(`${selectedRepo.owner}/${selectedRepo.repo}`, 'skip'));
+        serviceRef.current.skipRepo(selectedRepo.owner, selectedRepo.repo);
+      }
+    } else if (input === 'x' && serviceRef.current) {
+      const selectedRepo = repoStatuses[selectedRowIndex];
+      if (selectedRepo && !['completed', 'error', 'cancelling'].includes(selectedRepo.status)) {
+        setRepoStatuses((prev) =>
+          prev.map((repo) =>
+            repo.owner === selectedRepo.owner && repo.repo === selectedRepo.repo
+              ? { ...repo, status: "cancelling", currentActivity: "🛑 Stopping..." }
+              : repo
+          )
+        );
+        setCancellingRepos((prev) => new Map(prev).set(`${selectedRepo.owner}/${selectedRepo.repo}`, 'stop'));
+        serviceRef.current.stopRepo(selectedRepo.owner, selectedRepo.repo);
+      }
+    } else if (input === 'a' && serviceRef.current) {
+      setIsAborting(true);
+      serviceRef.current.abort();
+    }
+  });
+
   useEffect(() => {
     const runBatch = async () => {
       const service = new ParallelCodexService(urls);
+      serviceRef.current = service;
 
       const cloneResults = await service.cloneRepositories(
         (message, current, total) => {
@@ -134,6 +202,7 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
 
       if (cloneResults.successful.length > 0) {
         setPhase("grading");
+        setGradingProgress({ completed: 0, total: cloneResults.successful.length });
 
         const defaultPrompt = getDefaultGradingPrompt();
 
@@ -149,6 +218,8 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
             );
           },
           (result: ParallelGradingResult) => {
+            setGradingProgress((prev) => ({ ...prev, completed: prev.completed + 1 }));
+            const isTimeout = result.error?.toLowerCase().includes('timeout') ?? false;
             setRepoStatuses((prev) =>
               prev.map((repo) =>
                 repo.owner === result.repoInfo.owner &&
@@ -158,6 +229,7 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
                       status: result.success ? "completed" : "error",
                       error: result.error,
                       failureType: result.success ? undefined : ("grading" as const),
+                      isTimeout: isTimeout,
                       duration: result.duration,
                       feedback: result.feedback,
                       tokensUsed: result.tokensUsed,
@@ -210,6 +282,21 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
                       return repo;
                     case 'turn_completed':
                       return repo;
+                    case 'error':
+                      const repoKey = `${repo.owner}/${repo.repo}`;
+                      const wasSkipped = cancellingRepos.get(repoKey) === 'skip';
+                      const wasStopped = cancellingRepos.get(repoKey) === 'stop';
+                      const errorMessage = wasSkipped ? 'Skipped by user' :
+                                          wasStopped ? 'Stopped by user' :
+                                          event.data;
+                      return {
+                        ...repo,
+                        status: 'error',
+                        error: errorMessage,
+                        failureType: 'grading',
+                        currentActivity: undefined,
+                        streamingMessage: undefined,
+                      };
                     default:
                       return repo;
                   }
@@ -262,6 +349,8 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
         return `🔍`;
       case "streaming":
         return `💬`;
+      case "cancelling":
+        return `${spinnerFrames[spinnerFrame]}`;
       case "completed":
         return "✅";
       case "error":
@@ -271,7 +360,10 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
     }
   };
 
-  const getStatusColor = (status: RepoStatus["status"]) => {
+  const getStatusColor = (status: RepoStatus["status"], isTimeout?: boolean) => {
+    if (status === "error" && isTimeout) {
+      return "yellow";
+    }
     switch (status) {
       case "completed":
         return "green";
@@ -282,6 +374,8 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
       case "analyzing":
       case "streaming":
         return "cyan";
+      case "cancelling":
+        return "yellow";
       case "cloned":
         return "green";
       default:
@@ -293,6 +387,11 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
     if (!ms) return "N/A";
     return `${(ms / 1000).toFixed(1)}s`;
   };
+
+  // Calculate viewport bounds
+  const visibleRepos = repoStatuses.slice(scrollOffset, scrollOffset + VIEWPORT_SIZE);
+  const hasMoreAbove = scrollOffset > 0;
+  const hasMoreBelow = scrollOffset + VIEWPORT_SIZE < repoStatuses.length;
 
   return (
     <Box flexDirection="column">
@@ -306,9 +405,6 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
           <Text color="cyan">
             {spinnerFrames[spinnerFrame]} Cloning repositories...
           </Text>
-          <Text dimColor>
-            Progress: {cloningProgress.current}/{cloningProgress.total}
-          </Text>
           <Text></Text>
         </>
       )}
@@ -316,7 +412,7 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
       {phase === "grading" && (
         <>
           <Text color="cyan">
-            {spinnerFrames[spinnerFrame]} Running parallel grading ({instanceCount} instances)...
+            {spinnerFrames[spinnerFrame]} {isAborting ? "Aborting, please wait..." : `Running parallel grading (${instanceCount} instances)...`}
           </Text>
           <Text></Text>
         </>
@@ -343,16 +439,27 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
 
         <Text dimColor>{"─".repeat(80)}</Text>
 
-        {repoStatuses.map((repo, idx) => (
+        {hasMoreAbove && (
+          <Text dimColor>▲ {scrollOffset} more above</Text>
+        )}
+
+        {visibleRepos.map((repo, viewportIdx) => {
+          const idx = scrollOffset + viewportIdx;
+          const isSelected = idx === selectedRowIndex && !isAborting;
+          const showActions = phase === 'grading' && isSelected;
+          return (
           <Box key={idx} flexDirection="column">
             <Box>
               <Box width={3}>
-                <Text color={getStatusColor(repo.status)}>
-                  {getStatusIcon(repo.status)}
+                <Text color={getStatusColor(repo.status, repo.isTimeout)}>
+                  {showActions ? '→' : ' '}{getStatusIcon(repo.status)}
                 </Text>
               </Box>
               <Box width={30}>
-                <Text color={getStatusColor(repo.status)}>
+                <Text
+                  color={getStatusColor(repo.status, repo.isTimeout)}
+                  bold={isSelected}
+                >
                   {repo.owner}/{repo.repo}
                 </Text>
               </Box>
@@ -376,9 +483,12 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
                   <Text color="green" dimColor>Ready for grading</Text>
                 )}
                 {repo.status === "error" && repo.error && (
-                  <Text color="red" dimColor>
-                    {repo.failureType === "clone" ? "Clone failed: " : "Grading failed: "}
-                    {repo.error}
+                  <Text color={repo.isTimeout ? "yellow" : "red"} dimColor>
+                    {repo.isTimeout ? "⏱️ Timeout (5 min): " :
+                     repo.failureType === "clone" ? "Clone failed: " : "Grading failed: "}
+                    {isSelected
+                      ? repo.error
+                      : (repo.error.length > 50 ? `${repo.error.substring(0, 50)}...` : repo.error)}
                   </Text>
                 )}
               </Box>
@@ -387,8 +497,10 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
             {repo.streamingMessage && repo.status === "streaming" && (
               <Box marginLeft={3}>
                 <Text color="cyan" dimColor>
-                  💬 {repo.streamingMessage.substring(0, 80)}
-                  {repo.streamingMessage.length > 80 ? "..." : ""}
+                  💬 {isSelected
+                    ? repo.streamingMessage
+                    : repo.streamingMessage.substring(0, 80)}
+                  {!isSelected && repo.streamingMessage.length > 80 ? "..." : ""}
                 </Text>
               </Box>
             )}
@@ -396,8 +508,10 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
             {repo.status === "completed" && repo.feedback && (
               <Box marginLeft={3} flexDirection="column">
                 <Text dimColor>
-                  {repo.feedback.substring(0, 100)}
-                  {repo.feedback.length > 100 ? "..." : ""}
+                  {isSelected
+                    ? repo.feedback
+                    : repo.feedback.substring(0, 100)}
+                  {!isSelected && repo.feedback.length > 100 ? "..." : ""}
                 </Text>
                 {repo.tokensUsed && (
                   <Text dimColor>
@@ -408,56 +522,98 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
               </Box>
             )}
           </Box>
-        ))}
+          );
+        })}
+
+        {hasMoreBelow && (
+          <Text dimColor>▼ {repoStatuses.length - scrollOffset - VIEWPORT_SIZE} more below</Text>
+        )}
+
+        {repoStatuses.length > VIEWPORT_SIZE && (
+          <Text dimColor>
+            Showing {scrollOffset + 1}-{Math.min(scrollOffset + VIEWPORT_SIZE, repoStatuses.length)} of {repoStatuses.length} repos
+          </Text>
+        )}
       </Box>
 
-      {phase === "completed" && results && (
-        <>
-          <Text></Text>
-          <Box
-            flexDirection="column"
-            borderStyle="round"
-            borderColor={
-              results.cloneFailures.length + results.failureCount === 0
-                ? "green"
-                : results.successCount > 0
-                ? "yellow"
-                : "red"
-            }
-            paddingX={1}
-          >
-            <Text
-              color={
+      {/* Sticky Stats Section at Bottom */}
+      <Box flexDirection="column" marginTop={1}>
+        {phase === "cloning" && (
+          <Text dimColor>
+            Progress: {cloningProgress.current}/{cloningProgress.total}
+          </Text>
+        )}
+
+        {phase === "grading" && (
+          <>
+            <Text dimColor>
+              Processed: {gradingProgress.completed}/{gradingProgress.total} repos
+            </Text>
+            {!isAborting && (
+              <Text dimColor>↑/↓: navigate | s: skip selected | x: stop selected | a: abort all</Text>
+            )}
+          </>
+        )}
+
+        {phase === "completed" && results && (
+          <>
+            <Text></Text>
+            <Box
+              flexDirection="column"
+              borderStyle="round"
+              borderColor={
                 results.cloneFailures.length + results.failureCount === 0
                   ? "green"
                   : results.successCount > 0
                   ? "yellow"
                   : "red"
               }
-              bold
+              paddingX={1}
             >
-              Batch Grading Completed!
-            </Text>
-            <Text></Text>
-            <Text>
-              Total Duration: {formatDuration(results.totalDuration)}
-            </Text>
-            <Text color="green">Successfully Graded: {results.successCount}</Text>
-            {results.failureCount > 0 && (
-              <Text color="red">Grading Failures: {results.failureCount}</Text>
-            )}
-            {results.cloneFailures.length > 0 && (
-              <Text color="red">Clone Failures: {results.cloneFailures.length}</Text>
-            )}
-            <Text dimColor>
-              Total Processed: {results.successCount + results.failureCount + results.cloneFailures.length} repos
-            </Text>
-          </Box>
-        </>
-      )}
+              <Text
+                color={
+                  results.cloneFailures.length + results.failureCount === 0
+                    ? "green"
+                    : results.successCount > 0
+                    ? "yellow"
+                    : "red"
+                }
+                bold
+              >
+                {isAborting ? "Aborted - Partial Results" : "Batch Grading Completed!"}
+              </Text>
+              <Text></Text>
+              <Text>
+                Total Duration: {formatDuration(results.totalDuration)}
+              </Text>
+              <Text color="green">Successfully Graded: {results.successCount}</Text>
+              {(() => {
+                const timeoutCount = repoStatuses.filter((r) => r.isTimeout).length;
+                const nonTimeoutFailures = results.failureCount - timeoutCount;
+                return (
+                  <>
+                    {nonTimeoutFailures > 0 && (
+                      <Text color="red">Grading Failures: {nonTimeoutFailures}</Text>
+                    )}
+                    {timeoutCount > 0 && (
+                      <Text color="yellow">Timeouts: {timeoutCount}</Text>
+                    )}
+                  </>
+                );
+              })()}
+              {results.cloneFailures.length > 0 && (
+                <Text color="red">Clone Failures: {results.cloneFailures.length}</Text>
+              )}
+              <Text dimColor>
+                Total Processed: {results.successCount + results.failureCount + results.cloneFailures.length} repos
+              </Text>
+            </Box>
+          </>
+        )}
 
-      <Text></Text>
-      <Text dimColor>Press Ctrl+C to exit</Text>
+        <Text></Text>
+        <Text dimColor>Press Ctrl+C to exit</Text>
+      </Box>
     </Box>
   );
 };
