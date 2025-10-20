@@ -7,6 +7,10 @@ import {
   ThreadItem,
 } from "../lib/codex/codex-types.js";
 import { getDefaultGradingPrompt } from "../consts/grading-prompts.js";
+import { NotionSavePrompt } from "./notion-save-prompt.js";
+import { NotionDatabaseSelector } from "./notion-database-selector.js";
+import { GradingDatabaseService } from "../lib/notion/grading-database-service.js";
+import type { GradingResult } from "../lib/file-saver.js";
 
 interface ParallelCodexBatchProps {
   urls: string[];
@@ -15,7 +19,7 @@ interface ParallelCodexBatchProps {
   onBack?: () => void;
 }
 
-type Phase = "cloning" | "grading" | "completed";
+type Phase = "cloning" | "grading" | "completed" | "notion-prompt" | "notion-db-select" | "notion-saving";
 
 interface RepoStatus {
   owner: string;
@@ -87,6 +91,12 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
   const [scrollOffset, setScrollOffset] = useState(0);
   const [cancellingRepos, setCancellingRepos] = useState<Map<string, 'skip' | 'stop'>>(new Map());
   const serviceRef = useRef<ParallelCodexService | null>(null);
+  const [notionSaveStatus, setNotionSaveStatus] = useState<{
+    saving: boolean;
+    success: number;
+    failed: number;
+    errors: string[];
+  }>({ saving: false, success: 0, failed: 0, errors: [] });
 
   const VIEWPORT_SIZE = 7;
 
@@ -308,10 +318,15 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
         );
 
         setResults(batchResults);
-        setPhase("completed");
 
-        if (onComplete) {
-          onComplete(batchResults);
+        // Show Notion save prompt if there are successful gradings
+        if (batchResults.successCount > 0) {
+          setPhase("notion-prompt");
+        } else {
+          setPhase("completed");
+          if (onComplete) {
+            onComplete(batchResults);
+          }
         }
       } else {
         const emptyResults: ParallelTestResults = {
@@ -334,6 +349,78 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
 
     runBatch();
   }, [urls, instanceCount]);
+
+  // Handle Notion save decision
+  const handleNotionSaveDecision = (saveToNotion: boolean) => {
+    if (saveToNotion) {
+      setPhase("notion-db-select");
+    } else {
+      setPhase("completed");
+      if (onComplete && results) {
+        onComplete(results);
+      }
+    }
+  };
+
+  // Handle Notion database selection
+  const handleDatabaseSelected = async (databaseId: string, databaseTitle: string) => {
+    if (!results) return;
+
+    setPhase("notion-saving");
+
+    try {
+      // Convert Codex results to GradingResult format
+      const gradingResults: GradingResult[] = results.results
+        .filter(r => r.success && r.structuredData)
+        .map(r => ({
+          repositoryName: `${r.repoInfo.owner}/${r.repoInfo.repo}`,
+          githubUrl: r.repoInfo.url,
+          gradingData: {
+            repo_explained: r.structuredData!.repo_explained,
+            developer_feedback: r.structuredData!.developer_feedback,
+          },
+          usage: r.tokensUsed,
+        }));
+
+      // Save to Notion
+      const gradingService = new GradingDatabaseService();
+
+      // Ensure database has required columns
+      await gradingService.ensureGradingDatabase(databaseId, {
+        processingMode: 'code'
+      });
+
+      // Save results
+      const saveResult = await gradingService.saveGradingResults(
+        databaseId,
+        gradingResults,
+        'GitHub URL',
+        undefined,
+        'code'
+      );
+
+      setNotionSaveStatus({
+        saving: false,
+        success: saveResult.success,
+        failed: saveResult.failed,
+        errors: saveResult.errors,
+      });
+
+      setPhase("completed");
+      if (onComplete) {
+        onComplete(results);
+      }
+    } catch (error: any) {
+      console.error("Failed to save to Notion:", error);
+      setNotionSaveStatus({
+        saving: false,
+        success: 0,
+        failed: results.successCount,
+        errors: [error.message || "Unknown error"],
+      });
+      setPhase("completed");
+    }
+  };
 
   const getStatusIcon = (status: RepoStatus["status"]) => {
     switch (status) {
@@ -392,6 +479,33 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
   const visibleRepos = repoStatuses.slice(scrollOffset, scrollOffset + VIEWPORT_SIZE);
   const hasMoreAbove = scrollOffset > 0;
   const hasMoreBelow = scrollOffset + VIEWPORT_SIZE < repoStatuses.length;
+
+  // Render Notion save prompt
+  if (phase === "notion-prompt" && results) {
+    return <NotionSavePrompt successCount={results.successCount} onDecision={handleNotionSaveDecision} />;
+  }
+
+  // Render Notion database selector
+  if (phase === "notion-db-select") {
+    return (
+      <NotionDatabaseSelector
+        onSelect={handleDatabaseSelected}
+        onBack={() => setPhase("notion-prompt")}
+      />
+    );
+  }
+
+  // Render Notion saving status
+  if (phase === "notion-saving") {
+    return (
+      <Box flexDirection="column">
+        <Text color="blue" bold>Saving to Notion...</Text>
+        <Text></Text>
+        <Text color="cyan">Saving grading results to Notion database...</Text>
+        <Text dimColor>This may take a few moments...</Text>
+      </Box>
+    );
+  }
 
   return (
     <Box flexDirection="column">
@@ -608,6 +722,31 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
                 Total Processed: {results.successCount + results.failureCount + results.cloneFailures.length} repos
               </Text>
             </Box>
+
+            {/* Show Notion save results if we saved */}
+            {notionSaveStatus.success > 0 || notionSaveStatus.failed > 0 ? (
+              <>
+                <Text></Text>
+                <Text color="blue" bold>Notion Save Results:</Text>
+                {notionSaveStatus.success > 0 && (
+                  <Text color="green">✓ Successfully saved {notionSaveStatus.success} {notionSaveStatus.success === 1 ? 'result' : 'results'} to Notion</Text>
+                )}
+                {notionSaveStatus.failed > 0 && (
+                  <Text color="red">✗ Failed to save {notionSaveStatus.failed} {notionSaveStatus.failed === 1 ? 'result' : 'results'}</Text>
+                )}
+                {notionSaveStatus.errors.length > 0 && (
+                  <Box flexDirection="column" marginLeft={2}>
+                    <Text dimColor>Errors:</Text>
+                    {notionSaveStatus.errors.slice(0, 3).map((err, i) => (
+                      <Text key={i} dimColor>- {err}</Text>
+                    ))}
+                    {notionSaveStatus.errors.length > 3 && (
+                      <Text dimColor>... and {notionSaveStatus.errors.length - 3} more</Text>
+                    )}
+                  </Box>
+                )}
+              </>
+            ) : null}
           </>
         )}
 

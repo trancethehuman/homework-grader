@@ -117,7 +117,8 @@ export class ParallelCodexService {
     prompt: string,
     onRepoStart?: (repoInfo: { owner: string; repo: string }) => void,
     onRepoComplete?: (result: ParallelGradingResult) => void,
-    onRepoEvent?: (repoInfo: { owner: string; repo: string }, event: RepoEventData) => void
+    onRepoEvent?: (repoInfo: { owner: string; repo: string }, event: RepoEventData) => void,
+    useStructuredOutput: boolean = true
   ): Promise<ParallelTestResults> {
     const totalStartTime = Date.now();
 
@@ -176,32 +177,36 @@ export class ParallelCodexService {
           skipGitRepoCheck: false,
         });
 
-        const gradingPromise = codexService.startGrading(prompt, {
-          onItemUpdated: (item: ThreadItem) => {
-            if (onRepoEvent) {
-              onRepoEvent(
-                { owner: repo.owner, repo: repo.repo },
-                { type: 'item_updated', data: item }
-              );
-            }
+        const gradingPromise = codexService.startGrading(
+          prompt,
+          {
+            onItemUpdated: (item: ThreadItem) => {
+              if (onRepoEvent) {
+                onRepoEvent(
+                  { owner: repo.owner, repo: repo.repo },
+                  { type: 'item_updated', data: item }
+                );
+              }
+            },
+            onItemCompleted: (item: ThreadItem) => {
+              if (onRepoEvent) {
+                onRepoEvent(
+                  { owner: repo.owner, repo: repo.repo },
+                  { type: 'item_completed', data: item }
+                );
+              }
+            },
+            onTurnCompleted: (usage: Usage) => {
+              if (onRepoEvent) {
+                onRepoEvent(
+                  { owner: repo.owner, repo: repo.repo },
+                  { type: 'turn_completed', data: usage }
+                );
+              }
+            },
           },
-          onItemCompleted: (item: ThreadItem) => {
-            if (onRepoEvent) {
-              onRepoEvent(
-                { owner: repo.owner, repo: repo.repo },
-                { type: 'item_completed', data: item }
-              );
-            }
-          },
-          onTurnCompleted: (usage: Usage) => {
-            if (onRepoEvent) {
-              onRepoEvent(
-                { owner: repo.owner, repo: repo.repo },
-                { type: 'turn_completed', data: usage }
-              );
-            }
-          },
-        });
+          useStructuredOutput
+        );
 
         const result = await Promise.race([gradingPromise, timeoutPromise]);
 

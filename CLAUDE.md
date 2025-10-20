@@ -271,17 +271,23 @@ The codebase includes:
   - **NEW**: Local repository grading using OpenAI Codex SDK
   - **Thread Management**: Start new threads or resume existing ones for continuous conversation
   - **Streaming Support**: Real-time event handling with progress updates
+  - **Structured Output Support**: Uses JSON schema to ensure consistent, parseable responses
+    - Enforces schema with `repo_explained` and `developer_feedback` fields
+    - Automatically parses structured responses for Notion compatibility
+    - Falls back to raw feedback if structured parsing fails
   - **Event Handling**: Callbacks for item updates, completions, and turn completions
   - **Token Tracking**: Captures input/output token usage from Codex API
   - **Error Handling**: Comprehensive error handling with graceful degradation
   - **Git Repository Support**: Works with Git repositories (can skip check with configuration)
   - **Flexible Integration**: Used by CodexStarting component for local grading workflow
+  - **Notion Integration**: Structured outputs are directly compatible with Notion database schema
 
 - **ParallelCodexService Class** (`src/lib/codex/parallel-codex-service.ts`)
 
   - **NEW**: Parallel batch grading service using Codex SDK
   - **Repository Cloning**: Automated git clone with shallow depth for multiple repositories
   - **Parallel Processing**: Runs multiple Codex instances simultaneously using Promise.all
+  - **Structured Output Mode**: Uses structured outputs by default for Notion compatibility
   - **Fault Tolerance**: Individual repository failures don't stop the batch process
   - **Per-Repository Abort Controllers**: Individual abort control for each repository being processed
   - **Skip/Stop Functionality**: skipRepo() and stopRepo() methods to cancel specific repositories
@@ -486,8 +492,8 @@ The codebase includes:
 
 - **ParallelCodexBatch Component** (`src/components/parallel-codex-batch.tsx`)
 
-  - **NEW**: Parallel batch grading using Codex with interactive navigation
-  - **Three Phases**: Cloning → Grading → Completed with progress tracking
+  - **NEW**: Parallel batch grading using Codex with interactive navigation and Notion integration
+  - **Multiple Phases**: Cloning → Grading → Notion Prompt → Database Selection → Saving → Completed
   - **Interactive Row Navigation**: Arrow keys (↑/↓) to select individual repositories during processing
   - **Per-Repository Actions**: Skip (s) or stop (x) selected repository without affecting others
     - **Immediate Visual Feedback**: Pressing 's' or 'x' instantly shows "⏭️ Skipping..." or "🛑 Stopping..." with spinning icon
@@ -505,6 +511,13 @@ The codebase includes:
   - **Error Differentiation**: Clone failures vs grading failures with distinct messages
   - **Timeout Handling**: 5-minute timeout per repository with yellow warning display
   - **Token Tracking**: Displays input/output token usage for completed repositories
+  - **Notion Integration**: Optional Notion saving after grading completion
+    - Prompts user to save results to Notion database
+    - Interactive database selection from authenticated Notion workspace
+    - Automatic schema updates to ensure required columns exist
+    - Converts Codex structured outputs to Notion-compatible format
+    - Displays save results with success/failure counts and error details
+    - Uses structured outputs (`repo_explained`, `developer_feedback`) for clean data
   - **Fault Tolerance**: Individual repository failures don't stop the batch process
   - **Progress Counter**: Shows "Processed: X/Y repos" during grading phase
   - **Smart Resource Management**: Individual repo cleanup after processing completes
@@ -568,6 +581,38 @@ The codebase includes:
   - **Early Termination**: Allows user to terminate testing early if needed
   - **Results Display**: Shows recent test results with screenshots and action counts
   - **Resource Management**: Handles browser session cleanup with user feedback
+
+- **NotionSavePrompt Component** (`src/components/notion-save-prompt.tsx`)
+
+  - **NEW**: Post-grading Notion save confirmation interface
+  - **User Choice**: Yes/No selection for saving grading results to Notion
+  - **Success Count Display**: Shows number of successfully graded repositories
+  - **Arrow Key Navigation**: Up/down navigation with Enter to confirm
+  - **Quick Select**: Press 'y' or 'n' for quick selection
+  - **Integration**: Used by ParallelCodexBatch after grading completion
+
+- **NotionDatabaseSelector Component** (`src/components/notion-database-selector.tsx`)
+
+  - **NEW**: Notion database selection interface for saving grading results
+  - **Authenticated Access**: Loads databases from authenticated Notion workspace
+  - **Arrow Key Navigation**: Up/down navigation with Enter to select
+  - **Database List**: Shows up to 10 databases with pagination indicator
+  - **Error Handling**: Clear error messages for authentication and loading failures
+  - **Back Navigation**: Press 'b' to return to previous step
+  - **Integration**: Used by ParallelCodexBatch when user chooses to save to Notion
+
+### Codex Structured Output
+
+- **Structured Output Schema** (`src/lib/codex/structured-output-schema.ts`)
+
+  - **NEW**: JSON schema for Codex grading responses
+  - **Consistent Format**: Enforces `repo_explained` and `developer_feedback` fields
+  - **Notion Compatibility**: Schema matches Notion database column requirements
+  - **Type Safety**: TypeScript interfaces for structured output data
+  - **Parsing Utilities**: Helper functions to parse and validate structured responses
+  - **Error Handling**: Graceful fallback to raw feedback if parsing fails
+  - **Documentation**: Field descriptions guide Codex to generate appropriate responses
+  - **Integration**: Used by CodexService and ParallelCodexService by default
 
 ### Key Features
 
