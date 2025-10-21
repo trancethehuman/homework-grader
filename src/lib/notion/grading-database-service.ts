@@ -518,6 +518,9 @@ export class GradingDatabaseService {
   ): Promise<void> {
     const isUpdate = !!result.pageId;
 
+    console.log(`[GradingDB] Processing ${result.repositoryName}`);
+    console.log(`[GradingDB]   gradingData:`, JSON.stringify(result.gradingData).substring(0, 200));
+
     // Find matching browser test result for this repository
     const matchingBrowserTest = browserTestResults?.find(browserTest =>
       browserTest.pageId === result.pageId ||
@@ -535,6 +538,14 @@ export class GradingDatabaseService {
       result.error,
       processingMode
     );
+
+    console.log(`[GradingDB]   allProperties keys:`, Object.keys(allProperties));
+    if (allProperties['Repository Summary']) {
+      console.log(`[GradingDB]   Repository Summary content:`, allProperties['Repository Summary'].rich_text[0]?.text?.content?.substring(0, 100) || 'EMPTY');
+    }
+    if (allProperties['Developer Feedback']) {
+      console.log(`[GradingDB]   Developer Feedback content:`, allProperties['Developer Feedback'].rich_text[0]?.text?.content?.substring(0, 100) || 'EMPTY');
+    }
 
     // Only include properties that actually exist in the database
     const filteredProperties: Record<string, any> = {};

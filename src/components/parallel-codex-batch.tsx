@@ -369,18 +369,34 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
     setPhase("notion-saving");
 
     try {
+      console.log('[Notion Save] Starting Notion save process...');
+      console.log('[Notion Save] Total results:', results.results.length);
+      console.log('[Notion Save] Successful results:', results.results.filter(r => r.success).length);
+      console.log('[Notion Save] Results with structuredData:', results.results.filter(r => r.success && r.structuredData).length);
+
       // Convert Codex results to GradingResult format
       const gradingResults: GradingResult[] = results.results
         .filter(r => r.success && r.structuredData)
-        .map(r => ({
-          repositoryName: `${r.repoInfo.owner}/${r.repoInfo.repo}`,
-          githubUrl: r.repoInfo.url,
-          gradingData: {
-            repo_explained: r.structuredData!.repo_explained,
-            developer_feedback: r.structuredData!.developer_feedback,
-          },
-          usage: r.tokensUsed,
-        }));
+        .map((r, index) => {
+          console.log(`[Notion Save] Processing result ${index + 1}:`, r.repoInfo.owner, '/', r.repoInfo.repo);
+          console.log(`[Notion Save]   Has structuredData:`, !!r.structuredData);
+          if (r.structuredData) {
+            console.log(`[Notion Save]   repo_explained length:`, r.structuredData.repo_explained?.length || 0);
+            console.log(`[Notion Save]   developer_feedback length:`, r.structuredData.developer_feedback?.length || 0);
+          }
+
+          return {
+            repositoryName: `${r.repoInfo.owner}/${r.repoInfo.repo}`,
+            githubUrl: r.repoInfo.url,
+            gradingData: {
+              repo_explained: r.structuredData!.repo_explained,
+              developer_feedback: r.structuredData!.developer_feedback,
+            },
+            usage: r.tokensUsed,
+          };
+        });
+
+      console.log('[Notion Save] Created', gradingResults.length, 'grading results to save');
 
       // Save to Notion
       const gradingService = new GradingDatabaseService();

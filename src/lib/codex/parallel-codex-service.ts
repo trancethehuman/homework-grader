@@ -160,8 +160,9 @@ export class ParallelCodexService {
 
       const repoStartTime = Date.now();
 
+      // Increased timeout to 10 minutes for complex repositories
       const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('Processing timeout (5 minutes)')), 300000)
+        setTimeout(() => reject(new Error('Processing timeout (10 minutes)')), 600000)
       );
 
       try {
