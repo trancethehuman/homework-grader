@@ -1793,14 +1793,17 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         ? notionGitHubUrls.map((item) => item.url)
         : manualUrls;
 
+    // Pass urlsWithPageIds only for Notion workflows to enable row updates
+    const urlsWithPageIds =
+      selectedDataSource === "notion" ? notionGitHubUrls : null;
+
     return (
       <Box flexDirection="column">
         <ParallelCodexBatch
           urls={urlsToProcess}
           instanceCount={parallelInstanceCount}
-          onComplete={(results) => {
-            console.log("Batch grading completed:", results);
-          }}
+          urlsWithPageIds={urlsWithPageIds}
+          onComplete={(results) => {}}
           onBack={() => {
             navigateToStep("parallel-instance-select");
           }}

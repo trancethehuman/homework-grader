@@ -76,7 +76,7 @@ export class ParallelCodexService {
 
         execSync(`git clone --depth 1 ${url} ${localPath}`, {
           stdio: "pipe",
-          timeout: 300000,
+          timeout: 600000, // 10 minutes timeout for cloning
         });
 
         clonedRepos.push({
@@ -161,7 +161,7 @@ export class ParallelCodexService {
       const repoStartTime = Date.now();
 
       const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('Processing timeout (5 minutes)')), 300000)
+        setTimeout(() => reject(new Error('Processing timeout (10 minutes)')), 600000)
       );
 
       try {

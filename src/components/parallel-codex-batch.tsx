@@ -15,6 +15,7 @@ import type { GradingResult } from "../lib/file-saver.js";
 interface ParallelCodexBatchProps {
   urls: string[];
   instanceCount: number;
+  urlsWithPageIds?: Array<{url: string, pageId: string}> | null; // For Notion workflows - match URLs to existing rows
   onComplete?: (results: ParallelTestResults) => void;
   onBack?: () => void;
 }
@@ -61,6 +62,7 @@ const getActivityMessage = (item: ThreadItem): string => {
 export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
   urls,
   instanceCount,
+  urlsWithPageIds,
   onComplete,
   onBack,
 }) => {
@@ -369,18 +371,37 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
     setPhase("notion-saving");
 
     try {
+      // Create URL-to-pageId lookup map
+      const urlToPageId = new Map<string, string>();
+      if (urlsWithPageIds) {
+        for (const item of urlsWithPageIds) {
+          // Normalize URLs for matching (remove trailing slashes, .git suffix)
+          const normalizedUrl = item.url.replace(/\.git$/, '').replace(/\/$/, '');
+          urlToPageId.set(normalizedUrl, item.pageId);
+        }
+      }
+
       // Convert Codex results to GradingResult format
       const gradingResults: GradingResult[] = results.results
         .filter(r => r.success && r.structuredData)
-        .map(r => ({
-          repositoryName: `${r.repoInfo.owner}/${r.repoInfo.repo}`,
-          githubUrl: r.repoInfo.url,
-          gradingData: {
+        .map(r => {
+          const gradingData = {
             repo_explained: r.structuredData!.repo_explained,
             developer_feedback: r.structuredData!.developer_feedback,
-          },
-          usage: r.tokensUsed,
-        }));
+          };
+
+          // Match this repository's URL to a Notion page ID
+          const normalizedRepoUrl = r.repoInfo.url.replace(/\.git$/, '').replace(/\/$/, '');
+          const pageId = urlToPageId.get(normalizedRepoUrl);
+
+          return {
+            repositoryName: `${r.repoInfo.owner}/${r.repoInfo.repo}`,
+            githubUrl: r.repoInfo.url,
+            gradingData,
+            usage: r.tokensUsed,
+            pageId, // Set pageId if found, undefined otherwise
+          };
+        });
 
       // Save to Notion
       const gradingService = new GradingDatabaseService();
@@ -598,7 +619,7 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
                 )}
                 {repo.status === "error" && repo.error && (
                   <Text color={repo.isTimeout ? "yellow" : "red"} dimColor>
-                    {repo.isTimeout ? "⏱️ Timeout (5 min): " :
+                    {repo.isTimeout ? "⏱️ Timeout (10 min): " :
                      repo.failureType === "clone" ? "Clone failed: " : "Grading failed: "}
                     {isSelected
                       ? repo.error
