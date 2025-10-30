@@ -1802,6 +1802,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         <ParallelCodexBatch
           urls={urlsToProcess}
           instanceCount={parallelInstanceCount}
+          githubToken={githubToken}
           urlsWithPageIds={urlsWithPageIds}
           onComplete={(results) => {}}
           onBack={() => {

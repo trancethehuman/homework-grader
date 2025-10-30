@@ -10,14 +10,17 @@ import {
   ThreadItem,
 } from "../lib/codex/codex-types.js";
 import { getDefaultGradingPrompt } from "../consts/grading-prompts.js";
-import { NotionSavePrompt } from "./notion-save-prompt.js";
+import { PostGradingActionSelector, PostGradingAction } from "./post-grading-action-selector.js";
 import { NotionDatabaseSelector } from "./notion-database-selector.js";
+import { GitHubIssueCreator } from "./github-issue-creator.js";
 import { GradingDatabaseService } from "../lib/notion/grading-database-service.js";
 import type { GradingResult } from "../lib/file-saver.js";
+import type { RepositoryFeedback } from "../lib/github-issue-service.js";
 
 interface ParallelCodexBatchProps {
   urls: string[];
   instanceCount: number;
+  githubToken?: string; // Required for GitHub issue creation
   urlsWithPageIds?: Array<{ url: string; pageId: string }> | null; // For Notion workflows - match URLs to existing rows
   onComplete?: (results: ParallelTestResults) => void;
   onBack?: () => void;
@@ -27,9 +30,10 @@ type Phase =
   | "cloning"
   | "grading"
   | "completed"
-  | "notion-prompt"
+  | "action-select"
   | "notion-db-select"
-  | "notion-saving";
+  | "notion-saving"
+  | "github-issues-creating";
 
 interface RepoStatus {
   owner: string;
@@ -80,6 +84,7 @@ const getActivityMessage = (item: ThreadItem): string => {
 export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
   urls,
   instanceCount,
+  githubToken,
   urlsWithPageIds,
   onComplete,
   onBack,
@@ -119,6 +124,7 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
     failed: number;
     errors: string[];
   }>({ saving: false, success: 0, failed: 0, errors: [] });
+  const [selectedAction, setSelectedAction] = useState<PostGradingAction | null>(null);
 
   const VIEWPORT_SIZE = 7;
 
@@ -389,9 +395,9 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
 
         setResults(batchResults);
 
-        // Show Notion save prompt if there are successful gradings
+        // Show action selector if there are successful gradings
         if (batchResults.successCount > 0) {
-          setPhase("notion-prompt");
+          setPhase("action-select");
         } else {
           setPhase("completed");
           if (onComplete) {
@@ -420,15 +426,22 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
     runBatch();
   }, [urls, instanceCount]);
 
-  // Handle Notion save decision
-  const handleNotionSaveDecision = (saveToNotion: boolean) => {
-    if (saveToNotion) {
-      setPhase("notion-db-select");
-    } else {
+  // Handle action selection
+  const handleActionSelection = (action: PostGradingAction) => {
+    setSelectedAction(action);
+
+    if (action === 'skip') {
       setPhase("completed");
       if (onComplete && results) {
         onComplete(results);
       }
+    } else if (action === 'notion') {
+      setPhase("notion-db-select");
+    } else if (action === 'github-issues') {
+      setPhase("github-issues-creating");
+    } else if (action === 'both') {
+      // Start with Notion, then GitHub issues
+      setPhase("notion-db-select");
     }
   };
 
@@ -502,9 +515,14 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
         errors: saveResult.errors,
       });
 
-      setPhase("completed");
-      if (onComplete) {
-        onComplete(results);
+      // If user selected "both", move to GitHub issues next
+      if (selectedAction === 'both') {
+        setPhase("github-issues-creating");
+      } else {
+        setPhase("completed");
+        if (onComplete) {
+          onComplete(results);
+        }
       }
     } catch (error: any) {
       console.error("Failed to save to Notion:", error);
@@ -514,7 +532,21 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
         failed: results.successCount,
         errors: [error.message || "Unknown error"],
       });
-      setPhase("completed");
+
+      // If user selected "both", still try GitHub issues despite Notion failure
+      if (selectedAction === 'both') {
+        setPhase("github-issues-creating");
+      } else {
+        setPhase("completed");
+      }
+    }
+  };
+
+  // Handle GitHub issues creation completion
+  const handleGitHubIssuesComplete = () => {
+    setPhase("completed");
+    if (onComplete && results) {
+      onComplete(results);
     }
   };
 
@@ -582,12 +614,12 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
   const hasMoreAbove = scrollOffset > 0;
   const hasMoreBelow = scrollOffset + VIEWPORT_SIZE < repoStatuses.length;
 
-  // Render Notion save prompt
-  if (phase === "notion-prompt" && results) {
+  // Render action selector
+  if (phase === "action-select" && results) {
     return (
-      <NotionSavePrompt
+      <PostGradingActionSelector
         successCount={results.successCount}
-        onDecision={handleNotionSaveDecision}
+        onSelect={handleActionSelection}
       />
     );
   }
@@ -597,7 +629,7 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
     return (
       <NotionDatabaseSelector
         onSelect={handleDatabaseSelected}
-        onBack={() => setPhase("notion-prompt")}
+        onBack={() => setPhase("action-select")}
       />
     );
   }
@@ -613,6 +645,25 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
         <Text color="cyan">Saving grading results to Notion database...</Text>
         <Text dimColor>This may take a few moments...</Text>
       </Box>
+    );
+  }
+
+  // Render GitHub issues creation
+  if (phase === "github-issues-creating" && results && githubToken) {
+    const feedbacks: RepositoryFeedback[] = results.results
+      .filter((r) => r.success)
+      .map((r) => ({
+        repoUrl: r.repoInfo.url,
+        repoExplained: r.structuredData?.repo_explained,
+        developerFeedback: r.structuredData?.developer_feedback || r.feedback || '',
+      }));
+
+    return (
+      <GitHubIssueCreator
+        feedbacks={feedbacks}
+        githubToken={githubToken}
+        onComplete={handleGitHubIssuesComplete}
+      />
     );
   }
 
