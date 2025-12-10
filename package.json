@@ -1,6 +1,6 @@
 {
   "name": "cli-agents-fleet",
-  "version": "1.0.21",
+  "version": "1.0.22",
   "description": "A powerful CLI for running AI agents at scale across your data - analyze repositories, manage GitHub collaborators, and perform bulk research from Notion, CSV, or manual input",
   "main": "dist/cli.js",
   "bin": {
