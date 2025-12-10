@@ -31,6 +31,7 @@ interface NotionPageSelectorProps {
     type: "page" | "database"
   ) => void;
   onStartGrading?: (pageId: string, pageTitle: string) => void;
+  onSelectForCollaborator?: (pageId: string, pageTitle: string) => void;
   onError: (error: string) => void;
   onAuthenticationRequired?: () => void;
   onBack?: () => void;
@@ -42,6 +43,7 @@ interface NotionPageSelectorProps {
 export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
   onSelect,
   onStartGrading,
+  onSelectForCollaborator,
   onError,
   onAuthenticationRequired,
   onBack,
@@ -101,7 +103,7 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
       {
         id: "search",
         type: "input",
-        reservedKeys: ["s", "g", "d"],
+        reservedKeys: ["s", "g", "c", "d"],
       },
       {
         id: "back",
@@ -377,6 +379,15 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
         }
       }
 
+      // Handle 'c' key to select for collaborator (only for databases when in list)
+      if (input === "c" && onSelectForCollaborator && focusedRegion === "list") {
+        const currentItem = allItems[selectedIndex];
+        if (currentItem && "properties" in currentItem) {
+          onSelectForCollaborator(currentItem.id, currentItem.title);
+          return;
+        }
+      }
+
       // Handle 'd' key to toggle databases only
       if (input === "d") {
         setShowingDatabases(!showingDatabases);
@@ -509,6 +520,7 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
             const isDatabase = "properties" in item;
             const itemType = isDatabase ? "Database" : "Page";
             const canGrade = isDatabase && onStartGrading;
+            const canSelectForCollaborator = isDatabase && onSelectForCollaborator;
 
             return (
               <Box key={item.id}>
@@ -518,6 +530,9 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
                 <Text dimColor> ({itemType})</Text>
                 {isSelected && canGrade && (
                   <Text color="green"> [g to grade]</Text>
+                )}
+                {isSelected && canSelectForCollaborator && (
+                  <Text color="green"> [c to select]</Text>
                 )}
               </Box>
             );

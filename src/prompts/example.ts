@@ -1,4 +1,4 @@
-import { URLLoader } from "./url-loader.js";
+import { URLLoader } from "../url-loader.js";
 
 const main = async () => {
   const loader = new URLLoader();

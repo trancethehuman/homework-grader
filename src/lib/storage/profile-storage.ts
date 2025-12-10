@@ -1,4 +1,4 @@
-import type { GradingMode } from "../components/grading-mode-selector.js";
+import type { GradingMode } from "../../components/grading-mode-selector.js";
 
 export type ProfileType = "code-analysis" | "research";
 

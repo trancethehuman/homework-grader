@@ -3,6 +3,7 @@ export { CollaboratorDataSourceSelector } from "./collaborator-data-source-selec
 export { CollaboratorUsernameInput } from "./collaborator-username-input.js";
 export { CollaboratorCsvColumnSelector } from "./collaborator-csv-column-selector.js";
 export { CollaboratorNotionColumnSelector } from "./collaborator-notion-column-selector.js";
+export { CollaboratorConfirm } from "./collaborator-confirm.js";
 export { CollaboratorAddProgress } from "./collaborator-add-progress.js";
 export { CollaboratorAddSummary } from "./collaborator-add-summary.js";
 export type { CollaboratorResults } from "./collaborator-add-progress.js";

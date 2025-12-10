@@ -1,45 +1,81 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { Text, Box } from "ink";
 import { MenuSelector, MenuOption } from "../ui/MenuSelector.js";
 import { CollaboratorResults } from "./collaborator-add-progress.js";
 
-type SummaryAction = "add-more" | "new-repo" | "main-menu";
+type SummaryAction = "retry-failed" | "add-more" | "new-repo" | "main-menu";
 
 interface CollaboratorAddSummaryProps {
   targetRepo: { owner: string; repo: string; fullName: string };
   results: CollaboratorResults;
+  onRetryFailed: (failedUsernames: string[]) => void;
   onAddMore: () => void;
   onNewRepo: () => void;
   onBackToMenu: () => void;
 }
 
-const options: MenuOption<SummaryAction>[] = [
-  {
-    id: "add-more",
-    name: "Add more users to this repository",
-    description: "Continue adding collaborators to the same repository",
-  },
-  {
-    id: "new-repo",
-    name: "Choose a different repository",
-    description: "Select another repository to add collaborators to",
-  },
-  {
-    id: "main-menu",
-    name: "Return to main menu",
-    description: "Go back to the start screen",
-  },
-];
-
 export const CollaboratorAddSummary: React.FC<CollaboratorAddSummaryProps> = ({
   targetRepo,
   results,
+  onRetryFailed,
   onAddMore,
   onNewRepo,
   onBackToMenu,
 }) => {
+  const failedUsernames = useMemo(
+    () => results.failed.map((f) => f.username),
+    [results.failed]
+  );
+
+  const hasRateLimitFailures = useMemo(
+    () =>
+      results.failed.some(
+        (f) =>
+          f.error?.toLowerCase().includes("rate limit") ||
+          f.error?.toLowerCase().includes("too many requests")
+      ),
+    [results.failed]
+  );
+
+  const options = useMemo(() => {
+    const opts: MenuOption<SummaryAction>[] = [];
+
+    if (failedUsernames.length > 0) {
+      opts.push({
+        id: "retry-failed",
+        name: `Retry failed users (${failedUsernames.length})`,
+        description: hasRateLimitFailures
+          ? "Retry with rate limiting - recommended to wait a few minutes first"
+          : "Attempt to add the failed users again",
+      });
+    }
+
+    opts.push(
+      {
+        id: "add-more",
+        name: "Add more users to this repository",
+        description: "Continue adding collaborators to the same repository",
+      },
+      {
+        id: "new-repo",
+        name: "Choose a different repository",
+        description: "Select another repository to add collaborators to",
+      },
+      {
+        id: "main-menu",
+        name: "Return to main menu",
+        description: "Go back to the start screen",
+      }
+    );
+
+    return opts;
+  }, [failedUsernames.length, hasRateLimitFailures]);
+
   const handleSelect = (action: SummaryAction) => {
     switch (action) {
+      case "retry-failed":
+        onRetryFailed(failedUsernames);
+        break;
       case "add-more":
         onAddMore();
         break;

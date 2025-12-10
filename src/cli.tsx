@@ -2,13 +2,13 @@
 
 import dotenv from "dotenv";
 import { InteractiveCSV } from "./interactive-cli.js";
-import { safeRender, shouldUseInteractiveMode } from "./lib/ink-utils.js";
+import { safeRender, shouldUseInteractiveMode } from "./lib/utils/ink-utils.js";
 import { GitHubService } from "./github/github-service.js";
 import { SandboxService } from "./lib/sandbox/index.js";
 import { NUM_URLS_IN_PARALLEL } from "./consts/limits.js";
 import { AIProvider, DEFAULT_PROVIDER } from "./consts/ai-providers.js";
-import { saveRepositoryFiles } from "./lib/file-saver.js";
-import { updateChecker } from "./lib/update-checker.js";
+import { saveRepositoryFiles } from "./lib/utils/file-saver.js";
+import { updateChecker } from "./lib/utils/update-checker.js";
 
 // Load environment variables from .env and .env.local files
 // Load .env first (shared/committed config - if it exists)

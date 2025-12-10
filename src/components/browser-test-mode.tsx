@@ -189,7 +189,7 @@ export const BrowserTestMode: React.FC<BrowserTestModeProps> = ({ selectedModel,
 
       <Text></Text>
       <Text color="cyan">
-        Test completed! Press 'b' or Escape to return to provider selection.
+        Test completed! Press Escape to return to provider selection.
       </Text>
       <Text></Text>
       <BackButton onBack={onBack} isVisible={true} />

@@ -1,7 +1,7 @@
 import React from "react";
 import { Text, Box } from "ink";
 import { MenuSelector, MenuOption } from "./ui/MenuSelector.js";
-import { PROFILES, ProfileType, Profile } from "../lib/profile-storage.js";
+import { PROFILES, ProfileType, Profile } from "../lib/storage/profile-storage.js";
 
 interface ProfileSelectorProps {
   onSelect: (profile: ProfileType) => void;

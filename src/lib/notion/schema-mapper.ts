@@ -1,4 +1,4 @@
-import { DebugLogger } from "../debug-logger.js";
+import { DebugLogger } from "../utils/debug-logger.js";
 
 export interface NotionProperty {
   type: string;

@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { Text, Box, useInput } from "ink";
 import { MenuSelector, MenuOption, MenuCategory } from "./ui/MenuSelector.js";
-import { ProfileType, PROFILE_MENU_ITEMS } from "../lib/profile-storage.js";
+import { ProfileType, PROFILE_MENU_ITEMS } from "../lib/storage/profile-storage.js";
 
 export type GradingMode = "local" | "batch" | "collaborator" | "bulk-research";
 
@@ -13,8 +13,8 @@ interface GradingModeSelectorProps {
 
 const categories: MenuCategory[] = [
   { id: "analyze", name: "ANALYZE CODE", icon: "" },
-  { id: "repo-mgmt", name: "GITHUB MANAGEMENT", icon: "👥" },
-  { id: "research", name: "RESEARCH", icon: "🔬" },
+  { id: "repo-mgmt", name: "GITHUB MANAGEMENT", icon: "" },
+  { id: "research", name: "RESEARCH", icon: "" },
 ];
 
 const allOptions: MenuOption<GradingMode>[] = [
@@ -28,7 +28,8 @@ const allOptions: MenuOption<GradingMode>[] = [
     id: "batch",
     category: "analyze",
     name: "Batch analyze repositories",
-    description: "Analyze multiple GitHub repos from Notion, CSV, or manual input",
+    description:
+      "Analyze multiple GitHub repos from Notion, CSV, or manual input",
   },
   {
     id: "collaborator",
@@ -51,11 +52,9 @@ const AppHeader: React.FC = () => (
       ╔═══════════════════════════════════════════════════════╗
     </Text>
     <Text color="cyan" bold>
-      ║  CLI Agents Fleet                                     ║
+      ║ CLI Agents Fleet ║
     </Text>
-    <Text color="cyan">
-      ║  Run AI agents at scale across your data              ║
-    </Text>
+    <Text color="cyan">║ Run AI agents at scale across your data ║</Text>
     <Text color="cyan" bold>
       ╚═══════════════════════════════════════════════════════╝
     </Text>
@@ -89,12 +88,12 @@ export const GradingModeSelector: React.FC<GradingModeSelectorProps> = ({
   const options = useMemo(() => {
     if (!activeProfile) return allOptions;
     const allowedModes = PROFILE_MENU_ITEMS[activeProfile];
-    return allOptions.filter(opt => allowedModes.includes(opt.id));
+    return allOptions.filter((opt) => allowedModes.includes(opt.id));
   }, [activeProfile]);
 
   const filteredCategories = useMemo(() => {
-    const usedCategories = new Set(options.map(opt => opt.category));
-    return categories.filter(cat => usedCategories.has(cat.id));
+    const usedCategories = new Set(options.map((opt) => opt.category));
+    return categories.filter((cat) => usedCategories.has(cat.id));
   }, [options]);
 
   useInput((_input, key) => {
@@ -126,7 +125,11 @@ export const GradingModeSelector: React.FC<GradingModeSelectorProps> = ({
       onSelect={handleSelect}
       categories={filteredCategories}
       customHeader={<AppHeader />}
-      footer={activeProfile && onSwitchProfile ? <ProfileFooter isFocused={isFooterFocused} /> : undefined}
+      footer={
+        activeProfile && onSwitchProfile ? (
+          <ProfileFooter isFocused={isFooterFocused} />
+        ) : undefined
+      }
       onNavigateEnd={handleNavigateEnd}
       disableHighlight={isFooterFocused}
     />

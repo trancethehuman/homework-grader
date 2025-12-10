@@ -11,8 +11,8 @@ import {
 import { SandboxFileProcessor } from "./sandbox-file-processor.js";
 import { AIProvider } from "../../consts/ai-providers.js";
 import { getRepoScores } from "../../grader/grader.js";
-import { RateLimiter } from "../rate-limiter.js";
-import { GitHubUrlParser } from "../github-url-parser.js";
+import { RateLimiter } from "../utils/rate-limiter.js";
+import { GitHubUrlParser } from "../github/github-url-parser.js";
 
 export class SandboxService {
   private sandbox: Sandbox | null = null;

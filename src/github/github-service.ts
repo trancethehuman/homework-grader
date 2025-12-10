@@ -2,8 +2,9 @@ import { Octokit } from "@octokit/rest";
 import { DEFAULT_IGNORED_EXTENSIONS } from "../consts/ignored-extensions.js";
 import { getRepoScores } from "../grader/grader.js";
 import { AIProvider } from "../consts/ai-providers.js";
-import { RateLimiter } from "../lib/rate-limiter.js";
-import { GitHubUrlParser, GitHubRepoInfo } from "../lib/github-url-parser.js";
+import { RateLimiter } from "../lib/utils/rate-limiter.js";
+import { GitHubUrlParser, GitHubRepoInfo } from "../lib/github/github-url-parser.js";
+import { GitHubRateLimiter } from "../lib/github/github-rate-limiter.js";
 
 interface FileContent {
   path: string;
@@ -58,11 +59,13 @@ export class GitHubService {
   private octokit: Octokit;
   private ignoredExtensions: Set<string>;
   private maxDepth: number;
+  private collaboratorRateLimiter: GitHubRateLimiter;
 
   constructor(token?: string, ignoredExtensions?: string[], maxDepth: number = 5) {
     this.octokit = new Octokit({
       auth: token,
     });
+    this.collaboratorRateLimiter = new GitHubRateLimiter();
 
     this.ignoredExtensions = new Set([
       ...DEFAULT_IGNORED_EXTENSIONS,
@@ -509,6 +512,7 @@ export class GitHubService {
 
   /**
    * Adds a collaborator to a repository with read (pull) permission
+   * Uses rate limiting with exponential backoff for secondary rate limits
    */
   async addCollaborator(
     owner: string,
@@ -516,13 +520,16 @@ export class GitHubService {
     username: string
   ): Promise<AddCollaboratorResult> {
     try {
-      const response = await this.executeWithRateLimit(() =>
-        this.octokit.rest.repos.addCollaborator({
-          owner,
-          repo,
-          username,
-          permission: "pull", // Read-only access
-        })
+      const response = await this.collaboratorRateLimiter.executeWithRetry(
+        () =>
+          this.octokit.rest.repos.addCollaborator({
+            owner,
+            repo,
+            username,
+            permission: "pull",
+          }),
+        { maxRetries: 5 },
+        true
       );
 
       return {
@@ -537,9 +544,18 @@ export class GitHubService {
       if (error.status === 404) {
         errorMessage = "User not found or repository not accessible";
       } else if (error.status === 403) {
-        errorMessage = "Permission denied - you need admin access to this repository";
+        if (
+          error.message?.toLowerCase().includes("rate limit") ||
+          error.message?.toLowerCase().includes("secondary")
+        ) {
+          errorMessage = "Rate limit exceeded - please try again later";
+        } else {
+          errorMessage =
+            "Permission denied - you need admin access to this repository";
+        }
+      } else if (error.status === 429) {
+        errorMessage = "Too many requests - rate limit exceeded";
       } else if (error.status === 422) {
-        // User is already a collaborator or validation failed
         if (error.message?.includes("already")) {
           return {
             username,
@@ -560,6 +576,7 @@ export class GitHubService {
 
   /**
    * Batch adds collaborators with progress callback
+   * Rate limiting and throttling is handled by the GitHubRateLimiter
    */
   async addCollaboratorsBatch(
     owner: string,
@@ -572,7 +589,6 @@ export class GitHubService {
 
     for (let i = 0; i < usernames.length; i++) {
       if (abortSignal?.aborted) {
-        // Mark remaining as skipped
         for (let j = i; j < usernames.length; j++) {
           results.push({
             username: usernames[j].trim(),
@@ -590,11 +606,6 @@ export class GitHubService {
       results.push(result);
 
       onProgress?.(i + 1, usernames.length, result);
-
-      // Small delay between requests to be respectful
-      if (i < usernames.length - 1) {
-        await new Promise((resolve) => setTimeout(resolve, 200));
-      }
     }
 
     return results;

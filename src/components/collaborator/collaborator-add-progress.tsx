@@ -77,8 +77,9 @@ export const CollaboratorAddProgress: React.FC<CollaboratorAddProgressProps> = (
               };
             }
 
+            let nextUserIndex = -1;
             if (current < total) {
-              const nextUserIndex = updated.findIndex(
+              nextUserIndex = updated.findIndex(
                 (u, idx) => idx > userIndex && u.status === "pending"
               );
               if (nextUserIndex !== -1) {
@@ -88,6 +89,12 @@ export const CollaboratorAddProgress: React.FC<CollaboratorAddProgressProps> = (
                 };
               }
             }
+
+            const activeIndex = nextUserIndex !== -1 ? nextUserIndex : userIndex;
+            if (activeIndex >= scrollOffset + viewportSize - 2) {
+              setScrollOffset(Math.max(0, activeIndex - viewportSize + 3));
+            }
+            setSelectedIndex(activeIndex);
 
             return updated;
           });

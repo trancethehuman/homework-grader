@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Text, Box, useInput } from "ink";
 import { HelpFooter, createHelpHints, ConfidenceBadge } from "../ui/index.js";
-import { GitHubUrlParser } from "../../lib/github-url-parser.js";
+import { GitHubUrlParser } from "../../lib/github/github-url-parser.js";
 
 interface UsernameCandidate {
   propertyName: string;

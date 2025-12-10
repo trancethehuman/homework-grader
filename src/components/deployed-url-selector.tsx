@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Text, Box, useInput } from "ink";
-import { DeployedUrlDetector, DeployedUrlCandidate, DeployedUrlDetectionResult } from "../lib/deployed-url-detector.js";
+import { DeployedUrlDetector, DeployedUrlCandidate, DeployedUrlDetectionResult } from "../lib/utils/deployed-url-detector.js";
 import { BackButton, useBackNavigation } from "./ui/back-button.js";
 import { HelpFooter, ConfidenceBadge, ListRowDetails } from "./ui/index.js";
 

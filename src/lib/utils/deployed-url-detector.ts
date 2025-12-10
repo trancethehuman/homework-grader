@@ -1,9 +1,9 @@
-import { 
-  DEPLOYED_URL_PATTERNS, 
-  DEPLOYED_URL_HOSTING_PROVIDERS, 
+import {
+  DEPLOYED_URL_PATTERNS,
+  DEPLOYED_URL_HOSTING_PROVIDERS,
   DEPLOYED_URL_PROPERTY_KEYWORDS,
   EXCLUSION_KEYWORDS
-} from "../consts/deployed-url-patterns.js";
+} from "../../consts/deployed-url-patterns.js";
 
 export interface DeployedUrlCandidate {
   propertyName: string;

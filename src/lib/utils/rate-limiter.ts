@@ -1,4 +1,4 @@
-import { AIProvider } from "../consts/ai-providers.js";
+import { AIProvider } from "../../consts/ai-providers.js";
 
 interface TokenUsageRecord {
   timestamp: number;

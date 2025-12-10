@@ -1,7 +1,7 @@
 import { writeFileSync, mkdirSync } from "fs";
 import { join } from "path";
 import { usageLogger } from "./usage-logger.js";
-import { AIProvider } from "../consts/ai-providers.js";
+import { AIProvider } from "../../consts/ai-providers.js";
 
 export interface ProcessResult {
   content: string;

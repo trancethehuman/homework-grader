@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Text, Box, useInput } from "ink";
 import open from "open";
 import { GitHubService } from "../github/github-service.js";
-import { TokenStorage } from "../lib/token-storage.js";
+import { TokenStorage } from "../lib/storage/token-storage.js";
 
 type FocusArea = "input" | "open-browser" | "back";
 

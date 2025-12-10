@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Text, Box, useInput } from "ink";
-import { GitHubUrlDetector, GitHubUrlCandidate, GitHubUrlDetectionResult } from "../../lib/github-url-detector.js";
+import { GitHubUrlDetector, GitHubUrlCandidate, GitHubUrlDetectionResult } from "../../lib/github/github-url-detector.js";
 import { BackButton, useBackNavigation } from "../ui/back-button.js";
 import { HelpFooter, ConfidenceBadge, ListRowDetails } from "../ui/index.js";
 

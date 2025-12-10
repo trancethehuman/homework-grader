@@ -1,9 +1,9 @@
 import { NotionService } from "./notion-service.js";
 import { NotionOAuthClient } from "./oauth-client.js";
 import { NotionSchemaMapper } from "./schema-mapper.js";
-import { GradingResult } from "../file-saver.js";
+import { GradingResult } from "../utils/file-saver.js";
 import { ConflictDetector, ConflictDetectionResult, OverrideDecision } from "./conflict-detector.js";
-import { DebugLogger } from "../debug-logger.js";
+import { DebugLogger } from "../utils/debug-logger.js";
 
 export interface DatabaseCreationOptions {
   title?: string;

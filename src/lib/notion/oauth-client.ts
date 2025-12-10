@@ -3,7 +3,7 @@ import {
   NotionTokenStorage,
   NotionOAuthToken,
 } from "./notion-token-storage.js";
-import { DebugLogger } from "../debug-logger.js";
+import { DebugLogger } from "../utils/debug-logger.js";
 import { ApiTimeoutHandler, TimeoutConfig } from "./api-timeout-handler.js";
 
 const DEFAULT_PROXY_URL =

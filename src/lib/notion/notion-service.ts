@@ -2,7 +2,7 @@ import { Client } from "@notionhq/client";
 import { config } from "dotenv";
 import { NotionTokenStorage } from "./notion-token-storage.js";
 import { NotionDataSourceService } from "./data-source-service.js";
-import { DebugLogger } from "../debug-logger.js";
+import { DebugLogger } from "../utils/debug-logger.js";
 import { ApiTimeoutHandler, CircuitBreaker, TimeoutConfig } from "./api-timeout-handler.js";
 
 // Load environment variables

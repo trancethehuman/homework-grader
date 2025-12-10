@@ -13,7 +13,7 @@ import {
   ThreadItem,
   Usage,
 } from "./codex-types.js";
-import { GitHubUrlParser } from "../github-url-parser.js";
+import { GitHubUrlParser } from "../github/github-url-parser.js";
 
 export interface RepoEventData {
   type: 'initializing' | 'item_updated' | 'item_completed' | 'turn_completed' | 'error';

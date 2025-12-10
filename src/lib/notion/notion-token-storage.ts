@@ -1,5 +1,5 @@
 import { readFileSync, writeFileSync, existsSync, unlinkSync } from "fs";
-import { BaseJsonStorage } from "../base-storage.js";
+import { BaseJsonStorage } from "../storage/base-storage.js";
 
 export interface NotionOAuthToken {
   access_token: string;

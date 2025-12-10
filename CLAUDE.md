@@ -54,6 +54,14 @@ Load from `.env` and `.env.local` (local takes precedence):
 - Use TypeScript with full type safety
 - Follow existing patterns in the codebase
 
+### CLI Screen Requirements
+
+**Every CLI screen must have a proper footer:**
+- Use `HelpFooter` component from `src/components/ui/HelpFooter.tsx`
+- Always include a back option (Escape key) on the left side
+- Use `createHelpHints()` helper to generate consistent hints
+- Example: `<HelpFooter hints={createHelpHints("navigate", "select", "backEsc")} />`
+
 ### Documentation Updates
 
 **Update this CLAUDE.md file** when the user confirms changes are good:

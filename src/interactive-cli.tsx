@@ -7,23 +7,23 @@ import {
   CSVAnalysis,
   validateAndAnalyzeCSV,
   loadGitHubUrlsFromColumn,
-} from "./lib/csv-utils.js";
-import { GitHubUrlParser } from "./lib/github-url-parser.js";
-import { TokenStorage } from "./lib/token-storage.js";
-import { E2BTokenStorage } from "./lib/e2b-token-storage.js";
+} from "./lib/utils/csv-utils.js";
+import { GitHubUrlParser } from "./lib/github/github-url-parser.js";
+import { TokenStorage } from "./lib/storage/token-storage.js";
+import { E2BTokenStorage } from "./lib/storage/e2b-token-storage.js";
 import { GitHubService } from "./github/github-service.js";
 import {
   GitHubUrlDetector,
   GitHubUrlDetectionResult,
-} from "./lib/github-url-detector.js";
-import { saveRepositoryFiles } from "./lib/file-saver.js";
+} from "./lib/github/github-url-detector.js";
+import { saveRepositoryFiles } from "./lib/utils/file-saver.js";
 import { ProviderSelector } from "./components/provider-selector.js";
 import {
   GradingModeSelector,
   GradingMode,
 } from "./components/grading-mode-selector.js";
 import { ProfileSelector } from "./components/profile-selector.js";
-import type { ProfileType } from "./lib/profile-storage.js";
+import type { ProfileType } from "./lib/storage/profile-storage.js";
 import {
   LocalToolSelector,
   LocalTool,
@@ -70,13 +70,13 @@ import {
   DEFAULT_COMPUTER_USE_MODEL,
 } from "./consts/ai-providers.js";
 import { SANDBOX_BATCH_SIZE } from "./consts/limits.js";
-import { PreferencesStorage } from "./lib/preferences-storage.js";
-import { RateLimiter } from "./lib/rate-limiter.js";
+import { PreferencesStorage } from "./lib/storage/preferences-storage.js";
+import { RateLimiter } from "./lib/utils/rate-limiter.js";
 import {
   GradingSaveOptions,
   SaveOption,
 } from "./components/grading-save-options.js";
-import { GradingResult, saveBrowserTestResults } from "./lib/file-saver.js";
+import { GradingResult, saveBrowserTestResults } from "./lib/utils/file-saver.js";
 import { GradingDatabaseService } from "./lib/notion/grading-database-service.js";
 import { DeployedUrlSelector } from "./components/deployed-url-selector.js";
 import { BrowserTesting } from "./components/browser-testing.js";
@@ -102,12 +102,13 @@ import {
   CollaboratorNotionColumnSelector,
   CollaboratorAddProgress,
   CollaboratorAddSummary,
+  CollaboratorConfirm,
   CollaboratorResults,
 } from "./components/collaborator/index.js";
 import { GitHubAuthInput } from "./components/github-auth-input.js";
 import type { CollaboratorDataSource } from "./components/collaborator/collaborator-data-source-selector.js";
 
-export type { CSVColumn, CSVAnalysis } from "./lib/csv-utils.js";
+export type { CSVColumn, CSVAnalysis } from "./lib/utils/csv-utils.js";
 
 interface InteractiveCSVProps {
   onComplete: (
@@ -181,6 +182,7 @@ type Step =
   | "collaborator-notion-page-select"
   | "collaborator-notion-content-view"
   | "collaborator-notion-column"
+  | "collaborator-confirm"
   | "collaborator-adding"
   | "collaborator-summary";
 
@@ -1254,10 +1256,6 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
       } else if (inputChar === "r") {
         // Retry authentication after OAuth with loading animation
         navigateToStep("notion-auth-loading");
-      } else if (inputChar === "b") {
-        // Go back to data source selection
-        setNotionNavigationStack([]);
-        navigateToStep("data-source-select");
       }
     } else if (step === "notion-url-input") {
       if (key.return) {
@@ -1417,7 +1415,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
 
         // Navigate to processing choice
         navigateToStep("processing-choice");
-      } else if (inputChar === "b" || key.escape) {
+      } else if (key.escape) {
         // Go back to provider selection
         navigateToStep("provider-select");
       }
@@ -1465,7 +1463,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           setSelectedNavOption(0);
           navigateToStep("notion-database-filter");
         }
-      } else if (inputChar === "b" || key.escape) {
+      } else if (key.escape) {
         // Go back to page selector
         setSelectedNavOption(0);
         navigateToStep("notion-page-selector");
@@ -1506,7 +1504,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
       } else if (key.backspace || key.delete) {
         setCollaboratorCsvInput((prev) => prev.slice(0, -1));
         setError(null);
-      } else if ((inputChar === "b" || key.escape) && !collaboratorCsvInput) {
+      } else if (key.escape && !collaboratorCsvInput) {
         navigateToStep("collaborator-data-source");
       } else if (
         inputChar &&
@@ -2553,6 +2551,12 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
               );
             }
           }}
+          onAuthenticationRequired={() => {
+            console.log(
+              "Re-authentication required, triggering OAuth flow..."
+            );
+            navigateToStep("notion-auth-loading");
+          }}
           onBack={() => {
             // Pop from navigation stack if not empty, otherwise return to page selector
             setNotionNavigationStack((prev) => {
@@ -3179,7 +3183,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           targetRepo={collaboratorTargetRepo.fullName}
           onComplete={(usernames) => {
             setCollaboratorUsernames(usernames);
-            navigateToStep("collaborator-adding");
+            navigateToStep("collaborator-confirm");
           }}
           onBack={() => {
             navigateToStep("collaborator-data-source");
@@ -3222,7 +3226,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           targetRepo={collaboratorTargetRepo.fullName}
           onSelect={(usernames) => {
             setCollaboratorUsernames(usernames);
-            navigateToStep("collaborator-adding");
+            navigateToStep("collaborator-confirm");
           }}
           onBack={() => {
             navigateToStep("collaborator-csv-input");
@@ -3254,18 +3258,17 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         <Text></Text>
         <NotionPageSelector
           onSelect={(pageId, pageTitle, type) => {
-            if (type === "database") {
-              setCollaboratorNotionDatabaseId(pageId);
-              setCollaboratorNotionDatabaseTitle(pageTitle);
-              setCollaboratorNotionContent(null);
-              navigateToStep("collaborator-notion-column");
-            } else {
-              setCollaboratorNotionNavigationStack([]);
-              setNotionApiSelectedPageId(pageId);
-              setNotionApiSelectedPageTitle(pageTitle);
-              setNotionApiContentType("page");
-              navigateToStep("collaborator-notion-content-view");
-            }
+            setCollaboratorNotionNavigationStack([]);
+            setNotionApiSelectedPageId(pageId);
+            setNotionApiSelectedPageTitle(pageTitle);
+            setNotionApiContentType(type);
+            navigateToStep("collaborator-notion-content-view");
+          }}
+          onSelectForCollaborator={(pageId, pageTitle) => {
+            setCollaboratorNotionDatabaseId(pageId);
+            setCollaboratorNotionDatabaseTitle(pageTitle);
+            setCollaboratorNotionContent(null);
+            navigateToStep("collaborator-notion-column");
           }}
           onError={(err) => {
             setError(err);
@@ -3293,24 +3296,29 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           contentType={notionApiContentType}
           onComplete={() => {}}
           onNavigate={(pageId, pageTitle, contentType) => {
-            if (contentType === "database") {
-              setCollaboratorNotionDatabaseId(pageId);
-              setCollaboratorNotionDatabaseTitle(pageTitle);
-              setCollaboratorNotionContent(null);
-              navigateToStep("collaborator-notion-column");
-            } else {
-              setCollaboratorNotionNavigationStack([
-                ...collaboratorNotionNavigationStack,
-                {
-                  pageId: notionApiSelectedPageId,
-                  pageTitle: notionApiSelectedPageTitle,
-                  contentType: notionApiContentType,
-                },
-              ]);
-              setNotionApiSelectedPageId(pageId);
-              setNotionApiSelectedPageTitle(pageTitle);
-              setNotionApiContentType(contentType || "page");
-            }
+            setCollaboratorNotionNavigationStack([
+              ...collaboratorNotionNavigationStack,
+              {
+                pageId: notionApiSelectedPageId,
+                pageTitle: notionApiSelectedPageTitle,
+                contentType: notionApiContentType,
+              },
+            ]);
+            setNotionApiSelectedPageId(pageId);
+            setNotionApiSelectedPageTitle(pageTitle);
+            setNotionApiContentType(contentType || "page");
+          }}
+          onSelectForCollaborator={(pageId, pageTitle) => {
+            setCollaboratorNotionDatabaseId(pageId);
+            setCollaboratorNotionDatabaseTitle(pageTitle);
+            setCollaboratorNotionContent(null);
+            navigateToStep("collaborator-notion-column");
+          }}
+          onAuthenticationRequired={() => {
+            console.log(
+              "Re-authentication required, triggering OAuth flow..."
+            );
+            navigateToStep("notion-auth-loading");
           }}
           onBack={() => {
             if (collaboratorNotionNavigationStack.length > 0) {
@@ -3348,11 +3356,39 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           targetRepo={collaboratorTargetRepo.fullName}
           onSelect={(usernames) => {
             setCollaboratorUsernames(usernames);
-            navigateToStep("collaborator-adding");
+            navigateToStep("collaborator-confirm");
           }}
           onBack={() => {
             setCollaboratorNotionContent(null);
             navigateToStep("collaborator-notion-page-select");
+          }}
+        />
+      </Box>
+    );
+  }
+
+  if (step === "collaborator-confirm" && collaboratorTargetRepo && collaboratorUsernames.length > 0) {
+    return (
+      <Box flexDirection="column">
+        <CollaboratorConfirm
+          targetRepo={collaboratorTargetRepo.fullName}
+          usernames={collaboratorUsernames}
+          onConfirm={() => {
+            const uniqueUsernames = [...new Set(collaboratorUsernames.map((u) => u.trim().toLowerCase()))];
+            setCollaboratorUsernames(uniqueUsernames);
+            navigateToStep("collaborator-adding");
+          }}
+          onBack={() => {
+            setCollaboratorUsernames([]);
+            if (collaboratorDataSource === "manual") {
+              navigateToStep("collaborator-manual-input");
+            } else if (collaboratorDataSource === "csv") {
+              navigateToStep("collaborator-csv-column-select");
+            } else if (collaboratorDataSource === "notion") {
+              navigateToStep("collaborator-notion-column");
+            } else {
+              navigateToStep("collaborator-data-source");
+            }
           }}
         />
       </Box>
@@ -3381,6 +3417,11 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         <CollaboratorAddSummary
           targetRepo={collaboratorTargetRepo}
           results={collaboratorResults}
+          onRetryFailed={(failedUsernames) => {
+            setCollaboratorUsernames(failedUsernames);
+            setCollaboratorResults(null);
+            navigateToStep("collaborator-confirm");
+          }}
           onAddMore={() => {
             setCollaboratorUsernames([]);
             setCollaboratorResults(null);

@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import csv from "csv-parser";
-import { GitHubUrlParser } from "./github-url-parser.js";
+import { GitHubUrlParser } from "../github/github-url-parser.js";
 
 /**
  * Represents a column in a CSV file.

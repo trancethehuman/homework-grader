@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Text, Box, useInput } from "ink";
-import { GradingResult } from "../lib/file-saver.js";
+import { GradingResult } from "../lib/utils/file-saver.js";
 import { GradingDatabaseService } from "../lib/notion/grading-database-service.js";
 import { NotionService } from "../lib/notion/notion-service.js";
 import { NotionOAuthClient } from "../lib/notion/oauth-client.js";

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Box, Text, useInput } from "ink";
 import { AI_PROVIDERS, AIProvider } from "../consts/ai-providers.js";
-import { PreferencesStorage } from "../lib/preferences-storage.js";
+import { PreferencesStorage } from "../lib/storage/preferences-storage.js";
 import { HelpFooter } from "./ui/HelpFooter.js";
 
 interface ProviderSelectorProps {

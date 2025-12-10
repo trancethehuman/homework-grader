@@ -13,7 +13,7 @@ import { getDefaultGradingPrompt } from "../consts/grading-prompts.js";
 import { NotionSavePrompt } from "./notion-save-prompt.js";
 import { NotionDatabaseSelector } from "./notion-database-selector.js";
 import { GradingDatabaseService } from "../lib/notion/grading-database-service.js";
-import type { GradingResult } from "../lib/file-saver.js";
+import type { GradingResult } from "../lib/utils/file-saver.js";
 
 interface ParallelCodexBatchProps {
   urls: string[];

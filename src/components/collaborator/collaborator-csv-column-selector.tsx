@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Text, Box, useInput } from "ink";
-import { CSVAnalysis } from "../../lib/csv-utils.js";
+import { CSVAnalysis } from "../../lib/utils/csv-utils.js";
 import { HelpFooter, createHelpHints } from "../ui/HelpFooter.js";
 
 interface CollaboratorCsvColumnSelectorProps {

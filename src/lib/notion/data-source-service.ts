@@ -1,5 +1,5 @@
 import { Client } from "@notionhq/client";
-import { DebugLogger } from "../debug-logger.js";
+import { DebugLogger } from "../utils/debug-logger.js";
 
 export interface NotionDataSource {
   id: string;

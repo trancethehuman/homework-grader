@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Text, Box, useInput } from "ink";
+import { HelpFooter, createHelpHints } from "../ui/HelpFooter.js";
 
 interface CollaboratorUsernameInputProps {
   onComplete: (usernames: string[]) => void;
@@ -54,7 +55,7 @@ export const CollaboratorUsernameInput: React.FC<CollaboratorUsernameInputProps>
       return;
     }
 
-    if ((inputChar === "b" || key.escape) && !input) {
+    if (key.escape && !input) {
       onBack();
       return;
     }
@@ -98,6 +99,9 @@ export const CollaboratorUsernameInput: React.FC<CollaboratorUsernameInputProps>
           <Text color="red">{error}</Text>
         </Box>
       )}
+
+      <Text></Text>
+      <HelpFooter hints={createHelpHints("select", "backEsc")} />
     </Box>
   );
 };

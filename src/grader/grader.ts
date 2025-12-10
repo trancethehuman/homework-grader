@@ -12,7 +12,7 @@ import {
   AIProvider,
   DEFAULT_CONTEXT_WINDOW_TOKENS,
 } from "../consts/ai-providers.js";
-import { RateLimiter } from "../lib/rate-limiter.js";
+import { RateLimiter } from "../lib/utils/rate-limiter.js";
 import dotenv from "dotenv";
 
 dotenv.config();
