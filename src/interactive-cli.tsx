@@ -22,6 +22,8 @@ import {
   GradingModeSelector,
   GradingMode,
 } from "./components/grading-mode-selector.js";
+import { ProfileSelector } from "./components/profile-selector.js";
+import type { ProfileType } from "./lib/profile-storage.js";
 import {
   LocalToolSelector,
   LocalTool,
@@ -102,6 +104,7 @@ import {
   CollaboratorAddSummary,
   CollaboratorResults,
 } from "./components/collaborator/index.js";
+import { GitHubAuthInput } from "./components/github-auth-input.js";
 import type { CollaboratorDataSource } from "./components/collaborator/collaborator-data-source-selector.js";
 
 export type { CSVColumn, CSVAnalysis } from "./lib/csv-utils.js";
@@ -119,6 +122,7 @@ interface InteractiveCSVProps {
 }
 
 type Step =
+  | "profile-select"
   | "grading-mode-select"
   | "parallel-instance-select"
   | "parallel-codex-test"
@@ -184,7 +188,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
   onComplete,
   onError,
 }) => {
-  const [step, setStep] = useState<Step>("grading-mode-select");
+  const [step, setStep] = useState<Step>("profile-select");
   const [csvPath, setCsvPath] = useState("");
   const [input, setInput] = useState("");
   const [githubToken, setGithubToken] = useState<string | undefined>();
@@ -200,6 +204,8 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
     useState<WorkflowMode | null>(null);
   const [selectedGradingMode, setSelectedGradingMode] =
     useState<GradingMode | null>(null);
+  const [activeProfile, setActiveProfile] = useState<ProfileType | null>(null);
+  const [profileLoaded, setProfileLoaded] = useState(false);
   const [selectedLocalTool, setSelectedLocalTool] = useState<
     "codex" | "claude-code" | "cursor" | null
   >(null);
@@ -346,6 +352,25 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
     }
     setStep(newStep);
   };
+
+  // Load saved profile on mount
+  useEffect(() => {
+    const loadProfile = async () => {
+      try {
+        const prefs = await preferencesStorage.loadPreferences();
+        if (prefs.activeProfile) {
+          setActiveProfile(prefs.activeProfile);
+          setStep("grading-mode-select");
+        } else {
+          setStep("profile-select");
+        }
+      } catch {
+        setStep("profile-select");
+      }
+      setProfileLoaded(true);
+    };
+    loadProfile();
+  }, []);
 
   // Fetch filtered database content when filter is applied
   useEffect(() => {
@@ -1462,56 +1487,6 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           navigateToStep("complete");
         }
       }
-    } else if (step === "collaborator-github-auth") {
-      if (key.return) {
-        const newToken = input.trim();
-        if (newToken) {
-          setValidatingToken(true);
-          (async () => {
-            try {
-              const githubService = new GitHubService(newToken);
-              const validation = await githubService.validateToken();
-
-              if (validation.valid) {
-                try {
-                  tokenStorage.saveToken(newToken);
-                } catch (err) {
-                  // Token saving error is handled gracefully
-                }
-                setGithubToken(newToken);
-                setTokenValid(true);
-                setError(null);
-                navigateToStep("collaborator-repo-search");
-              } else {
-                setError(validation.error || "Invalid token");
-                setTokenValid(false);
-              }
-            } catch (error) {
-              setError("Failed to validate token");
-              setTokenValid(false);
-            } finally {
-              setValidatingToken(false);
-            }
-          })();
-        }
-        setInput("");
-      } else if (key.backspace || key.delete) {
-        setInput((prev) => prev.slice(0, -1));
-      } else if (inputChar === "o" && !input) {
-        open(
-          "https://github.com/settings/tokens/new?description=cli-agents-fleet&scopes=repo"
-        );
-      } else if (inputChar === "b" && !input) {
-        navigateToStep("grading-mode-select");
-      } else if (
-        inputChar &&
-        !key.ctrl &&
-        !key.meta &&
-        !key.escape &&
-        !key.return
-      ) {
-        setInput((prev) => prev + inputChar);
-      }
     } else if (step === "collaborator-csv-input") {
       if (key.return && collaboratorCsvInput.trim()) {
         const csvPath = collaboratorCsvInput.trim();
@@ -1620,6 +1595,27 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
   };
 
   // All conditional rendering in a single return statement
+  if (step === "profile-select") {
+    if (!profileLoaded) {
+      return (
+        <Box flexDirection="column">
+          <Text dimColor>Loading...</Text>
+        </Box>
+      );
+    }
+    return (
+      <Box flexDirection="column">
+        <ProfileSelector
+          onSelect={async (profile) => {
+            setActiveProfile(profile);
+            await preferencesStorage.savePreferences({ activeProfile: profile });
+            navigateToStep("grading-mode-select");
+          }}
+        />
+      </Box>
+    );
+  }
+
   if (step === "grading-mode-select") {
     return (
       <Box flexDirection="column">
@@ -1641,6 +1637,8 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
               }
             }
           }}
+          activeProfile={activeProfile ?? undefined}
+          onSwitchProfile={() => navigateToStep("profile-select")}
         />
       </Box>
     );
@@ -3107,40 +3105,19 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
 
   if (step === "collaborator-github-auth") {
     return (
-      <Box flexDirection="column">
-        <Text color="blue" bold>
-          GitHub Authentication Required
-        </Text>
-        <Text></Text>
-        <Text>
-          To add collaborators to a repository, you need to authenticate with GitHub.
-        </Text>
-        <Text></Text>
-        <Text dimColor>
-          Your token needs the 'repo' scope for private repos or 'public_repo' for public repos.
-        </Text>
-        <Text></Text>
-        <Box
-          borderStyle="single"
-          borderColor={error ? "red" : "blue"}
-          paddingX={1}
-        >
-          <Text>{input ? "*".repeat(input.length) : ""}</Text>
-          <Text color="blue">█</Text>
-        </Box>
-        {error && (
-          <Box marginTop={1}>
-            <Text color="red">{error}</Text>
-          </Box>
-        )}
-        {githubToken && (
-          <Box marginTop={1}>
-            <Text dimColor>
-              Authenticated as: {githubToken.slice(0, 8)}...
-            </Text>
-          </Box>
-        )}
-      </Box>
+      <GitHubAuthInput
+        title="GitHub Authentication Required"
+        description="To add collaborators to a repository, you need to authenticate with GitHub."
+        scope="repo"
+        existingToken={githubToken}
+        onAuthenticated={(token) => {
+          setGithubToken(token);
+          setTokenValid(true);
+          setError(null);
+          navigateToStep("collaborator-repo-search");
+        }}
+        onBack={() => navigateToStep("grading-mode-select")}
+      />
     );
   }
 

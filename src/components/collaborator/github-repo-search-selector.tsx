@@ -175,6 +175,7 @@ export const GitHubRepoSearchSelector: React.FC<GitHubRepoSearchSelectorProps> =
       }
 
       if (key.upArrow) {
+        // Up from search goes to list (last visible item since list is above search)
         if (filteredRepos.length > 0) {
           setFocusArea("list");
           const lastIndex = filteredRepos.length - 1;
@@ -186,12 +187,11 @@ export const GitHubRepoSearchSelector: React.FC<GitHubRepoSearchSelectorProps> =
       }
 
       if (key.downArrow) {
-        if (filteredRepos.length > 0) {
-          setFocusArea("list");
-          setSelectedIndex(0);
-          setScrollOffset(0);
-        } else if (onBack) {
+        // Down from search goes to footer (back/account), not list
+        if (onBack) {
           setFocusArea("back");
+        } else if (authenticatedUser) {
+          setFocusArea("account");
         }
         return;
       }
@@ -238,6 +238,13 @@ export const GitHubRepoSearchSelector: React.FC<GitHubRepoSearchSelectorProps> =
         if (selectedIndex < filteredRepos.length) {
           const repo = filteredRepos[selectedIndex];
           onSelect({ owner: repo.owner, repo: repo.repo, fullName: repo.fullName });
+        }
+      } else if (input && input.length === 1 && !key.ctrl && !key.meta) {
+        // Auto-focus search and type when pressing letters (not shortcuts)
+        // Reserved shortcuts: b (back), s (search)
+        if (!['b', 's'].includes(input.toLowerCase())) {
+          setFocusArea("search");
+          setSearchTerm(searchTerm + input);
         }
       }
     }

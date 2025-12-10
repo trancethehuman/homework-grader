@@ -15,6 +15,8 @@ export interface UseMenuSelectorOptions<T> {
   onSelect: (id: T) => void;
   onBack?: () => void;
   initialIndex?: number;
+  onNavigateEnd?: () => void;
+  disabled?: boolean;
 }
 
 export interface UseMenuSelectorResult {
@@ -31,6 +33,8 @@ export function useMenuSelector<T>({
   onSelect,
   onBack,
   initialIndex = 0,
+  onNavigateEnd,
+  disabled = false,
 }: UseMenuSelectorOptions<T>): UseMenuSelectorResult {
   const [selectedIndex, setSelectedIndex] = useState(initialIndex);
 
@@ -42,10 +46,16 @@ export function useMenuSelector<T>({
   }, [options, selectedIndex, onSelect]);
 
   useInput((input, key) => {
+    if (disabled) return;
+
     if (key.upArrow) {
       setSelectedIndex((prev) => Math.max(0, prev - 1));
     } else if (key.downArrow) {
-      setSelectedIndex((prev) => Math.min(options.length - 1, prev + 1));
+      if (selectedIndex >= options.length - 1 && onNavigateEnd) {
+        onNavigateEnd();
+      } else {
+        setSelectedIndex((prev) => Math.min(options.length - 1, prev + 1));
+      }
     } else if (key.return) {
       handleSelect();
     } else if ((input === "b" || key.escape) && onBack) {

@@ -302,6 +302,16 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
         setFocusArea('search');
         return;
       }
+      if (key.downArrow) {
+        if (totalItemsWithLoadMore > 0) {
+          setFocusArea('list');
+          setSelectedIndex(0);
+          setScrollOffset(0);
+        } else {
+          setFocusArea('search');
+        }
+        return;
+      }
       if (key.return) {
         onBack?.();
         return;
@@ -333,14 +343,14 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
         return;
       }
 
-      // Down arrow from search bar goes to first list item (circular navigation)
+      // Down arrow from search bar goes to back button (if exists), then to list
       if (key.downArrow) {
-        if (totalItemsWithLoadMore > 0) {
+        if (onBack) {
+          setFocusArea('back');
+        } else if (totalItemsWithLoadMore > 0) {
           setFocusArea('list');
           setSelectedIndex(0);
           setScrollOffset(0);
-        } else if (onBack) {
-          setFocusArea('back');
         }
         return;
       }

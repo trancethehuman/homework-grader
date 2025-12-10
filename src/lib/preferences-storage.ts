@@ -1,8 +1,10 @@
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import type { ProfileType } from './profile-storage.js';
 
 interface Preferences {
+  activeProfile?: ProfileType;
   selectedProvider?: string;
   notionDatabaseId?: string;
   notionConfig?: {

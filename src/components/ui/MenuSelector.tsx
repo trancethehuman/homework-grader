@@ -18,6 +18,9 @@ export interface MenuSelectorProps<T> {
   highlightColor?: string;
   categories?: MenuCategory[];
   customHeader?: React.ReactNode;
+  footer?: React.ReactNode;
+  onNavigateEnd?: () => void;
+  disableHighlight?: boolean;
 }
 
 export function MenuSelector<T>({
@@ -30,12 +33,17 @@ export function MenuSelector<T>({
   highlightColor = "blue",
   categories,
   customHeader,
+  footer,
+  onNavigateEnd,
+  disableHighlight = false,
 }: MenuSelectorProps<T>): React.ReactElement {
   const { selectedIndex } = useMenuSelector({
     options,
     onSelect,
     onBack,
     initialIndex,
+    onNavigateEnd,
+    disabled: disableHighlight,
   });
 
   const renderCategorizedOptions = () => {
@@ -72,7 +80,7 @@ export function MenuSelector<T>({
   };
 
   const renderOption = (option: MenuOption<T>, index: number) => {
-    const isSelected = index === selectedIndex;
+    const isSelected = index === selectedIndex && !disableHighlight;
     const isDisabled = option.disabled || option.comingSoon;
 
     return (
@@ -114,6 +122,12 @@ export function MenuSelector<T>({
       )}
 
       {renderCategorizedOptions()}
+
+      {footer && (
+        <Box justifyContent="flex-end" marginTop={1}>
+          {footer}
+        </Box>
+      )}
     </Box>
   );
 }

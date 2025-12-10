@@ -233,18 +233,28 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
     if (isSearchFocused) {
       if (key.return) {
         if (allItems.length > 0) {
-          const item = allItems[0];
+          const item = allItems[selectedIndex];
           handleItemSelect(item);
         }
         return;
       }
 
-      if (key.downArrow) {
+      // Up arrow from search (at bottom) goes to last item in list
+      if (key.upArrow) {
         if (allItems.length > 0) {
           setIsSearchFocused(false);
-          setSelectedIndex(0);
-          setScrollOffset(0);
+          const lastIndex = allItems.length - 1;
+          setSelectedIndex(lastIndex);
+          // Ensure last item is visible
+          if (lastIndex >= viewportSize) {
+            setScrollOffset(lastIndex - viewportSize + 1);
+          }
         }
+        return;
+      }
+
+      // Down arrow from search does nothing (search is at bottom)
+      if (key.downArrow) {
         return;
       }
 
@@ -264,9 +274,8 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
     // Handle navigation in list (not search focused)
     if (!isSearchFocused) {
       if (key.upArrow) {
-        if (selectedIndex === 0) {
-          setIsSearchFocused(true);
-        } else {
+        // Up arrow at first item does nothing (search is at bottom, not top)
+        if (selectedIndex > 0) {
           const newIndex = selectedIndex - 1;
           setSelectedIndex(newIndex);
           if (newIndex < scrollOffset) {
@@ -280,6 +289,9 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
           if (newIndex >= scrollOffset + viewportSize) {
             setScrollOffset(newIndex - viewportSize + 1);
           }
+        } else {
+          // Down arrow at last item focuses search (search is at bottom)
+          setIsSearchFocused(true);
         }
       } else if (key.return) {
         if (selectedIndex < allItems.length) {
@@ -287,6 +299,13 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
         }
       } else if (input === "b" || key.escape) {
         onComplete(content);
+      } else if (input && input.length === 1 && !key.ctrl && !key.meta) {
+        // Auto-focus search and type when pressing letters (not shortcuts)
+        // Reserved shortcuts: b (back), s (search), g (grade), i (properties)
+        if (!['b', 's', 'g', 'i'].includes(input.toLowerCase())) {
+          setIsSearchFocused(true);
+          setSearchTerm(searchTerm + input);
+        }
       }
     }
   });
