@@ -46,11 +46,11 @@ export const StagehandTest: React.FC<StagehandTestProps> = ({ onBack }) => {
           return;
         }
         runTest(selectedTest);
-      } else if (input === "b" || key.escape) {
+      } else if (key.escape) {
         onBack();
       }
     } else if (state === "results") {
-      if (input === "b" || key.escape) {
+      if (key.escape) {
         setState("menu");
         setResults([]);
         setError(null);
@@ -247,7 +247,7 @@ export const StagehandTest: React.FC<StagehandTestProps> = ({ onBack }) => {
         ))}
         
         <Text></Text>
-        <Text color="blue">Press 'b' to run another test, 'q' to return to main flow</Text>
+        <Text color="blue">Press Escape to run another test, 'q' to return to main flow</Text>
       </Box>
     );
   }

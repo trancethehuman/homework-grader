@@ -19,7 +19,7 @@ export const PromptSelector: React.FC<PromptSelectorProps> = ({
     if (showPreview) {
       if (key.return) {
         onSelect(prompts[selectedIndex]);
-      } else if (input === "b" || key.escape) {
+      } else if (key.escape) {
         setShowPreview(false);
       }
     } else {
@@ -31,7 +31,7 @@ export const PromptSelector: React.FC<PromptSelectorProps> = ({
         onSelect(prompts[selectedIndex]);
       } else if (input === "p") {
         setShowPreview(true);
-      } else if (input === "b" || key.escape) {
+      } else if (key.escape) {
         onBack();
       }
     }

@@ -166,9 +166,9 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
       return;
     }
 
-    // When showing properties, only handle 'i' to close and 'b' to go back
+    // When showing properties, only handle 'i' to close and Escape to go back
     if (showProperties) {
-      if (input === "b" || key.escape) {
+      if (key.escape) {
         onComplete(content);
       }
       return;
@@ -314,12 +314,12 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
         if (selectedIndex < allItems.length) {
           handleItemSelect(allItems[selectedIndex]);
         }
-      } else if (input === "b" || key.escape) {
+      } else if (key.escape) {
         onComplete(content);
       } else if (input && input.length === 1 && !key.ctrl && !key.meta) {
         // Auto-focus search and type when pressing letters (not shortcuts)
-        // Reserved shortcuts: b (back), s (search), g (grade), i (properties)
-        if (!['b', 's', 'g', 'i'].includes(input.toLowerCase())) {
+        // Reserved shortcuts: s (search), g (grade), i (properties)
+        if (!['s', 'g', 'i'].includes(input.toLowerCase())) {
           setIsSearchFocused(true);
           setSearchTerm(searchTerm + input);
         }

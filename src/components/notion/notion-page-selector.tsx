@@ -101,7 +101,7 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
       {
         id: "search",
         type: "input",
-        reservedKeys: ["b", "s", "g", "d"],
+        reservedKeys: ["s", "g", "d"],
       },
       {
         id: "back",
@@ -359,12 +359,6 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
   useInput(
     (input, key) => {
       if (isLoading || error || isStartingGrading) return;
-
-      // Global shortcut: 'b' to go back (except when typing in search)
-      if (input === "b" && onBack && focusedRegion !== "search") {
-        onBack();
-        return;
-      }
 
       // Global shortcut: 's' to focus search
       if (input === "s" && focusedRegion !== "search") {

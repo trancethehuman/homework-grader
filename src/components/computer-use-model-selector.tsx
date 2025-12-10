@@ -20,7 +20,7 @@ export const ComputerUseModelSelector: React.FC<ComputerUseModelSelectorProps> =
       setSelectedIndex((prev) => Math.min(COMPUTER_USE_MODELS.length - 1, prev + 1));
     } else if (key.return) {
       onModelSelected(COMPUTER_USE_MODELS[selectedIndex]);
-    } else if (input === "b" || key.escape) {
+    } else if (key.escape) {
       onBack();
     }
   });

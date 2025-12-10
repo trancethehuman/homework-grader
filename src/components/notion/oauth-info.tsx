@@ -17,7 +17,7 @@ export const NotionOAuthInfo: React.FC<NotionOAuthInfoProps> = ({
   useInput((input, key) => {
     if (key.return) {
       onContinue();
-    } else if (input === "b" || key.escape) {
+    } else if (key.escape) {
       onBack();
     } else if (input === "c") {
       onClear?.();

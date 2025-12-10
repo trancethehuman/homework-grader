@@ -81,7 +81,7 @@ export const NotionDatabaseSelector: React.FC<NotionDatabaseSelectorProps> = ({
       } else if (key.return && databases.length > 0) {
         const selected = databases[selectedIndex];
         onSelect(selected.id, selected.title);
-      } else if ((input === "b" || key.escape) && onBack) {
+      } else if (key.escape && onBack) {
         onBack();
       }
     } else if (focusedButton === "back") {
@@ -91,7 +91,7 @@ export const NotionDatabaseSelector: React.FC<NotionDatabaseSelectorProps> = ({
         setFocusedButton("reauth");
       } else if (key.return && onBack) {
         onBack();
-      } else if (input === "b" || key.escape) {
+      } else if (key.escape) {
         onBack?.();
       }
     } else if (focusedButton === "reauth") {
@@ -101,7 +101,7 @@ export const NotionDatabaseSelector: React.FC<NotionDatabaseSelectorProps> = ({
         setFocusedButton("back");
       } else if (key.return) {
         handleReauth();
-      } else if ((input === "b" || key.escape) && onBack) {
+      } else if (key.escape && onBack) {
         onBack();
       }
     }

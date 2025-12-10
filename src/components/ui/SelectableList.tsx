@@ -62,7 +62,7 @@ export function SelectableList<T extends SelectableListItem>({
         if (item && !item.disabled) {
           onSelect(item, selectedIndex);
         }
-      } else if ((input === "b" || key.escape) && onBack) {
+      } else if (key.escape && onBack) {
         onBack();
       }
     },
