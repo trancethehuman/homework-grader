@@ -2490,8 +2490,8 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           }}
           onNavigate={(pageId, pageTitle, contentType) => {
             // Push current page to navigation stack before navigating to new page
-            setNotionNavigationStack([
-              ...notionNavigationStack,
+            setNotionNavigationStack((prev) => [
+              ...prev,
               {
                 pageId: notionApiSelectedPageId,
                 pageTitle: notionApiSelectedPageTitle,
@@ -2553,18 +2553,18 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           }}
           onBack={() => {
             // Pop from navigation stack if not empty, otherwise return to page selector
-            if (notionNavigationStack.length > 0) {
-              const previousPage =
-                notionNavigationStack[notionNavigationStack.length - 1];
-              setNotionNavigationStack(notionNavigationStack.slice(0, -1));
-              setNotionApiSelectedPageId(previousPage.pageId);
-              setNotionApiSelectedPageTitle(previousPage.pageTitle);
-              setNotionApiContentType(previousPage.contentType);
-              // Stay in same step to show the previous content
-            } else {
-              // At top level, return to page selector
-              navigateToStep("notion-page-selector");
-            }
+            setNotionNavigationStack((prev) => {
+              if (prev.length > 0) {
+                const previousPage = prev[prev.length - 1];
+                setNotionApiSelectedPageId(previousPage.pageId);
+                setNotionApiSelectedPageTitle(previousPage.pageTitle);
+                setNotionApiContentType(previousPage.contentType);
+                return prev.slice(0, -1);
+              } else {
+                navigateToStep("notion-page-selector");
+                return prev;
+              }
+            });
           }}
         />
       </Box>

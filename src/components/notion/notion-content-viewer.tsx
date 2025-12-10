@@ -41,6 +41,7 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
   const [showProperties, setShowProperties] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const [isBackFocused, setIsBackFocused] = useState(false);
   const [loadingDots, setLoadingDots] = useState("");
   const [scrollOffset, setScrollOffset] = useState(0);
   const viewportSize = 8;
@@ -253,8 +254,10 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
         return;
       }
 
-      // Down arrow from search does nothing (search is at bottom)
-      if (key.downArrow) {
+      // Down arrow from search goes to back button
+      if (key.downArrow && onBack) {
+        setIsSearchFocused(false);
+        setIsBackFocused(true);
         return;
       }
 
@@ -268,6 +271,20 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
         return;
       }
 
+      return;
+    }
+
+    // Handle back button focused
+    if (isBackFocused) {
+      if (key.upArrow) {
+        setIsBackFocused(false);
+        setIsSearchFocused(true);
+        return;
+      }
+      if (key.return) {
+        onBack?.();
+        return;
+      }
       return;
     }
 
@@ -490,7 +507,9 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
       />
       {onBack && (
         <Box>
-          <Text color="gray">← back</Text>
+          <Text color={isBackFocused ? "blue" : "gray"} bold={isBackFocused}>
+            {isBackFocused ? "→ " : "  "}← back
+          </Text>
         </Box>
       )}
     </Box>

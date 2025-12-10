@@ -8,7 +8,11 @@ import {
 import { SearchInput } from "../ui/search-input.js";
 import { NotionOAuthClient } from "../../lib/notion/oauth-client.js";
 import { NotionTokenStorage } from "../../lib/notion/notion-token-storage.js";
-import { ApiTimeoutHandler, TimeoutError, CircuitBreakerError } from "../../lib/notion/api-timeout-handler.js";
+import {
+  ApiTimeoutHandler,
+  TimeoutError,
+  CircuitBreakerError,
+} from "../../lib/notion/api-timeout-handler.js";
 import { NotionDataLoading, LoadingPhase } from "./notion-data-loading.js";
 import {
   useDebounce,
@@ -21,7 +25,11 @@ const DEFAULT_PROXY_URL =
   process.env.NOTION_PROXY_URL || "https://notion-proxy-8xr3.onrender.com";
 
 interface NotionPageSelectorProps {
-  onSelect: (pageId: string, pageTitle: string, type: "page" | "database") => void;
+  onSelect: (
+    pageId: string,
+    pageTitle: string,
+    type: "page" | "database"
+  ) => void;
   onStartGrading?: (pageId: string, pageTitle: string) => void;
   onError: (error: string) => void;
   onAuthenticationRequired?: () => void;
@@ -128,8 +136,14 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
   const selectedIndex = listState?.selectedIndex ?? 0;
   const scrollOffset = listState?.scrollOffset ?? 0;
   const visibleStartIndex = scrollOffset;
-  const visibleEndIndex = Math.min(scrollOffset + viewportSize, totalItemsWithLoadMore);
-  const displayItems = allItems.slice(visibleStartIndex, Math.min(visibleEndIndex, allItems.length));
+  const visibleEndIndex = Math.min(
+    scrollOffset + viewportSize,
+    totalItemsWithLoadMore
+  );
+  const displayItems = allItems.slice(
+    visibleStartIndex,
+    Math.min(visibleEndIndex, allItems.length)
+  );
 
   const isSearchFocused = focusedRegion === "search";
   const isBackFocused = focusedRegion === "back";
@@ -164,22 +178,28 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
 
         const oauth = new NotionOAuthClient();
 
-        await ApiTimeoutHandler.withTimeout(async () => {
-          await oauth.refreshIfPossible();
-          return Promise.resolve();
-        }, {
-          timeoutMs: 30000,
-          retries: 1,
-          operation: 'Token Refresh'
-        });
+        await ApiTimeoutHandler.withTimeout(
+          async () => {
+            await oauth.refreshIfPossible();
+            return Promise.resolve();
+          },
+          {
+            timeoutMs: 30000,
+            retries: 1,
+            operation: "Token Refresh",
+          }
+        );
 
-        const token = await ApiTimeoutHandler.withTimeout(async () => {
-          return await oauth.ensureAuthenticated();
-        }, {
-          timeoutMs: 120000,
-          retries: 1,
-          operation: 'OAuth Authentication'
-        });
+        const token = await ApiTimeoutHandler.withTimeout(
+          async () => {
+            return await oauth.ensureAuthenticated();
+          },
+          {
+            timeoutMs: 120000,
+            retries: 1,
+            operation: "OAuth Authentication",
+          }
+        );
 
         setLoadingPhase("fetching");
 
@@ -188,7 +208,7 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
 
         const initialResult = await ApiTimeoutHandler.withTimeout(
           () => notionService.getInitialItems(10),
-          { timeoutMs: 15000, retries: 1, operation: 'Initial Notion Data' }
+          { timeoutMs: 15000, retries: 1, operation: "Initial Notion Data" }
         );
 
         setPages(initialResult.pages);
@@ -210,19 +230,23 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
         } else if (err instanceof Error) {
           errorMessage = err.message;
 
-          if (err.message.includes("Token validation failed") ||
-              err.message.includes("API token is invalid") ||
-              err.message.includes("Unauthorized") ||
-              err.message.includes("401") ||
-              err.message.includes("403") ||
-              err.message.includes("expired") ||
-              err.message.includes("Invalid refresh token") ||
-              err.message.includes("OAuth")) {
+          if (
+            err.message.includes("Token validation failed") ||
+            err.message.includes("API token is invalid") ||
+            err.message.includes("Unauthorized") ||
+            err.message.includes("401") ||
+            err.message.includes("403") ||
+            err.message.includes("expired") ||
+            err.message.includes("Invalid refresh token") ||
+            err.message.includes("OAuth")
+          ) {
             shouldRetriggerAuth = true;
             errorMessage = `Authentication failed: ${err.message}\n\nYour Notion token has expired or is invalid. Please re-authenticate.`;
-          } else if (err.message.includes("Failed to start OAuth") ||
-                     err.message.includes("OAuth polling failed") ||
-                     err.message.includes("OAuth timeout")) {
+          } else if (
+            err.message.includes("Failed to start OAuth") ||
+            err.message.includes("OAuth polling failed") ||
+            err.message.includes("OAuth timeout")
+          ) {
             errorMessage = `Authentication service error: ${err.message}\n\nPossible causes:\n• Notion proxy server is starting up (~60s delay)\n• Network connectivity issues\n• Browser blocked the authentication popup\n\nTry again or check your network connection.`;
           } else if (err.message.includes("fetch")) {
             errorMessage = `Network error: ${err.message}\n\nPlease check your internet connection and try again.`;
@@ -264,17 +288,20 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
       setLoadingPhase("searching");
 
       try {
-        const results = await notionServiceRef.current.searchWithQuery(debouncedSearchTerm, {
-          pageSize: 20,
-          filter: 'both'
-        });
+        const results = await notionServiceRef.current.searchWithQuery(
+          debouncedSearchTerm,
+          {
+            pageSize: 20,
+            filter: "both",
+          }
+        );
 
         setPages(results.pages);
         setDatabases(results.databases);
         setNextCursor(results.nextCursor);
         setHasMoreItems(results.hasMore);
       } catch (err) {
-        console.error('Search failed:', err);
+        console.error("Search failed:", err);
       } finally {
         setIsSearching(false);
       }
@@ -284,20 +311,29 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
   }, [debouncedSearchTerm]);
 
   const loadMore = async () => {
-    if (!hasMoreItems || isLoadingMore || !nextCursor || !notionServiceRef.current) return;
+    if (
+      !hasMoreItems ||
+      isLoadingMore ||
+      !nextCursor ||
+      !notionServiceRef.current
+    )
+      return;
 
     setIsLoadingMore(true);
     setLoadingPhase("loading-more");
 
     try {
-      const moreResults = await notionServiceRef.current.loadMoreItems(nextCursor, 10);
+      const moreResults = await notionServiceRef.current.loadMoreItems(
+        nextCursor,
+        10
+      );
 
-      setPages(prev => [...prev, ...moreResults.pages]);
-      setDatabases(prev => [...prev, ...moreResults.databases]);
+      setPages((prev) => [...prev, ...moreResults.pages]);
+      setDatabases((prev) => [...prev, ...moreResults.databases]);
       setNextCursor(moreResults.nextCursor);
       setHasMoreItems(moreResults.hasMore);
     } catch (err) {
-      console.error('Load more failed:', err);
+      console.error("Load more failed:", err);
     } finally {
       setIsLoadingMore(false);
     }
@@ -360,7 +396,9 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
           <Text>🎯</Text>
         </Box>
         <Box marginTop={1}>
-          <Text color="cyan">Setting up grading for "{selectedDatabaseName}"...</Text>
+          <Text color="cyan">
+            Setting up grading for "{selectedDatabaseName}"...
+          </Text>
         </Box>
         <Box marginTop={2}>
           <Text color="gray">
@@ -373,10 +411,7 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
 
   if (isLoading) {
     return (
-      <NotionDataLoading
-        phase={loadingPhase}
-        startTime={loadingStartTime}
-      />
+      <NotionDataLoading phase={loadingPhase} startTime={loadingStartTime} />
     );
   }
 
@@ -418,7 +453,8 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
   const loadMoreIndex = allItems.length;
   const showScrollIndicatorTop = scrollOffset > 0;
   const showScrollIndicatorBottom = visibleEndIndex < totalItemsWithLoadMore;
-  const showLoadMoreInViewport = hasLoadMoreOption && visibleEndIndex > allItems.length;
+  const showLoadMoreInViewport =
+    hasLoadMoreOption && visibleEndIndex > allItems.length;
 
   return (
     <Box flexDirection="column">
@@ -447,13 +483,12 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
 
       {allItems.length > 0 && (
         <>
-          {showScrollIndicatorTop && (
-            <Text dimColor>  ↑ more above</Text>
-          )}
+          {showScrollIndicatorTop && <Text dimColor> ↑ more above</Text>}
 
           {displayItems.map((item, displayIndex) => {
             const actualIndex = visibleStartIndex + displayIndex;
-            const isSelected = focusedRegion === "list" && selectedIndex === actualIndex;
+            const isSelected =
+              focusedRegion === "list" && selectedIndex === actualIndex;
             const isDatabase = "properties" in item;
             const itemType = isDatabase ? "Database" : "Page";
             const canGrade = isDatabase && onStartGrading;
@@ -461,7 +496,8 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
             return (
               <Box key={item.id}>
                 <Text color={isSelected ? "blue" : "white"} bold={isSelected}>
-                  {isSelected ? "→ " : "  "}{item.title}
+                  {isSelected ? "→ " : "  "}
+                  {item.title}
                 </Text>
                 <Text dimColor> ({itemType})</Text>
                 {isSelected && canGrade && (
@@ -471,22 +507,25 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
             );
           })}
 
-          {showLoadMoreInViewport && (() => {
-            const isLoadMoreSelected = focusedRegion === "list" && selectedIndex === loadMoreIndex;
-            return (
-              <Box>
-                <Text
-                  color={isLoadMoreSelected ? "blue" : "gray"}
-                  bold={isLoadMoreSelected}
-                >
-                  {isLoadMoreSelected ? "→ " : "  "}{isLoadingMore ? "Loading..." : "Load more..."}
-                </Text>
-              </Box>
-            );
-          })()}
+          {showLoadMoreInViewport &&
+            (() => {
+              const isLoadMoreSelected =
+                focusedRegion === "list" && selectedIndex === loadMoreIndex;
+              return (
+                <Box>
+                  <Text
+                    color={isLoadMoreSelected ? "blue" : "gray"}
+                    bold={isLoadMoreSelected}
+                  >
+                    {isLoadMoreSelected ? "→ " : "  "}
+                    {isLoadingMore ? "Loading..." : "Load more..."}
+                  </Text>
+                </Box>
+              );
+            })()}
 
           {showScrollIndicatorBottom && !showLoadMoreInViewport && (
-            <Text dimColor>  ↓ more below</Text>
+            <Text dimColor> ↓ more below</Text>
           )}
         </>
       )}
