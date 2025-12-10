@@ -11,6 +11,7 @@ jobs:
     permissions:
       contents: write # Needed to create GitHub releases
       packages: write # Needed to publish to GitHub Packages
+      id-token: write # Needed for npm trusted publishing (OIDC)
       
     steps:
       - name: Checkout repository
@@ -28,6 +29,9 @@ jobs:
           
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
+
+      - name: Ensure npm 11.5.1+ for trusted publishing
+        run: npm install -g npm@latest
         
       - name: Auto-increment version
         id: version
@@ -82,8 +86,6 @@ jobs:
           
       - name: Publish to NPM
         run: npm publish
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           
       - name: Setup Node.js for GitHub Packages
         uses: actions/setup-node@v4
