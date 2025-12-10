@@ -43,6 +43,13 @@ interface ValidationResult {
   error?: string;
 }
 
+export interface PaginatedSearchResult {
+  pages: NotionPage[];
+  databases: NotionDatabase[];
+  hasMore: boolean;
+  nextCursor?: string;
+}
+
 export class NotionService {
   private notion: Client;
   private storage: NotionTokenStorage;
@@ -367,6 +374,202 @@ export class NotionService {
         DebugLogger.debug(`✅ Successfully fetched ${databases.length} databases from Notion`);
         return databases;
       }, this.defaultTimeouts.search);
+    });
+  }
+
+  /**
+   * Fetch initial items for fast browse display (pages and databases combined)
+   * Only fetches the first N items - much faster than getAllPages() + getAllDatabases()
+   */
+  async getInitialItems(limit: number = 10): Promise<PaginatedSearchResult> {
+    await this.ensureValidToken();
+
+    return await this.searchCircuitBreaker.execute(async () => {
+      return await ApiTimeoutHandler.withTimeout(async () => {
+        DebugLogger.debug(`🔍 Fetching initial ${limit} items from Notion...`);
+
+        const pages: NotionPage[] = [];
+        const databases: NotionDatabase[] = [];
+
+        const response = await this.notion.search({
+          page_size: limit,
+        });
+
+        for (const result of response.results) {
+          if (result.object === "page" && "properties" in result) {
+            const title = this.extractTitle(result);
+            pages.push({
+              id: result.id,
+              title,
+              url: result.url,
+              lastEditedTime: result.last_edited_time,
+              parent: result.parent,
+            });
+          } else if ((result as any).object === "data_source") {
+            const dsItem = result as any;
+            const databaseId = dsItem.parent?.database_id;
+            if (databaseId) {
+              const title = this.extractTitle(dsItem) || 'Untitled Database';
+              databases.push({
+                id: databaseId,
+                title,
+                url: `https://notion.so/${databaseId.replace(/-/g, '')}`,
+                lastEditedTime: dsItem.last_edited_time || new Date().toISOString(),
+                properties: dsItem.properties || {},
+              });
+            }
+          }
+        }
+
+        DebugLogger.debug(`✅ Fetched ${pages.length} pages and ${databases.length} databases`);
+
+        return {
+          pages,
+          databases,
+          hasMore: response.has_more,
+          nextCursor: response.next_cursor || undefined,
+        };
+      }, { timeoutMs: 10000, retries: 1, operation: 'Initial Items Fetch' });
+    });
+  }
+
+  /**
+   * Search Notion with a query string - uses Notion's Search API with query parameter
+   * Much faster than fetching all items and filtering client-side
+   */
+  async searchWithQuery(
+    query: string,
+    options: {
+      pageSize?: number;
+      startCursor?: string;
+      filter?: 'page' | 'database' | 'both';
+    } = {}
+  ): Promise<PaginatedSearchResult> {
+    await this.ensureValidToken();
+
+    const { pageSize = 20, startCursor, filter = 'both' } = options;
+
+    return await this.searchCircuitBreaker.execute(async () => {
+      return await ApiTimeoutHandler.withTimeout(async () => {
+        DebugLogger.debug(`🔍 Searching Notion for: "${query}" (filter: ${filter})`);
+
+        const pages: NotionPage[] = [];
+        const databases: NotionDatabase[] = [];
+
+        if (filter === 'both' || filter === 'page') {
+          const pageResponse = await this.notion.search({
+            query,
+            filter: { property: "object", value: "page" },
+            page_size: pageSize,
+            start_cursor: startCursor,
+          });
+
+          for (const result of pageResponse.results) {
+            if (result.object === "page" && "properties" in result) {
+              const title = this.extractTitle(result);
+              pages.push({
+                id: result.id,
+                title,
+                url: result.url,
+                lastEditedTime: result.last_edited_time,
+                parent: result.parent,
+              });
+            }
+          }
+        }
+
+        if (filter === 'both' || filter === 'database') {
+          const dbResponse = await this.notion.search({
+            query,
+            filter: { property: "object", value: "data_source" as any },
+            page_size: pageSize,
+            start_cursor: startCursor,
+          });
+
+          for (const result of dbResponse.results) {
+            const dsItem = result as any;
+            if (dsItem.object === "data_source") {
+              const databaseId = dsItem.parent?.database_id;
+              if (databaseId) {
+                const title = this.extractTitle(dsItem) || 'Untitled Database';
+                databases.push({
+                  id: databaseId,
+                  title,
+                  url: `https://notion.so/${databaseId.replace(/-/g, '')}`,
+                  lastEditedTime: dsItem.last_edited_time || new Date().toISOString(),
+                  properties: dsItem.properties || {},
+                });
+              }
+            }
+          }
+        }
+
+        DebugLogger.debug(`✅ Search found ${pages.length} pages and ${databases.length} databases`);
+
+        return {
+          pages,
+          databases,
+          hasMore: false,
+          nextCursor: undefined,
+        };
+      }, { timeoutMs: 10000, retries: 1, operation: 'Notion Search' });
+    });
+  }
+
+  /**
+   * Load more items for pagination during browsing
+   * Uses the cursor from a previous search result
+   */
+  async loadMoreItems(cursor: string, limit: number = 10): Promise<PaginatedSearchResult> {
+    await this.ensureValidToken();
+
+    return await this.searchCircuitBreaker.execute(async () => {
+      return await ApiTimeoutHandler.withTimeout(async () => {
+        DebugLogger.debug(`🔍 Loading more items from cursor...`);
+
+        const pages: NotionPage[] = [];
+        const databases: NotionDatabase[] = [];
+
+        const response = await this.notion.search({
+          page_size: limit,
+          start_cursor: cursor,
+        });
+
+        for (const result of response.results) {
+          if (result.object === "page" && "properties" in result) {
+            const title = this.extractTitle(result);
+            pages.push({
+              id: result.id,
+              title,
+              url: result.url,
+              lastEditedTime: result.last_edited_time,
+              parent: result.parent,
+            });
+          } else if ((result as any).object === "data_source") {
+            const dsItem = result as any;
+            const databaseId = dsItem.parent?.database_id;
+            if (databaseId) {
+              const title = this.extractTitle(dsItem) || 'Untitled Database';
+              databases.push({
+                id: databaseId,
+                title,
+                url: `https://notion.so/${databaseId.replace(/-/g, '')}`,
+                lastEditedTime: dsItem.last_edited_time || new Date().toISOString(),
+                properties: dsItem.properties || {},
+              });
+            }
+          }
+        }
+
+        DebugLogger.debug(`✅ Loaded ${pages.length} more pages and ${databases.length} more databases`);
+
+        return {
+          pages,
+          databases,
+          hasMore: response.has_more,
+          nextCursor: response.next_cursor || undefined,
+        };
+      }, { timeoutMs: 10000, retries: 1, operation: 'Load More Items' });
     });
   }
 

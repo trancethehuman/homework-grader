@@ -12,8 +12,11 @@ export const SearchInput: React.FC<SearchInputProps> = ({
   value,
   placeholder = "Search...",
   isFocused,
-  onChange,
 }) => {
+  // Always render some content to prevent layout shifts when typing starts
+  // Use a zero-width space as fallback when value is empty to maintain consistent height
+  const displayValue = value || (isFocused ? "\u200B" : placeholder);
+
   return (
     <Box
       borderStyle="single"
@@ -22,7 +25,7 @@ export const SearchInput: React.FC<SearchInputProps> = ({
       marginBottom={1}
     >
       <Text color={isFocused ? "white" : "gray"}>
-        {value || (isFocused ? "" : placeholder)}
+        {displayValue}
         {isFocused && <Text color="blue">█</Text>}
       </Text>
     </Box>

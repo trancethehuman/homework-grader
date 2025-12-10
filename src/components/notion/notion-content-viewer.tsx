@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Text, Box, useInput } from "ink";
 import { NotionService } from "../../lib/notion/notion-service.js";
 import { NotionOAuthClient } from "../../lib/notion/oauth-client.js";
@@ -8,7 +8,7 @@ import {
 } from "../../lib/notion/notion-formatter.js";
 import { BackButton, useBackNavigation } from "../ui/back-button.js";
 import { DebugLogger } from "../../lib/debug-logger.js";
-import { NotionDataLoading } from "./notion-data-loading.js";
+import { SearchInput } from "../ui/search-input.js";
 
 interface NotionContentViewerProps {
   pageId: string;
@@ -37,13 +37,38 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [content, setContent] = useState<any>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const [showingContent, setShowingContent] = useState(false);
   const [navigableItems, setNavigableItems] = useState<FormattedBlock[]>([]);
   const [currentPage, setCurrentPage] = useState(0);
-  const [propertiesExpanded, setPropertiesExpanded] = useState(false);
+  const [showProperties, setShowProperties] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const [isViewAllMode, setIsViewAllMode] = useState(false);
+  const [loadingDots, setLoadingDots] = useState("");
   const itemsPerPage = 10;
+  const maxSearchResults = 3;
 
   const { handleBackInput } = useBackNavigation(() => onBack?.(), !!onBack);
+
+  const filteredItems = useMemo(() => {
+    if (!searchTerm.trim()) {
+      return navigableItems;
+    }
+    return navigableItems.filter((item) =>
+      (item.title || item.content).toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }, [navigableItems, searchTerm]);
+
+  const displayItems = isViewAllMode ? navigableItems : filteredItems;
+  const searchResultsItems = filteredItems.slice(0, maxSearchResults);
+
+  // Animate loading dots
+  useEffect(() => {
+    if (!isLoading) return;
+    const interval = setInterval(() => {
+      setLoadingDots((prev) => (prev.length >= 3 ? "" : prev + "."));
+    }, 400);
+    return () => clearInterval(interval);
+  }, [isLoading]);
 
   useEffect(() => {
     const fetchContent = async () => {
@@ -51,35 +76,30 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
         setIsLoading(true);
         setError(null);
 
-        DebugLogger.debugAuth(`🔍 Checking existing Notion authentication...`);
+        DebugLogger.debugAuth(`Checking existing Notion authentication...`);
         const oauth = new NotionOAuthClient();
 
-        // ensureAuthenticated handles refresh internally if needed
-        DebugLogger.debugAuth("🔐 Ensuring authentication...");
+        DebugLogger.debugAuth("Ensuring authentication...");
         const token = await oauth.ensureAuthenticated();
         const notionService = new NotionService(token.access_token);
 
-        // Validate token before using it
         const validation = await notionService.validateToken();
         if (!validation.valid) {
           throw new Error(validation.error || "Token validation failed");
         }
-        DebugLogger.debugAuth("✓ Notion authentication is valid");
+        DebugLogger.debugAuth("Notion authentication is valid");
 
-        // Use the correct API based on content type
         let pageContent;
         if (contentType === "database") {
           pageContent = await notionService.getDatabaseContent(pageId);
         } else if (contentType === "page") {
           pageContent = await notionService.getPageContentDirect(pageId);
         } else {
-          // Fallback to the original logic for unknown types
           pageContent = await notionService.getPageContent(pageId);
         }
 
         setContent(pageContent);
 
-        // Find navigable items (child pages, databases, and database entries)
         const formatted = NotionFormatter.formatContent(pageContent);
         const navItems = formatted.blocks.filter(
           (block) =>
@@ -88,11 +108,6 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
             block.type === "database_entry"
         );
         setNavigableItems(navItems);
-
-        // If there are navigable items, show content selection
-        if (navItems.length > 0) {
-          setShowingContent(true);
-        }
 
         setError(null);
       } catch (err) {
@@ -132,31 +147,55 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
     fetchContent();
   }, [pageId, pageTitle, contentType]);
 
-  // Handle input for navigation
+  useEffect(() => {
+    setSelectedIndex(0);
+  }, [searchTerm]);
+
   useInput((input, key) => {
     if (isLoading || error) return;
 
-    // Handle back navigation first
     if (handleBackInput(input, key)) {
       return;
     }
 
-    // Handle 'g' key to start grading the entire database (when viewing a database)
+    // Handle 'i' key to toggle properties view
+    if (input === "i") {
+      setShowProperties(!showProperties);
+      return;
+    }
+
+    // When showing properties, only handle 'i' to close and 'b' to go back
+    if (showProperties) {
+      if (input === "b" || key.escape) {
+        onComplete(content);
+      }
+      return;
+    }
+
+    // Handle 's' key to focus search
+    if (input === "s" && !isSearchFocused) {
+      setIsViewAllMode(false);
+      setIsSearchFocused(true);
+      setSelectedIndex(0);
+      return;
+    }
+
+    // Handle 'g' key to start grading the entire database
     if (input === "g" && onStartGrading && contentType === "database") {
-      // Grade the entire database, not individual entries
       onStartGrading(pageId, pageTitle);
       return;
     }
 
-    // Handle 'g' key to start grading individual database entries/child databases (legacy behavior)
+    // Handle 'g' key for individual items
     if (
       input === "g" &&
       onStartGrading &&
-      showingContent &&
       navigableItems.length > 0 &&
-      contentType !== "database" // Only for non-database content to avoid double handling
+      !isSearchFocused &&
+      contentType !== "database"
     ) {
-      const selectedItem = navigableItems[selectedIndex];
+      const items = isViewAllMode ? displayItems : searchResultsItems;
+      const selectedItem = items[selectedIndex];
       if (
         selectedItem &&
         (selectedItem.type === "child_database" ||
@@ -165,11 +204,9 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
         let childId, childTitle;
 
         if (selectedItem.type === "database_entry") {
-          // For database entries, use the entry ID directly
           childId = selectedItem.id;
           childTitle = selectedItem.title || selectedItem.content;
         } else {
-          // For child databases, find the matching block
           const originalBlocks = content.blocks || [];
           const matchingBlock = originalBlocks.find((block: any) => {
             const blockTitle =
@@ -192,19 +229,46 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
       }
     }
 
-    if (showingContent && navigableItems.length > 0) {
-      const totalPages = Math.ceil(navigableItems.length / itemsPerPage);
+    // Handle search input when search is focused
+    if (isSearchFocused && !isViewAllMode) {
+      if (key.return) {
+        if (searchResultsItems.length > 0) {
+          const item = searchResultsItems[0];
+          handleItemSelect(item);
+        }
+        return;
+      }
+
+      if (key.downArrow) {
+        if (searchResultsItems.length > 0) {
+          setIsSearchFocused(false);
+          setSelectedIndex(0);
+        }
+        return;
+      }
+
+      if (key.backspace || key.delete) {
+        setSearchTerm(searchTerm.slice(0, -1));
+        return;
+      }
+
+      if (input && input.length === 1 && !key.ctrl && !key.meta) {
+        setSearchTerm(searchTerm + input);
+        return;
+      }
+
+      return;
+    }
+
+    // Handle view all mode
+    if (isViewAllMode) {
+      const totalPages = Math.ceil(displayItems.length / itemsPerPage);
       const startIndex = currentPage * itemsPerPage;
-      const endIndex = Math.min(
-        startIndex + itemsPerPage,
-        navigableItems.length
-      );
-      const currentPageItems = navigableItems.slice(startIndex, endIndex);
+      const endIndex = Math.min(startIndex + itemsPerPage, displayItems.length);
 
       if (key.upArrow) {
         setSelectedIndex((prev) => {
           const newIndex = Math.max(0, prev - 1);
-          // If we go to the previous page
           if (newIndex < startIndex && currentPage > 0) {
             setCurrentPage(currentPage - 1);
             return newIndex;
@@ -213,8 +277,7 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
         });
       } else if (key.downArrow) {
         setSelectedIndex((prev) => {
-          const newIndex = Math.min(navigableItems.length - 1, prev + 1);
-          // If we go to the next page
+          const newIndex = Math.min(displayItems.length - 1, prev + 1);
           if (newIndex >= endIndex && currentPage < totalPages - 1) {
             setCurrentPage(currentPage + 1);
             return newIndex;
@@ -227,240 +290,323 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
       } else if (key.rightArrow && currentPage < totalPages - 1) {
         setCurrentPage(currentPage + 1);
         setSelectedIndex(
-          Math.min(navigableItems.length - 1, (currentPage + 1) * itemsPerPage)
+          Math.min(displayItems.length - 1, (currentPage + 1) * itemsPerPage)
         );
       } else if (key.return) {
-        const selectedItem = navigableItems[selectedIndex];
-        if (selectedItem && onNavigate) {
-          if (selectedItem.type === "database_entry") {
-            // For database entries, navigate directly using the entry ID (these are pages)
-            const childId = selectedItem.id;
-            const childTitle = selectedItem.title || selectedItem.content;
-            onNavigate(childId, childTitle, "page");
-          } else {
-            // For child pages and databases, find the matching block
-            const originalBlocks = content.blocks || [];
-            const matchingBlock = originalBlocks.find((block: any) => {
-              const blockTitle =
-                block.child_database?.title || block.child_page?.title;
-              const itemTitle = selectedItem.content.replace(/^(📊|📄) /, "");
-              return (
-                blockTitle === itemTitle &&
-                (block.type === "child_database" || block.type === "child_page")
-              );
-            });
-
-            if (matchingBlock) {
-              const childId = matchingBlock.id;
-              let childTitle = selectedItem.content.replace(/^(📊|📄) /, "");
-              let contentType = "page";
-
-              // Try to get the actual title from the block and determine type
-              if (matchingBlock.type === "child_database") {
-                childTitle = matchingBlock.child_database?.title || childTitle;
-                contentType = "database";
-              } else if (matchingBlock.type === "child_page") {
-                childTitle = matchingBlock.child_page?.title || childTitle;
-                contentType = "page";
-              }
-
-              onNavigate(childId, childTitle, contentType);
-            }
-          }
+        if (displayItems[selectedIndex]) {
+          handleItemSelect(displayItems[selectedIndex]);
         }
       } else if (input === "b" || key.escape) {
-        // Go back - complete the current view
         onComplete(content);
-      } else if (input === "p") {
-        // Toggle properties expansion
-        setPropertiesExpanded(!propertiesExpanded);
       }
-    } else {
-      // No navigable items, handle property expansion, grading, or complete
-      if (input === "p") {
-        setPropertiesExpanded(!propertiesExpanded);
-      } else if (input === "g" && onStartGrading && contentType === "database") {
-        // Grade the entire database when no navigable items are shown
-        onStartGrading(pageId, pageTitle);
-      } else {
+      return;
+    }
+
+    // Handle navigation in search results (not view all mode, not search focused)
+    if (!isViewAllMode && !isSearchFocused) {
+      const maxIndex = searchResultsItems.length;
+
+      if (key.upArrow) {
+        if (selectedIndex === 0) {
+          setIsSearchFocused(true);
+        } else {
+          setSelectedIndex(selectedIndex - 1);
+        }
+      } else if (key.downArrow) {
+        setSelectedIndex(Math.min(maxIndex, selectedIndex + 1));
+      } else if (key.return) {
+        if (selectedIndex < searchResultsItems.length) {
+          handleItemSelect(searchResultsItems[selectedIndex]);
+        } else if (selectedIndex === searchResultsItems.length) {
+          setIsViewAllMode(true);
+          setSelectedIndex(0);
+          setCurrentPage(0);
+        }
+      } else if (input === "b" || key.escape) {
         onComplete(content);
       }
     }
   });
 
+  const handleItemSelect = (item: FormattedBlock) => {
+    if (!onNavigate) return;
+
+    if (item.type === "database_entry") {
+      const childId = item.id;
+      const childTitle = item.title || item.content;
+      onNavigate(childId, childTitle, "page");
+    } else {
+      const originalBlocks = content.blocks || [];
+      const matchingBlock = originalBlocks.find((block: any) => {
+        const blockTitle =
+          block.child_database?.title || block.child_page?.title;
+        const itemTitle = item.content.replace(/^(📊|📄) /, "");
+        return (
+          blockTitle === itemTitle &&
+          (block.type === "child_database" || block.type === "child_page")
+        );
+      });
+
+      if (matchingBlock) {
+        const childId = matchingBlock.id;
+        let childTitle = item.content.replace(/^(📊|📄) /, "");
+        let itemContentType = "page";
+
+        if (matchingBlock.type === "child_database") {
+          childTitle = matchingBlock.child_database?.title || childTitle;
+          itemContentType = "database";
+        } else if (matchingBlock.type === "child_page") {
+          childTitle = matchingBlock.child_page?.title || childTitle;
+          itemContentType = "page";
+        }
+
+        onNavigate(childId, childTitle, itemContentType);
+      }
+    }
+  };
+
+  // Loading state - show inline loading with title
   if (isLoading) {
+    const displayType = contentType === "database" ? "Database" : "Page";
     return (
-      <NotionDataLoading
-        title="Fetching Content"
-        message={`Loading content for: ${pageTitle}`}
-      />
+      <Box flexDirection="column">
+        <Box>
+          <Text color="blue" bold>
+            {pageTitle}
+          </Text>
+          <Text color="yellow"> Loading{loadingDots}</Text>
+        </Box>
+        <Text dimColor>
+          {displayType}
+        </Text>
+        <Text></Text>
+
+        <BackButton onBack={() => onBack?.()} isVisible={!!onBack} />
+
+        <Text dimColor>Fetching content...</Text>
+        <Text></Text>
+        <Text dimColor>'b' back, Ctrl+C to exit</Text>
+      </Box>
     );
   }
 
   if (error) {
     return (
       <Box flexDirection="column">
-        <Text color="red" bold>
-          Error Fetching Content
+        <Text color="blue" bold>
+          {pageTitle}
         </Text>
+        <Text color="red">Error</Text>
         <Text></Text>
-        <Text>{error}</Text>
+
+        <BackButton onBack={() => onBack?.()} isVisible={!!onBack} />
+
+        <Text color="red">{error}</Text>
         <Text></Text>
-        <Text dimColor>Check the console for more details.</Text>
-        <Text></Text>
-        <Text dimColor>Press any key to continue...</Text>
+        <Text dimColor>'b' go back, Ctrl+C to exit</Text>
       </Box>
     );
   }
 
-  // Format the content for display
   const formatted = NotionFormatter.formatContent(content);
   const isDatabase = content.type === "database";
   const displayType = isDatabase ? "Database" : "Page";
 
+  // Properties View (replaces list when 'i' is pressed)
+  if (showProperties) {
+    return (
+      <Box flexDirection="column">
+        <Text color="blue" bold>
+          {formatted.icon} {formatted.title} - Properties
+        </Text>
+        <Text dimColor>Press 'i' to return to list</Text>
+        <Text></Text>
+
+        {formatted.properties.length > 0 ? (
+          <>
+            {formatted.properties.map((prop, index) => (
+              <Text key={index} dimColor>
+                • {prop.name}: {prop.value}{" "}
+                {prop.type !== "rich_text" && `(${prop.type})`}
+              </Text>
+            ))}
+          </>
+        ) : (
+          <Text dimColor>No properties found</Text>
+        )}
+
+        <Text></Text>
+        <Text dimColor>
+          'i' back to list, 'b' go back, Ctrl+C to exit
+        </Text>
+      </Box>
+    );
+  }
+
+  // No navigable items view
+  if (navigableItems.length === 0) {
+    return (
+      <Box flexDirection="column">
+        <Text color="blue" bold>
+          {formatted.icon} {formatted.title}
+        </Text>
+        <Text>
+          {displayType} • {formatted.properties.length} properties
+        </Text>
+        <Text></Text>
+
+        <BackButton onBack={() => onBack?.()} isVisible={!!onBack} />
+
+        <Text dimColor>No child pages or databases found.</Text>
+        <Text></Text>
+        <Text dimColor>
+          'i' view properties
+          {onStartGrading && contentType === "database" && ", 'g' grade database"}
+          , 'b' go back, Ctrl+C to exit
+        </Text>
+      </Box>
+    );
+  }
+
+  // View All Mode
+  if (isViewAllMode) {
+    const totalPages = Math.ceil(displayItems.length / itemsPerPage);
+    const startIndex = currentPage * itemsPerPage;
+    const endIndex = Math.min(startIndex + itemsPerPage, displayItems.length);
+    const currentPageItems = displayItems.slice(startIndex, endIndex);
+
+    return (
+      <Box flexDirection="column">
+        <Text color="blue" bold>
+          {formatted.icon} {formatted.title}
+        </Text>
+        <Text>
+          {displayType} • {navigableItems.length} items
+        </Text>
+        <Text></Text>
+
+        <BackButton onBack={() => onBack?.()} isVisible={!!onBack} />
+
+        {totalPages > 1 && (
+          <Text dimColor>
+            Page {currentPage + 1} of {totalPages} | Items {startIndex + 1}-
+            {endIndex} of {displayItems.length}
+          </Text>
+        )}
+        <Text></Text>
+
+        {currentPageItems.map((item, pageIndex) => {
+          const actualIndex = startIndex + pageIndex;
+          const isSelected = actualIndex === selectedIndex;
+          const canGrade =
+            onStartGrading &&
+            contentType !== "database" &&
+            (item.type === "child_database" || item.type === "database_entry");
+
+          return (
+            <Box key={item.id} marginBottom={1}>
+              <Text color={isSelected ? "blue" : "white"} bold={isSelected}>
+                {isSelected ? "→ " : "  "}
+                {item.content}
+                {isSelected && canGrade && (
+                  <Text color="green"> [Press 'g' to grade]</Text>
+                )}
+              </Text>
+            </Box>
+          );
+        })}
+
+        <Text></Text>
+        <SearchInput
+          value={searchTerm}
+          placeholder="Search items..."
+          isFocused={isSearchFocused}
+          onChange={setSearchTerm}
+        />
+        <Text dimColor>
+          ↑/↓ navigate, ←/→ pages, Enter select, 's' search, 'i' info
+          {onStartGrading && contentType === "database" && ", 'g' grade database"}
+          {onStartGrading && contentType !== "database" && ", 'g' grade item"}
+          , 'b' back
+        </Text>
+      </Box>
+    );
+  }
+
+  // Default Search Mode
   return (
     <Box flexDirection="column">
-      <Text color="green" bold>
-        ✓ Content Fetched Successfully
-      </Text>
-      <Text></Text>
-      <Text>
-        <Text bold>Title:</Text> {formatted.icon} {formatted.title}
+      <Text color="blue" bold>
+        {formatted.icon} {formatted.title}
       </Text>
       <Text>
-        <Text bold>Type:</Text> {displayType}
-      </Text>
-      <Text>
-        <Text bold>Summary:</Text> {formatted.summary}
-      </Text>
-      <Text>
-        <Text bold>Blocks:</Text> {formatted.blocks.length}
-      </Text>
-      <Text>
-        <Text bold>Properties:</Text> {formatted.properties.length}
-      </Text>
-      <Text>
-        <Text bold>Last edited:</Text> {formatted.lastEditedTime}
+        {displayType} • {navigableItems.length} items
       </Text>
       <Text></Text>
 
       <BackButton onBack={() => onBack?.()} isVisible={!!onBack} />
 
-      {formatted.properties.length > 0 && (
+      {searchTerm && filteredItems.length === 0 ? (
+        <Box marginBottom={1}>
+          <Text color="yellow">No results found for "{searchTerm}"</Text>
+        </Box>
+      ) : (
         <>
-          <Text color="cyan" bold>
-            Properties:
-          </Text>
-          {(() => {
-            const displayCount = propertiesExpanded
-              ? formatted.properties.length
-              : Math.min(10, formatted.properties.length);
-            const propertiesToShow = formatted.properties.slice(
-              0,
-              displayCount
-            );
+          {searchResultsItems.map((item, index) => {
+            const isSelected = !isSearchFocused && selectedIndex === index;
+            const canGrade =
+              onStartGrading &&
+              contentType !== "database" &&
+              (item.type === "child_database" || item.type === "database_entry");
 
             return (
-              <>
-                {propertiesToShow.map((prop, index) => (
-                  <Text key={index} dimColor>
-                    • {prop.name}: {prop.value}{" "}
-                    {prop.type !== "rich_text" && `(${prop.type})`}
-                  </Text>
-                ))}
-                {formatted.properties.length > 10 && (
-                  <Text dimColor>
-                    {propertiesExpanded
-                      ? `Press 'p' to collapse properties`
-                      : `... and ${
-                          formatted.properties.length - 10
-                        } more properties (press 'p' to expand)`}
-                  </Text>
-                )}
-              </>
+              <Box key={item.id} marginBottom={1}>
+                <Text color={isSelected ? "blue" : "white"} bold={isSelected}>
+                  {isSelected ? "→ " : "  "}
+                  {item.content}
+                  {isSelected && canGrade && (
+                    <Text color="green"> [Press 'g' to grade]</Text>
+                  )}
+                </Text>
+              </Box>
             );
-          })()}
-          <Text></Text>
+          })}
+
+          {filteredItems.length > maxSearchResults && (
+            <Box marginBottom={1}>
+              <Text
+                color={
+                  !isSearchFocused && selectedIndex === searchResultsItems.length
+                    ? "blue"
+                    : "gray"
+                }
+                bold={
+                  !isSearchFocused && selectedIndex === searchResultsItems.length
+                }
+              >
+                {!isSearchFocused && selectedIndex === searchResultsItems.length
+                  ? "→ "
+                  : "  "}
+                View All ({filteredItems.length} total results)
+              </Text>
+            </Box>
+          )}
         </>
       )}
-      <Text color="yellow">Content loaded successfully.</Text>
+
       <Text></Text>
-
-      {showingContent && navigableItems.length > 0 && (
-        <>
-          <Text color="cyan" bold>
-            Navigate to child pages/databases:
-          </Text>
-          <Text dimColor>
-            Use ↑/↓ arrows to navigate, ←/→ to change pages, Enter to select,
-            'p' to expand/collapse properties
-            {onStartGrading && contentType === "database" && ", 'g' to grade entire database"}
-            {onStartGrading && contentType !== "database" && ", 'g' to grade selected item"}, 'b' to go back
-          </Text>
-          <Text></Text>
-
-          {(() => {
-            const totalPages = Math.ceil(navigableItems.length / itemsPerPage);
-            const startIndex = currentPage * itemsPerPage;
-            const endIndex = Math.min(
-              startIndex + itemsPerPage,
-              navigableItems.length
-            );
-            const currentPageItems = navigableItems.slice(startIndex, endIndex);
-
-            return (
-              <>
-                {totalPages > 1 && (
-                  <Text dimColor>
-                    Page {currentPage + 1} of {totalPages} | Items{" "}
-                    {startIndex + 1}-{endIndex} of {navigableItems.length}
-                  </Text>
-                )}
-                <Text></Text>
-
-                {currentPageItems.map((item, pageIndex) => {
-                  const actualIndex = startIndex + pageIndex;
-                  const isSelected = actualIndex === selectedIndex;
-                  const canGrade =
-                    onStartGrading &&
-                    (item.type === "child_database" ||
-                      item.type === "database_entry");
-
-                  return (
-                    <Box key={item.id} marginBottom={1}>
-                      <Text
-                        color={isSelected ? "blue" : "white"}
-                        bold={isSelected}
-                      >
-                        {isSelected ? "→ " : "  "}
-                        {item.content}
-                        {isSelected && canGrade && (
-                          <Text color="green"> [Press 'g' to grade]</Text>
-                        )}
-                      </Text>
-                    </Box>
-                  );
-                })}
-              </>
-            );
-          })()}
-
-          <Text></Text>
-          <Text dimColor>
-            Press Enter to navigate, ←/→ for pages, 'p' for properties
-            {onStartGrading && contentType === "database" && ", 'g' to grade entire database"}
-            {onStartGrading && contentType !== "database" && ", 'g' to grade selected item"}, 'b' to go back,
-            Ctrl+C to exit
-          </Text>
-        </>
-      )}
-
-      {(!showingContent || navigableItems.length === 0) && (
-        <Text dimColor>
-          Press 'p' to expand/collapse properties
-          {onStartGrading && contentType === "database" && ", 'g' to grade entire database"}, any other key to continue...
-        </Text>
-      )}
+      <SearchInput
+        value={searchTerm}
+        placeholder="Search items..."
+        isFocused={isSearchFocused}
+        onChange={setSearchTerm}
+      />
+      <Text dimColor>
+        Type to search, ↑/↓ navigate, Enter select, 'i' info
+        {onStartGrading && contentType === "database" && ", 'g' grade database"}
+        {onStartGrading && contentType !== "database" && ", 'g' grade item"}
+        , 'b' back
+      </Text>
     </Box>
   );
 };

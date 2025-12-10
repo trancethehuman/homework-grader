@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Text, Box } from "ink";
 import Spinner from "ink-spinner";
 
-export type LoadingPhase = "warming-up" | "authenticating" | "fetching";
+export type LoadingPhase = "warming-up" | "authenticating" | "fetching" | "searching" | "loading-more";
 
 interface NotionDataLoadingProps {
   title?: string;
@@ -16,12 +16,16 @@ const PHASE_MESSAGES: Record<LoadingPhase, string> = {
     "Waking up the server (this may take up to 60 seconds on first use)...",
   authenticating: "Verifying your Notion access...",
   fetching: "Loading pages and databases from your workspace...",
+  searching: "Searching your Notion workspace...",
+  "loading-more": "Loading more items...",
 };
 
 const PHASE_TITLES: Record<LoadingPhase, string> = {
   "warming-up": "Connecting to Notion",
   authenticating: "Authenticating",
   fetching: "Loading Notion Data",
+  searching: "Searching",
+  "loading-more": "Loading More",
 };
 
 export const NotionDataLoading: React.FC<NotionDataLoadingProps> = ({

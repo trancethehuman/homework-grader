@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { Text, Box, useInput } from "ink";
 import {
   NotionService,
@@ -8,9 +8,11 @@ import {
 import { SearchInput } from "../ui/search-input.js";
 import { NotionOAuthClient } from "../../lib/notion/oauth-client.js";
 import { NotionTokenStorage } from "../../lib/notion/notion-token-storage.js";
-import { BackButton, useBackNavigation } from "../ui/back-button.js";
 import { ApiTimeoutHandler, TimeoutError, CircuitBreakerError } from "../../lib/notion/api-timeout-handler.js";
 import { NotionDataLoading, LoadingPhase } from "./notion-data-loading.js";
+import { useDebounce } from "../../hooks/index.js";
+
+type FocusArea = 'list' | 'search' | 'back';
 
 const DEFAULT_PROXY_URL =
   process.env.NOTION_PROXY_URL || "https://notion-proxy-8xr3.onrender.com";
@@ -21,10 +23,8 @@ interface NotionPageSelectorProps {
   onError: (error: string) => void;
   onAuthenticationRequired?: () => void;
   onBack?: () => void;
-  // Optional pre-loaded data to avoid refetching
   cachedPages?: NotionPage[];
   cachedDatabases?: NotionDatabase[];
-  // Callback to cache data when first loaded
   onDataLoaded?: (pages: NotionPage[], databases: NotionDatabase[]) => void;
 }
 
@@ -46,7 +46,7 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
   const [showingDatabases, setShowingDatabases] = useState(false);
   const [currentPage, setCurrentPage] = useState(0);
   const [searchTerm, setSearchTerm] = useState("");
-  const [isSearchFocused, setIsSearchFocused] = useState(true);
+  const [focusArea, setFocusArea] = useState<FocusArea>('search');
   const [isViewAllMode, setIsViewAllMode] = useState(false);
   const [isStartingGrading, setIsStartingGrading] = useState(false);
   const [selectedDatabaseName, setSelectedDatabaseName] = useState("");
@@ -54,6 +54,16 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
   const [loadingStartTime] = useState(Date.now());
   const itemsPerPage = 10;
   const maxSearchResults = 3;
+
+  const [nextCursor, setNextCursor] = useState<string | undefined>();
+  const [hasMoreItems, setHasMoreItems] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
+  const notionServiceRef = useRef<NotionService | null>(null);
+  const debouncedSearchTerm = useDebounce(searchTerm, 300);
+
+  const isSearchFocused = focusArea === 'search';
+  const isBackFocused = focusArea === 'back';
 
   const baseItems = showingDatabases ? databases : [...pages, ...databases];
 
@@ -69,19 +79,12 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
   const displayItems = isViewAllMode ? baseItems : filteredItems;
   const searchResultsItems = filteredItems.slice(0, maxSearchResults);
 
-  const { handleBackInput } = useBackNavigation(
-    () => onBack?.(),
-    !!onBack,
-    () => isSearchFocused && !isViewAllMode // Disable back navigation when search input is focused
-  );
-
   useEffect(() => {
     const loadNotionData = async () => {
       try {
         setIsLoading(true);
         setLoadingPhase("warming-up");
 
-        // Use cached data if available (and not empty)
         if (
           (cachedPages && cachedPages.length > 0) ||
           (cachedDatabases && cachedDatabases.length > 0)
@@ -93,37 +96,32 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
           return;
         }
 
-        // Phase 1: Warm up the proxy server with a lightweight request
-        // This helps detect cold start early and gives user feedback
         try {
           await fetch(`${DEFAULT_PROXY_URL}/health`, {
             method: "GET",
-            signal: AbortSignal.timeout(5000), // Quick check - if it fails, we'll retry during OAuth
+            signal: AbortSignal.timeout(5000),
           });
         } catch {
-          // Ignore warmup errors - the main OAuth flow will handle cold starts
+          // Ignore warmup errors
         }
 
         setLoadingPhase("authenticating");
 
-        // Otherwise fetch fresh data with enhanced timeout and error handling
         const oauth = new NotionOAuthClient();
 
-        // Refresh token if possible with timeout
         await ApiTimeoutHandler.withTimeout(async () => {
           await oauth.refreshIfPossible();
           return Promise.resolve();
         }, {
-          timeoutMs: 30000, // 30 seconds for token refresh
+          timeoutMs: 30000,
           retries: 1,
           operation: 'Token Refresh'
         });
 
-        // Ensure authentication with extended timeout for cold proxy
         const token = await ApiTimeoutHandler.withTimeout(async () => {
           return await oauth.ensureAuthenticated();
         }, {
-          timeoutMs: 120000, // 2 minutes for full OAuth flow (includes cold proxy startup)
+          timeoutMs: 120000,
           retries: 1,
           operation: 'OAuth Authentication'
         });
@@ -131,37 +129,32 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
         setLoadingPhase("fetching");
 
         const notionService = new NotionService(token.access_token);
+        notionServiceRef.current = notionService;
 
-        // Fetch data with concurrent timeout handling
-        const [pagesData, databasesData] = await ApiTimeoutHandler.withConcurrentTimeout([
-          () => notionService.getAllPages(),
-          () => notionService.getAllDatabases()
-        ], {
-          timeoutMs: 45000, // 45 seconds total for data fetching
-          retries: 1,
-          operation: 'Notion Data Loading'
-        });
+        const initialResult = await ApiTimeoutHandler.withTimeout(
+          () => notionService.getInitialItems(10),
+          { timeoutMs: 15000, retries: 1, operation: 'Initial Notion Data' }
+        );
 
-        setPages(pagesData as NotionPage[]);
-        setDatabases(databasesData as NotionDatabase[]);
+        setPages(initialResult.pages);
+        setDatabases(initialResult.databases);
+        setNextCursor(initialResult.nextCursor);
+        setHasMoreItems(initialResult.hasMore);
         setError(null);
 
-        // Cache the data for future use
-        onDataLoaded?.(pagesData as NotionPage[], databasesData as NotionDatabase[]);
+        onDataLoaded?.(initialResult.pages, initialResult.databases);
       } catch (err) {
         let errorMessage = "Failed to load Notion data";
         let shouldRetriggerAuth = false;
 
         if (err instanceof TimeoutError) {
           errorMessage = `Connection timed out. This often happens when the server is starting up after being idle.\n\nPlease try again - the second attempt usually works much faster!`;
-          // Don't trigger re-auth for timeouts - just let user retry
           shouldRetriggerAuth = false;
         } else if (err instanceof CircuitBreakerError) {
           errorMessage = `Service temporarily unavailable: ${err.message}\n\nThe Notion API is experiencing issues. Please try again in a few minutes.`;
         } else if (err instanceof Error) {
           errorMessage = err.message;
 
-          // Check if this is an authentication error
           if (err.message.includes("Token validation failed") ||
               err.message.includes("API token is invalid") ||
               err.message.includes("Unauthorized") ||
@@ -184,12 +177,11 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
         setError(errorMessage);
 
         if (shouldRetriggerAuth && onAuthenticationRequired) {
-          // Clear the invalid token and trigger re-authentication
           const tokenStorage = new NotionTokenStorage();
           tokenStorage.clearToken();
           setTimeout(() => {
             onAuthenticationRequired();
-          }, 1500); // Small delay to let user read the error message
+          }, 1500);
           return;
         }
 
@@ -202,34 +194,81 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
     loadNotionData();
   }, [onError, cachedPages, cachedDatabases, onDataLoaded]);
 
-
-  // Reset selection when search term changes
   useEffect(() => {
     setSelectedIndex(0);
   }, [searchTerm]);
 
+  useEffect(() => {
+    const performSearch = async () => {
+      if (!debouncedSearchTerm.trim() || !notionServiceRef.current) {
+        return;
+      }
+
+      setIsSearching(true);
+      setLoadingPhase("searching");
+
+      try {
+        const results = await notionServiceRef.current.searchWithQuery(debouncedSearchTerm, {
+          pageSize: 20,
+          filter: 'both'
+        });
+
+        setPages(results.pages);
+        setDatabases(results.databases);
+        setNextCursor(results.nextCursor);
+        setHasMoreItems(results.hasMore);
+      } catch (err) {
+        console.error('Search failed:', err);
+      } finally {
+        setIsSearching(false);
+      }
+    };
+
+    performSearch();
+  }, [debouncedSearchTerm]);
+
+  const loadMore = async () => {
+    if (!hasMoreItems || isLoadingMore || !nextCursor || !notionServiceRef.current) return;
+
+    setIsLoadingMore(true);
+    setLoadingPhase("loading-more");
+
+    try {
+      const moreResults = await notionServiceRef.current.loadMoreItems(nextCursor, 10);
+
+      setPages(prev => [...prev, ...moreResults.pages]);
+      setDatabases(prev => [...prev, ...moreResults.databases]);
+      setNextCursor(moreResults.nextCursor);
+      setHasMoreItems(moreResults.hasMore);
+    } catch (err) {
+      console.error('Load more failed:', err);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
+
   useInput((input, key) => {
     if (isLoading || error || isStartingGrading) return;
 
-    // Handle back navigation first
-    if (handleBackInput(input, key)) {
+    // Handle 'b' key to go back from anywhere
+    if (input === "b" && onBack && focusArea !== 'search') {
+      onBack();
       return;
     }
 
-    // Handle 's' key to switch to search mode from anywhere
-    if (input === "s" && !isSearchFocused) {
+    // Handle 's' key to focus search
+    if (input === "s" && focusArea !== 'search') {
       setIsViewAllMode(false);
-      setIsSearchFocused(true);
+      setFocusArea('search');
       setSelectedIndex(0);
       return;
     }
 
-    // Handle 'g' key to start grading directly (only for databases and only if onStartGrading is provided)
-    if (input === "g" && onStartGrading && !isSearchFocused) {
+    // Handle 'g' key to start grading (only for databases)
+    if (input === "g" && onStartGrading && focusArea === 'list') {
       const items = isViewAllMode ? displayItems : searchResultsItems;
       const currentItem = items[selectedIndex];
       if (currentItem && "properties" in currentItem) {
-        // It's a database - immediately set loading state before async operations
         setIsStartingGrading(true);
         setSelectedDatabaseName(currentItem.title);
         onStartGrading(currentItem.id, currentItem.title);
@@ -237,10 +276,30 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
       }
     }
 
-    // Handle search input when search is focused
-    if (isSearchFocused && !isViewAllMode) {
+    // Handle 'd' key to toggle databases only (in view all mode)
+    if (input === "d" && isViewAllMode) {
+      setShowingDatabases(!showingDatabases);
+      setSelectedIndex(0);
+      setCurrentPage(0);
+      return;
+    }
+
+    // Handle back button focus
+    if (focusArea === 'back') {
+      if (key.upArrow) {
+        setFocusArea('search');
+        return;
+      }
       if (key.return) {
-        // If there are search results, select the first one
+        onBack?.();
+        return;
+      }
+      return;
+    }
+
+    // Handle search input when search is focused
+    if (focusArea === 'search' && !isViewAllMode) {
+      if (key.return) {
         if (searchResultsItems.length > 0) {
           const item = searchResultsItems[0];
           const type = "properties" in item ? "database" : "page";
@@ -249,12 +308,21 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
         return;
       }
 
-      if (key.downArrow) {
-        // Move to search results list if there are results
+      // Up arrow from search bar goes to the list above
+      if (key.upArrow) {
         if (searchResultsItems.length > 0) {
-          setIsSearchFocused(false);
-          setSelectedIndex(0);
+          setFocusArea('list');
+          const hasViewAll = filteredItems.length > maxSearchResults;
+          const hasLoadMore = hasMoreItems && !searchTerm;
+          const lastIndex = searchResultsItems.length - 1 + (hasViewAll ? 1 : 0) + (hasLoadMore ? 1 : 0);
+          setSelectedIndex(lastIndex);
         }
+        return;
+      }
+
+      // Down arrow from search bar goes to back button
+      if (key.downArrow && onBack) {
+        setFocusArea('back');
         return;
       }
 
@@ -263,7 +331,6 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
         return;
       }
 
-      // Handle regular character input
       if (input && input.length === 1 && !key.ctrl && !key.meta) {
         setSearchTerm(searchTerm + input);
         return;
@@ -272,7 +339,7 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
       return;
     }
 
-    // Handle view all mode (existing functionality)
+    // Handle view all mode
     if (isViewAllMode) {
       const totalPages = Math.ceil(displayItems.length / itemsPerPage);
       const startIndex = currentPage * itemsPerPage;
@@ -310,37 +377,40 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
           const type = "properties" in item ? "database" : "page";
           onSelect(item.id, item.title, type);
         }
-      } else if (input === "d") {
-        setShowingDatabases(!showingDatabases);
-        setSelectedIndex(0);
-        setCurrentPage(0);
       }
       return;
     }
 
-    // Handle navigation in search results (not view all mode, not search focused)
-    if (!isViewAllMode && !isSearchFocused) {
-      const maxIndex = searchResultsItems.length; // +1 for "View All" button
+    // Handle navigation in list (search bar is at the bottom)
+    if (!isViewAllMode && focusArea === 'list') {
+      const hasViewAll = filteredItems.length > maxSearchResults;
+      const hasLoadMore = hasMoreItems && !searchTerm;
+      const viewAllIndex = searchResultsItems.length;
+      const loadMoreIndex = hasViewAll ? viewAllIndex + 1 : viewAllIndex;
+      const maxIndex = loadMoreIndex + (hasLoadMore ? 1 : 0);
 
       if (key.upArrow) {
-        if (selectedIndex === 0) {
-          setIsSearchFocused(true);
-        } else {
+        if (selectedIndex > 0) {
           setSelectedIndex(selectedIndex - 1);
         }
       } else if (key.downArrow) {
-        setSelectedIndex(Math.min(maxIndex, selectedIndex + 1));
+        // Down arrow at the last item goes to search bar
+        if (selectedIndex >= maxIndex - 1) {
+          setFocusArea('search');
+        } else {
+          setSelectedIndex(selectedIndex + 1);
+        }
       } else if (key.return) {
         if (selectedIndex < searchResultsItems.length) {
-          // Select a search result
           const item = searchResultsItems[selectedIndex];
           const type = "properties" in item ? "database" : "page";
           onSelect(item.id, item.title, type);
-        } else if (selectedIndex === searchResultsItems.length) {
-          // "View All" button selected
+        } else if (hasViewAll && selectedIndex === viewAllIndex) {
           setIsViewAllMode(true);
           setSelectedIndex(0);
           setCurrentPage(0);
+        } else if (hasLoadMore && selectedIndex === loadMoreIndex) {
+          loadMore();
         }
       }
     }
@@ -411,7 +481,7 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
     );
   }
 
-  // Render View All Mode
+  // View All Mode
   if (isViewAllMode) {
     const totalPages = Math.ceil(displayItems.length / itemsPerPage);
     const startIndex = currentPage * itemsPerPage;
@@ -421,28 +491,16 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
     return (
       <Box flexDirection="column">
         <Text color="blue" bold>
-          Select Notion {showingDatabases ? "Database" : "Page/Database"} - View
-          All Mode
+          Notion Workspace
         </Text>
-        <Text></Text>
         <Text>
-          Found {pages.length} pages and {databases.length} databases accessible
-          to your integration.
-        </Text>
-        <Text dimColor>
-          Use ↑/↓ arrows to navigate, ←/→ to change pages, Enter to select, 'd'
-          to toggle databases only, 's' to search
-          {onStartGrading && ", 'g' to start grading database"}
+          {showingDatabases ? "Databases" : "Pages & Databases"} • {displayItems.length} items
         </Text>
         <Text></Text>
-
-        <BackButton onBack={() => onBack?.()} isVisible={!!onBack} />
 
         {showingDatabases && (
           <Box marginBottom={1}>
-            <Text color="yellow" bold>
-              Showing databases only (press 'd' to show all)
-            </Text>
+            <Text color="yellow">Showing databases only (press 'd' to show all)</Text>
           </Box>
         )}
 
@@ -462,8 +520,73 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
           const canGrade = isDatabase && onStartGrading;
 
           return (
-            <Box key={item.id} flexDirection="column" marginBottom={1}>
-              <Box>
+            <Box key={item.id} marginBottom={1}>
+              <Text color={isSelected ? "blue" : "white"} bold={isSelected}>
+                {isSelected ? "→ " : "  "}
+                {item.title}
+              </Text>
+              <Text dimColor> ({itemType})</Text>
+              {isSelected && canGrade && (
+                <Text color="green"> [Press 'g' to grade]</Text>
+              )}
+            </Box>
+          );
+        })}
+
+        <Text></Text>
+        <Box>
+          <Text color={isSearchFocused ? "blue" : "white"} bold={isSearchFocused}>
+            {isSearchFocused ? "→ " : "  "}
+          </Text>
+          <SearchInput
+            value={searchTerm}
+            placeholder="Search pages and databases..."
+            isFocused={isSearchFocused}
+            onChange={setSearchTerm}
+          />
+        </Box>
+        {onBack && (
+          <Box>
+            <Text color={isBackFocused ? "blue" : "gray"} bold={isBackFocused}>
+              {isBackFocused ? "→ " : "  "}
+              ← back
+            </Text>
+          </Box>
+        )}
+        <Text></Text>
+        <Text dimColor>
+          ↑/↓ navigate, ←/→ pages, Enter select, 's' search, 'd' toggle databases
+          {onStartGrading && ", 'g' grade"}, 'b' back
+        </Text>
+      </Box>
+    );
+  }
+
+  // Default Search Mode
+  return (
+    <Box flexDirection="column">
+      <Text color="blue" bold>
+        Notion Workspace
+      </Text>
+      <Text>
+        {pages.length} pages, {databases.length} databases
+      </Text>
+      <Text></Text>
+
+      {searchTerm && filteredItems.length === 0 ? (
+        <Box marginBottom={1}>
+          <Text color="yellow">No results found for "{searchTerm}"</Text>
+        </Box>
+      ) : (
+        <>
+          {searchResultsItems.map((item, index) => {
+            const isSelected = focusArea === 'list' && selectedIndex === index;
+            const isDatabase = "properties" in item;
+            const itemType = isDatabase ? "Database" : "Page";
+            const canGrade = isDatabase && onStartGrading;
+
+            return (
+              <Box key={item.id} marginBottom={1}>
                 <Text color={isSelected ? "blue" : "white"} bold={isSelected}>
                   {isSelected ? "→ " : "  "}
                   {item.title}
@@ -473,91 +596,6 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
                   <Text color="green"> [Press 'g' to grade]</Text>
                 )}
               </Box>
-              <Box marginLeft={4}>
-                <Text dimColor>
-                  Last edited:{" "}
-                  {new Date(item.lastEditedTime).toLocaleDateString()}
-                </Text>
-              </Box>
-            </Box>
-          );
-        })}
-
-        <Text></Text>
-        <Text dimColor>
-          Press Enter to select, ←/→ for pages, 'd' to toggle databases only,
-          's' to search{onStartGrading && ", 'g' to grade database"}, Ctrl+C to
-          exit
-        </Text>
-      </Box>
-    );
-  }
-
-  // Render Search Mode (default)
-  return (
-    <Box flexDirection="column">
-      <Text color="blue" bold>
-        Select Notion {showingDatabases ? "Database" : "Page/Database"}
-      </Text>
-      <Text></Text>
-      <Text>
-        Found {pages.length} pages and {databases.length} databases accessible
-        to your integration.
-      </Text>
-      <Text dimColor>
-        Type to search, ↑/↓ arrows to navigate, Enter to select
-        {onStartGrading && ", 'g' to grade database"}
-      </Text>
-      <Text></Text>
-
-      <BackButton onBack={() => onBack?.()} isVisible={!!onBack} />
-
-      <SearchInput
-        value={searchTerm}
-        placeholder="Search pages and databases..."
-        isFocused={isSearchFocused}
-        onChange={setSearchTerm}
-      />
-
-      {showingDatabases && (
-        <Box marginBottom={1}>
-          <Text color="yellow" bold>
-            Showing databases only (press 'd' to show all in View All mode)
-          </Text>
-        </Box>
-      )}
-
-      {searchTerm && filteredItems.length === 0 ? (
-        <Box marginBottom={1}>
-          <Text color="yellow">No results found for "{searchTerm}"</Text>
-        </Box>
-      ) : (
-        <>
-          {searchResultsItems.map((item, index) => {
-            const isSelected = !isSearchFocused && selectedIndex === index;
-            const isDatabase = "properties" in item;
-            const itemType = isDatabase ? "Database" : "Page";
-            const canGrade = isDatabase && onStartGrading;
-
-            return (
-              <Box key={item.id} flexDirection="column" marginBottom={1}>
-                <Box>
-                  <Text color={isSelected ? "blue" : "white"} bold={isSelected}>
-                    {isSelected ? "→ " : "  "}
-                    {item.title}
-                  </Text>
-                  <Text dimColor> ({itemType})</Text>
-                  {isSelected && canGrade && (
-                    <Text color="green"> [Press 'g' to grade]</Text>
-                  )}
-                </Box>
-                <Box marginLeft={4}>
-                  <Text dimColor>
-                    Last edited:{" "}
-                    {new Date(item.lastEditedTime).toLocaleDateString()}
-                  </Text>
-                </Box>
-              </Box>
             );
           })}
 
@@ -565,30 +603,72 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
             <Box marginBottom={1}>
               <Text
                 color={
-                  !isSearchFocused &&
-                  selectedIndex === searchResultsItems.length
+                  focusArea === 'list' && selectedIndex === searchResultsItems.length
                     ? "blue"
                     : "gray"
                 }
                 bold={
-                  !isSearchFocused &&
-                  selectedIndex === searchResultsItems.length
+                  focusArea === 'list' && selectedIndex === searchResultsItems.length
                 }
               >
-                {!isSearchFocused && selectedIndex === searchResultsItems.length
+                {focusArea === 'list' && selectedIndex === searchResultsItems.length
                   ? "→ "
                   : "  "}
                 View All ({filteredItems.length} total results)
               </Text>
             </Box>
           )}
+
+          {hasMoreItems && !searchTerm && (() => {
+            const loadMoreIdx = filteredItems.length > maxSearchResults
+              ? searchResultsItems.length + 1
+              : searchResultsItems.length;
+            const isLoadMoreSelected = focusArea === 'list' && selectedIndex === loadMoreIdx;
+            return (
+              <Box marginBottom={1}>
+                <Text
+                  color={isLoadMoreSelected ? "blue" : "gray"}
+                  bold={isLoadMoreSelected}
+                >
+                  {isLoadMoreSelected ? "→ " : "  "}
+                  {isLoadingMore ? "Loading..." : "Load more items..."}
+                </Text>
+              </Box>
+            );
+          })()}
         </>
       )}
 
+      {isSearching && (
+        <Box marginBottom={1}>
+          <Text color="cyan">Searching...</Text>
+        </Box>
+      )}
+
+      <Text></Text>
+      <Box>
+        <Text color={isSearchFocused ? "blue" : "white"} bold={isSearchFocused}>
+          {isSearchFocused ? "→ " : "  "}
+        </Text>
+        <SearchInput
+          value={searchTerm}
+          placeholder="Search pages and databases..."
+          isFocused={isSearchFocused}
+          onChange={setSearchTerm}
+        />
+      </Box>
+      {onBack && (
+        <Box>
+          <Text color={isBackFocused ? "blue" : "gray"} bold={isBackFocused}>
+            {isBackFocused ? "→ " : "  "}
+            ← back
+          </Text>
+        </Box>
+      )}
       <Text></Text>
       <Text dimColor>
-        Press Enter to select, 's' to focus search
-        {onStartGrading && ", 'g' to grade database"}, Ctrl+C to exit
+        ↑/↓ navigate, Enter select
+        {onStartGrading && ", 'g' grade"}, 'b' back
       </Text>
     </Box>
   );

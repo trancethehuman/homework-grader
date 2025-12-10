@@ -9,3 +9,5 @@ export type { UseSpinnerOptions } from "./useSpinner.js";
 
 export { useScrollableList } from "./useScrollableList.js";
 export type { UseScrollableListOptions, UseScrollableListResult } from "./useScrollableList.js";
+
+export { useDebounce } from "./useDebounce.js";
