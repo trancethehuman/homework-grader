@@ -1,6 +1,6 @@
 {
   "name": "homework-grader",
-  "version": "1.0.19",
+  "version": "1.0.20",
   "description": "A high-performance CLI for grading homework submissions from CSV files and Notion databases with ultra-fast GitHub repository analysis",
   "main": "dist/cli.js",
   "bin": {
