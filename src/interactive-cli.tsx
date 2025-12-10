@@ -175,6 +175,7 @@ type Step =
   | "collaborator-csv-column-select"
   | "collaborator-notion-loading"
   | "collaborator-notion-page-select"
+  | "collaborator-notion-content-view"
   | "collaborator-notion-column"
   | "collaborator-adding"
   | "collaborator-summary";
@@ -311,6 +312,9 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
   const [collaboratorNotionContent, setCollaboratorNotionContent] = useState<any>(null);
   const [collaboratorNotionDatabaseId, setCollaboratorNotionDatabaseId] = useState<string>("");
   const [collaboratorNotionDatabaseTitle, setCollaboratorNotionDatabaseTitle] = useState<string>("");
+  const [collaboratorNotionNavigationStack, setCollaboratorNotionNavigationStack] = useState<
+    Array<{ pageId: string; pageTitle: string; contentType: string }>
+  >([]);
 
   const { exit } = useApp();
 
@@ -3308,10 +3312,14 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
             if (type === "database") {
               setCollaboratorNotionDatabaseId(pageId);
               setCollaboratorNotionDatabaseTitle(pageTitle);
-              setCollaboratorNotionContent(null); // Clear any previous content
+              setCollaboratorNotionContent(null);
               navigateToStep("collaborator-notion-column");
             } else {
-              setError("Please select a database, not a page.");
+              setCollaboratorNotionNavigationStack([]);
+              setNotionApiSelectedPageId(pageId);
+              setNotionApiSelectedPageTitle(pageTitle);
+              setNotionApiContentType("page");
+              navigateToStep("collaborator-notion-content-view");
             }
           }}
           onError={(err) => {
@@ -3325,6 +3333,50 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           onDataLoaded={(pages, databases) => {
             setCachedNotionPages(pages);
             setCachedNotionDatabases(databases);
+          }}
+        />
+      </Box>
+    );
+  }
+
+  if (step === "collaborator-notion-content-view") {
+    return (
+      <Box flexDirection="column">
+        <NotionContentViewer
+          pageId={notionApiSelectedPageId}
+          pageTitle={notionApiSelectedPageTitle}
+          contentType={notionApiContentType}
+          onComplete={() => {}}
+          onNavigate={(pageId, pageTitle, contentType) => {
+            if (contentType === "database") {
+              setCollaboratorNotionDatabaseId(pageId);
+              setCollaboratorNotionDatabaseTitle(pageTitle);
+              setCollaboratorNotionContent(null);
+              navigateToStep("collaborator-notion-column");
+            } else {
+              setCollaboratorNotionNavigationStack([
+                ...collaboratorNotionNavigationStack,
+                {
+                  pageId: notionApiSelectedPageId,
+                  pageTitle: notionApiSelectedPageTitle,
+                  contentType: notionApiContentType,
+                },
+              ]);
+              setNotionApiSelectedPageId(pageId);
+              setNotionApiSelectedPageTitle(pageTitle);
+              setNotionApiContentType(contentType || "page");
+            }
+          }}
+          onBack={() => {
+            if (collaboratorNotionNavigationStack.length > 0) {
+              const prev = collaboratorNotionNavigationStack[collaboratorNotionNavigationStack.length - 1];
+              setCollaboratorNotionNavigationStack(collaboratorNotionNavigationStack.slice(0, -1));
+              setNotionApiSelectedPageId(prev.pageId);
+              setNotionApiSelectedPageTitle(prev.pageTitle);
+              setNotionApiContentType(prev.contentType);
+            } else {
+              navigateToStep("collaborator-notion-page-select");
+            }
           }}
         />
       </Box>
