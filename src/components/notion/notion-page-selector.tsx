@@ -196,7 +196,18 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
 
   useEffect(() => {
     setSelectedIndex(0);
+    // When search term changes, keep focus on search bar
+    if (searchTerm) {
+      setFocusArea('search');
+    }
   }, [searchTerm]);
+
+  // When filtered items become empty, ensure focus stays on search/back
+  useEffect(() => {
+    if (filteredItems.length === 0 && focusArea === 'list') {
+      setFocusArea('search');
+    }
+  }, [filteredItems.length, focusArea]);
 
   useEffect(() => {
     const performSearch = async () => {
@@ -308,9 +319,9 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
         return;
       }
 
-      // Up arrow from search bar goes to the list above
+      // Up arrow from search bar goes to the list above (only if there are items)
       if (key.upArrow) {
-        if (searchResultsItems.length > 0) {
+        if (filteredItems.length > 0) {
           setFocusArea('list');
           const hasViewAll = filteredItems.length > maxSearchResults;
           const hasLoadMore = hasMoreItems && !searchTerm;
@@ -573,11 +584,12 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
       </Text>
       <Text></Text>
 
-      {searchTerm && filteredItems.length === 0 ? (
+      {searchTerm && filteredItems.length === 0 && (
         <Box marginBottom={1}>
           <Text color="yellow">No results found for "{searchTerm}"</Text>
         </Box>
-      ) : (
+      )}
+      {filteredItems.length > 0 && (
         <>
           {searchResultsItems.map((item, index) => {
             const isSelected = focusArea === 'list' && selectedIndex === index;
