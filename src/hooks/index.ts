@@ -11,3 +11,18 @@ export { useScrollableList } from "./useScrollableList.js";
 export type { UseScrollableListOptions, UseScrollableListResult } from "./useScrollableList.js";
 
 export { useDebounce } from "./useDebounce.js";
+
+export { useFocusNavigation } from "./useFocusNavigation.js";
+export type {
+  RegionType,
+  ListRegionConfig,
+  InputRegionConfig,
+  ButtonRegionConfig,
+  RegionConfig,
+  UseFocusNavigationOptions,
+  ListRegionState,
+  InputRegionState,
+  ButtonRegionState,
+  RegionState,
+  UseFocusNavigationResult,
+} from "./useFocusNavigation.js";

@@ -10,9 +10,12 @@ import { NotionOAuthClient } from "../../lib/notion/oauth-client.js";
 import { NotionTokenStorage } from "../../lib/notion/notion-token-storage.js";
 import { ApiTimeoutHandler, TimeoutError, CircuitBreakerError } from "../../lib/notion/api-timeout-handler.js";
 import { NotionDataLoading, LoadingPhase } from "./notion-data-loading.js";
-import { useDebounce } from "../../hooks/index.js";
-
-type FocusArea = 'list' | 'search' | 'back';
+import {
+  useDebounce,
+  useFocusNavigation,
+  ListRegionState,
+  InputRegionState,
+} from "../../hooks/index.js";
 
 const DEFAULT_PROXY_URL =
   process.env.NOTION_PROXY_URL || "https://notion-proxy-8xr3.onrender.com";
@@ -40,30 +43,74 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
 }) => {
   const [pages, setPages] = useState<NotionPage[]>([]);
   const [databases, setDatabases] = useState<NotionDatabase[]>([]);
-  const [selectedIndex, setSelectedIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showingDatabases, setShowingDatabases] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [focusArea, setFocusArea] = useState<FocusArea>('search');
   const [isStartingGrading, setIsStartingGrading] = useState(false);
   const [selectedDatabaseName, setSelectedDatabaseName] = useState("");
   const [loadingPhase, setLoadingPhase] = useState<LoadingPhase>("warming-up");
   const [loadingStartTime] = useState(Date.now());
-  const [scrollOffset, setScrollOffset] = useState(0);
-  const viewportSize = 8;
 
   const [nextCursor, setNextCursor] = useState<string | undefined>();
   const [hasMoreItems, setHasMoreItems] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const notionServiceRef = useRef<NotionService | null>(null);
-  const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
-  const isSearchFocused = focusArea === 'search';
-  const isBackFocused = focusArea === 'back';
+  const viewportSize = 8;
 
   const baseItems = showingDatabases ? databases : [...pages, ...databases];
+
+  // Use a ref to store the current loadMore function for the callback
+  const loadMoreRef = useRef<(() => Promise<void>) | undefined>(undefined);
+
+  const {
+    focusedRegion,
+    regionStates,
+    focusRegion,
+    inputSetValue,
+    listSelectIndex,
+  } = useFocusNavigation({
+    regions: [
+      {
+        id: "list",
+        type: "list",
+        itemCount: baseItems.length + (hasMoreItems ? 1 : 0),
+        viewportSize,
+        enabled: baseItems.length > 0 || hasMoreItems,
+        onSelect: (index: number) => {
+          // Use baseItems directly since filteredItems depends on searchTerm from regionStates
+          const items = baseItems;
+          if (index < items.length) {
+            const item = items[index];
+            const type = "properties" in item ? "database" : "page";
+            onSelect(item.id, item.title, type);
+          } else if (hasMoreItems && index === items.length) {
+            loadMoreRef.current?.();
+          }
+        },
+      },
+      {
+        id: "search",
+        type: "input",
+        reservedKeys: ["b", "s", "g", "d"],
+      },
+      {
+        id: "back",
+        type: "button",
+        enabled: !!onBack,
+        onActivate: onBack,
+      },
+    ],
+    initialFocus: "search",
+    disabled: isLoading || !!error || isStartingGrading,
+  });
+
+  const listState = regionStates.list as ListRegionState | undefined;
+  const searchState = regionStates.search as InputRegionState;
+
+  const searchTerm = searchState?.value ?? "";
+  const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
   const filteredItems = useMemo(() => {
     if (!searchTerm.trim()) {
@@ -78,9 +125,14 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
   const hasLoadMoreOption = hasMoreItems && !searchTerm;
   const totalItemsWithLoadMore = allItems.length + (hasLoadMoreOption ? 1 : 0);
 
+  const selectedIndex = listState?.selectedIndex ?? 0;
+  const scrollOffset = listState?.scrollOffset ?? 0;
   const visibleStartIndex = scrollOffset;
   const visibleEndIndex = Math.min(scrollOffset + viewportSize, totalItemsWithLoadMore);
   const displayItems = allItems.slice(visibleStartIndex, Math.min(visibleEndIndex, allItems.length));
+
+  const isSearchFocused = focusedRegion === "search";
+  const isBackFocused = focusedRegion === "back";
 
   useEffect(() => {
     const loadNotionData = async () => {
@@ -197,20 +249,10 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
     loadNotionData();
   }, [onError, cachedPages, cachedDatabases, onDataLoaded]);
 
+  // Reset list selection when search changes or databases toggle
   useEffect(() => {
-    setSelectedIndex(0);
-    // When search term changes, keep focus on search bar
-    if (searchTerm) {
-      setFocusArea('search');
-    }
-  }, [searchTerm]);
-
-  // When filtered items become empty, ensure focus stays on search/back
-  useEffect(() => {
-    if (filteredItems.length === 0 && focusArea === 'list') {
-      setFocusArea('search');
-    }
-  }, [filteredItems.length, focusArea]);
+    listSelectIndex("list", 0);
+  }, [searchTerm, showingDatabases, listSelectIndex]);
 
   useEffect(() => {
     const performSearch = async () => {
@@ -261,159 +303,52 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
     }
   };
 
-  useInput((input, key) => {
-    if (isLoading || error || isStartingGrading) return;
+  // Keep loadMoreRef up to date
+  loadMoreRef.current = loadMore;
 
-    // Handle 'b' key to go back from anywhere
-    if (input === "b" && onBack && focusArea !== 'search') {
-      onBack();
-      return;
-    }
+  // Handle shortcuts that aren't part of standard navigation
+  useInput(
+    (input, key) => {
+      if (isLoading || error || isStartingGrading) return;
 
-    // Handle 's' key to focus search
-    if (input === "s" && focusArea !== 'search') {
-      setFocusArea('search');
-      setSelectedIndex(0);
-      return;
-    }
-
-    // Handle 'g' key to start grading (only for databases)
-    if (input === "g" && onStartGrading && focusArea === 'list') {
-      const currentItem = displayItems[selectedIndex];
-      if (currentItem && "properties" in currentItem) {
-        setIsStartingGrading(true);
-        setSelectedDatabaseName(currentItem.title);
-        onStartGrading(currentItem.id, currentItem.title);
-        return;
-      }
-    }
-
-    // Handle 'd' key to toggle databases only
-    if (input === "d") {
-      setShowingDatabases(!showingDatabases);
-      setSelectedIndex(0);
-      setScrollOffset(0);
-      return;
-    }
-
-    // Handle back button focus
-    if (focusArea === 'back') {
-      if (key.upArrow) {
-        setFocusArea('search');
-        return;
-      }
-      if (key.downArrow) {
-        if (totalItemsWithLoadMore > 0) {
-          setFocusArea('list');
-          setSelectedIndex(0);
-          setScrollOffset(0);
-        } else {
-          setFocusArea('search');
-        }
-        return;
-      }
-      if (key.return) {
-        onBack?.();
-        return;
-      }
-      return;
-    }
-
-    // Handle search input when search is focused
-    if (focusArea === 'search') {
-      if (key.return) {
-        if (displayItems.length > 0) {
-          const item = displayItems[0];
-          const type = "properties" in item ? "database" : "page";
-          onSelect(item.id, item.title, type);
-        }
+      // Global shortcut: 'b' to go back (except when typing in search)
+      if (input === "b" && onBack && focusedRegion !== "search") {
+        onBack();
         return;
       }
 
-      // Up arrow from search bar goes to the list above (only if there are items)
-      if (key.upArrow) {
-        if (totalItemsWithLoadMore > 0) {
-          setFocusArea('list');
-          const lastIndex = totalItemsWithLoadMore - 1;
-          setSelectedIndex(lastIndex);
-          // Scroll to show the last item
-          const newScrollOffset = Math.max(0, lastIndex - viewportSize + 1);
-          setScrollOffset(newScrollOffset);
-        }
+      // Global shortcut: 's' to focus search
+      if (input === "s" && focusedRegion !== "search") {
+        focusRegion("search");
         return;
       }
 
-      // Down arrow from search bar goes to back button (if exists), then to list
-      if (key.downArrow) {
-        if (onBack) {
-          setFocusArea('back');
-        } else if (totalItemsWithLoadMore > 0) {
-          setFocusArea('list');
-          setSelectedIndex(0);
-          setScrollOffset(0);
-        }
-        return;
-      }
-
-      if (key.backspace || key.delete) {
-        setSearchTerm(searchTerm.slice(0, -1));
-        return;
-      }
-
-      if (input && input.length === 1 && !key.ctrl && !key.meta) {
-        setSearchTerm(searchTerm + input);
-        return;
-      }
-
-      return;
-    }
-
-    // Handle navigation in list (search bar is at the bottom)
-    if (focusArea === 'list') {
-      const loadMoreIndex = allItems.length;
-
-      if (key.upArrow) {
-        if (selectedIndex > 0) {
-          const newIndex = selectedIndex - 1;
-          setSelectedIndex(newIndex);
-          // Scroll up if needed
-          if (newIndex < scrollOffset) {
-            setScrollOffset(newIndex);
-          }
-        } else {
-          // At first item, wrap to search bar at bottom
-          setFocusArea('search');
-        }
-      } else if (key.downArrow) {
-        // Down arrow at the last item goes to search bar
-        if (selectedIndex >= totalItemsWithLoadMore - 1) {
-          setFocusArea('search');
-        } else {
-          const newIndex = selectedIndex + 1;
-          setSelectedIndex(newIndex);
-          // Scroll down if needed
-          if (newIndex >= scrollOffset + viewportSize) {
-            setScrollOffset(newIndex - viewportSize + 1);
-          }
-        }
-      } else if (key.return) {
-        if (selectedIndex < allItems.length) {
-          const item = allItems[selectedIndex];
-          const type = "properties" in item ? "database" : "page";
-          onSelect(item.id, item.title, type);
-        } else if (hasLoadMoreOption && selectedIndex === loadMoreIndex) {
-          loadMore();
-        }
-      } else if (input && input.length === 1 && !key.ctrl && !key.meta) {
-        // Auto-focus search and type when pressing letters (not shortcuts)
-        // Reserved shortcuts: b (back), s (search), g (grade), d (toggle databases)
-        if (!['b', 's', 'g', 'd'].includes(input.toLowerCase())) {
-          setFocusArea('search');
-          setSearchTerm(searchTerm + input);
+      // Handle 'g' key to start grading (only for databases when in list)
+      if (input === "g" && onStartGrading && focusedRegion === "list") {
+        const currentItem = allItems[selectedIndex];
+        if (currentItem && "properties" in currentItem) {
+          setIsStartingGrading(true);
+          setSelectedDatabaseName(currentItem.title);
+          onStartGrading(currentItem.id, currentItem.title);
+          return;
         }
       }
-    }
-  });
+
+      // Handle 'd' key to toggle databases only
+      if (input === "d") {
+        setShowingDatabases(!showingDatabases);
+        return;
+      }
+
+      // When search is focused and Enter is pressed, select first visible item
+      if (focusedRegion === "search" && key.return && displayItems.length > 0) {
+        const item = displayItems[0];
+        const type = "properties" in item ? "database" : "page";
+        onSelect(item.id, item.title, type);
+      }
+    },
+    { isActive: !isLoading && !error && !isStartingGrading }
+  );
 
   if (isStartingGrading) {
     return (
@@ -518,7 +453,7 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
 
           {displayItems.map((item, displayIndex) => {
             const actualIndex = visibleStartIndex + displayIndex;
-            const isSelected = focusArea === 'list' && selectedIndex === actualIndex;
+            const isSelected = focusedRegion === "list" && selectedIndex === actualIndex;
             const isDatabase = "properties" in item;
             const itemType = isDatabase ? "Database" : "Page";
             const canGrade = isDatabase && onStartGrading;
@@ -537,7 +472,7 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
           })}
 
           {showLoadMoreInViewport && (() => {
-            const isLoadMoreSelected = focusArea === 'list' && selectedIndex === loadMoreIndex;
+            const isLoadMoreSelected = focusedRegion === "list" && selectedIndex === loadMoreIndex;
             return (
               <Box>
                 <Text
@@ -561,12 +496,12 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
         value={searchTerm}
         placeholder="Search..."
         isFocused={isSearchFocused}
-        onChange={setSearchTerm}
+        onChange={(value) => inputSetValue("search", value)}
       />
       {onBack && (
         <Box>
           <Text color={isBackFocused ? "blue" : "gray"} bold={isBackFocused}>
-            ← back
+            {isBackFocused ? "→ " : "  "}← back
           </Text>
         </Box>
       )}

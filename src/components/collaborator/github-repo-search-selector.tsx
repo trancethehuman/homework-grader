@@ -3,10 +3,13 @@ import { Text, Box, useInput } from "ink";
 import Spinner from "ink-spinner";
 import { SearchInput } from "../ui/search-input.js";
 import { HelpFooter, createHelpHints } from "../ui/HelpFooter.js";
-import { useDebounce } from "../../hooks/index.js";
+import {
+  useDebounce,
+  useFocusNavigation,
+  ListRegionState,
+  InputRegionState,
+} from "../../hooks/index.js";
 import { GitHubService, GitHubRepoResult } from "../../github/github-service.js";
-
-type FocusArea = "list" | "search" | "back" | "account";
 
 interface GitHubRepoSearchSelectorProps {
   githubToken: string;
@@ -24,27 +27,75 @@ export const GitHubRepoSearchSelector: React.FC<GitHubRepoSearchSelectorProps> =
   onError,
 }) => {
   const [repos, setRepos] = useState<GitHubRepoResult[]>([]);
-  const [selectedIndex, setSelectedIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isSearching, setIsSearching] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [focusArea, setFocusArea] = useState<FocusArea>("search");
-  const [scrollOffset, setScrollOffset] = useState(0);
   const [authenticatedUser, setAuthenticatedUser] = useState<string | null>(null);
 
   const viewportSize = 8;
-  const debouncedSearchTerm = useDebounce(searchTerm, 300);
   const githubServiceRef = useRef<GitHubService | null>(null);
-
-  const isSearchFocused = focusArea === "search";
-  const isBackFocused = focusArea === "back";
-  const isAccountFocused = focusArea === "account";
 
   const filteredRepos = repos.filter((repo) => repo.permissions.admin);
 
+  const handleRepoSelect = (index: number) => {
+    if (index < filteredRepos.length) {
+      const repo = filteredRepos[index];
+      onSelect({ owner: repo.owner, repo: repo.repo, fullName: repo.fullName });
+    }
+  };
+
+  const {
+    focusedRegion,
+    regionStates,
+    focusRegion,
+    inputSetValue,
+    listSelectIndex,
+  } = useFocusNavigation({
+    regions: [
+      {
+        id: "list",
+        type: "list",
+        itemCount: filteredRepos.length,
+        viewportSize,
+        enabled: filteredRepos.length > 0,
+        onSelect: handleRepoSelect,
+      },
+      {
+        id: "search",
+        type: "input",
+        reservedKeys: ["b", "s"],
+      },
+      {
+        id: "back",
+        type: "button",
+        enabled: !!onBack,
+        onActivate: onBack,
+      },
+      {
+        id: "account",
+        type: "button",
+        enabled: !!authenticatedUser,
+        onActivate: onLogout,
+      },
+    ],
+    initialFocus: "search",
+    disabled: isLoading,
+  });
+
+  const listState = regionStates.list as ListRegionState | undefined;
+  const searchState = regionStates.search as InputRegionState;
+
+  const searchTerm = searchState?.value ?? "";
+  const debouncedSearchTerm = useDebounce(searchTerm, 300);
+
+  const selectedIndex = listState?.selectedIndex ?? 0;
+  const scrollOffset = listState?.scrollOffset ?? 0;
   const visibleStartIndex = scrollOffset;
   const visibleEndIndex = Math.min(scrollOffset + viewportSize, filteredRepos.length);
   const displayRepos = filteredRepos.slice(visibleStartIndex, visibleEndIndex);
+
+  const isSearchFocused = focusedRegion === "search";
+  const isBackFocused = focusedRegion === "back";
+  const isAccountFocused = focusedRegion === "account";
 
   useEffect(() => {
     const loadInitialRepos = async () => {
@@ -79,8 +130,7 @@ export const GitHubRepoSearchSelector: React.FC<GitHubRepoSearchSelectorProps> =
           30
         );
         setRepos(results);
-        setSelectedIndex(0);
-        setScrollOffset(0);
+        listSelectIndex("list", 0);
       } catch (err) {
         console.error("Search failed:", err);
       } finally {
@@ -89,166 +139,33 @@ export const GitHubRepoSearchSelector: React.FC<GitHubRepoSearchSelectorProps> =
     };
 
     performSearch();
-  }, [debouncedSearchTerm]);
+  }, [debouncedSearchTerm, listSelectIndex]);
 
-  useEffect(() => {
-    if (searchTerm) {
-      setFocusArea("search");
-    }
-  }, [searchTerm]);
+  // Handle shortcuts that aren't part of standard navigation
+  useInput(
+    (input, key) => {
+      if (isLoading) return;
 
-  useEffect(() => {
-    if (filteredRepos.length === 0 && focusArea === "list") {
-      setFocusArea("search");
-    }
-  }, [filteredRepos.length, focusArea]);
-
-  useInput((input, key) => {
-    if (isLoading) return;
-
-    if (input === "b" && onBack && focusArea !== "search") {
-      onBack();
-      return;
-    }
-
-    if (input === "s" && focusArea !== "search") {
-      setFocusArea("search");
-      setSelectedIndex(0);
-      return;
-    }
-
-    if (focusArea === "back") {
-      if (key.upArrow) {
-        if (filteredRepos.length > 0) {
-          setFocusArea("list");
-          const lastIndex = filteredRepos.length - 1;
-          setSelectedIndex(lastIndex);
-          const newScrollOffset = Math.max(0, lastIndex - viewportSize + 1);
-          setScrollOffset(newScrollOffset);
-        } else {
-          setFocusArea("search");
-        }
-        return;
-      }
-      if (key.downArrow) {
-        if (authenticatedUser) {
-          setFocusArea("account");
-        }
-        return;
-      }
-      if (key.return) {
-        onBack?.();
-        return;
-      }
-      return;
-    }
-
-    if (focusArea === "account") {
-      if (key.upArrow) {
-        if (onBack) {
-          setFocusArea("back");
-        } else if (filteredRepos.length > 0) {
-          setFocusArea("list");
-          const lastIndex = filteredRepos.length - 1;
-          setSelectedIndex(lastIndex);
-          const newScrollOffset = Math.max(0, lastIndex - viewportSize + 1);
-          setScrollOffset(newScrollOffset);
-        } else {
-          setFocusArea("search");
-        }
-        return;
-      }
-      if (key.return && onLogout) {
-        onLogout();
-        return;
-      }
-      return;
-    }
-
-    if (focusArea === "search") {
-      if (key.return) {
-        if (displayRepos.length > 0) {
-          const repo = displayRepos[0];
-          onSelect({ owner: repo.owner, repo: repo.repo, fullName: repo.fullName });
-        }
+      // Global shortcut: 'b' to go back (except when typing in search)
+      if (input === "b" && onBack && focusedRegion !== "search") {
+        onBack();
         return;
       }
 
-      if (key.upArrow) {
-        // Up from search goes to list (last visible item since list is above search)
-        if (filteredRepos.length > 0) {
-          setFocusArea("list");
-          const lastIndex = filteredRepos.length - 1;
-          setSelectedIndex(lastIndex);
-          const newScrollOffset = Math.max(0, lastIndex - viewportSize + 1);
-          setScrollOffset(newScrollOffset);
-        }
+      // Global shortcut: 's' to focus search
+      if (input === "s" && focusedRegion !== "search") {
+        focusRegion("search");
         return;
       }
 
-      if (key.downArrow) {
-        // Down from search goes to footer (back/account), not list
-        if (onBack) {
-          setFocusArea("back");
-        } else if (authenticatedUser) {
-          setFocusArea("account");
-        }
-        return;
+      // When search is focused and Enter is pressed, select first visible repo
+      if (focusedRegion === "search" && key.return && displayRepos.length > 0) {
+        const repo = displayRepos[0];
+        onSelect({ owner: repo.owner, repo: repo.repo, fullName: repo.fullName });
       }
-
-      if (key.backspace || key.delete) {
-        setSearchTerm(searchTerm.slice(0, -1));
-        return;
-      }
-
-      if (input && input.length === 1 && !key.ctrl && !key.meta) {
-        setSearchTerm(searchTerm + input);
-        return;
-      }
-
-      return;
-    }
-
-    if (focusArea === "list") {
-      if (key.upArrow) {
-        if (selectedIndex > 0) {
-          const newIndex = selectedIndex - 1;
-          setSelectedIndex(newIndex);
-          if (newIndex < scrollOffset) {
-            setScrollOffset(newIndex);
-          }
-        } else {
-          setFocusArea("search");
-        }
-      } else if (key.downArrow) {
-        if (selectedIndex >= filteredRepos.length - 1) {
-          if (onBack) {
-            setFocusArea("back");
-          } else {
-            setFocusArea("search");
-          }
-        } else {
-          const newIndex = selectedIndex + 1;
-          setSelectedIndex(newIndex);
-          if (newIndex >= scrollOffset + viewportSize) {
-            setScrollOffset(newIndex - viewportSize + 1);
-          }
-        }
-      } else if (key.return) {
-        if (selectedIndex < filteredRepos.length) {
-          const repo = filteredRepos[selectedIndex];
-          onSelect({ owner: repo.owner, repo: repo.repo, fullName: repo.fullName });
-        }
-      } else if (input && input.length === 1 && !key.ctrl && !key.meta) {
-        // Auto-focus search and type when pressing letters (not shortcuts)
-        // Reserved shortcuts: b (back), s (search)
-        if (!['b', 's'].includes(input.toLowerCase())) {
-          setFocusArea("search");
-          setSearchTerm(searchTerm + input);
-        }
-      }
-    }
-  });
+    },
+    { isActive: !isLoading }
+  );
 
   if (isLoading) {
     return (
@@ -299,7 +216,7 @@ export const GitHubRepoSearchSelector: React.FC<GitHubRepoSearchSelectorProps> =
 
           {displayRepos.map((repo, displayIndex) => {
             const actualIndex = visibleStartIndex + displayIndex;
-            const isSelected = focusArea === "list" && selectedIndex === actualIndex;
+            const isSelected = focusedRegion === "list" && selectedIndex === actualIndex;
 
             return (
               <Box key={repo.fullName} flexDirection="column" marginBottom={0}>
@@ -335,13 +252,13 @@ export const GitHubRepoSearchSelector: React.FC<GitHubRepoSearchSelectorProps> =
         value={searchTerm}
         placeholder="Search repositories..."
         isFocused={isSearchFocused}
-        onChange={setSearchTerm}
+        onChange={(value) => inputSetValue("search", value)}
       />
 
       {onBack && (
         <Box>
           <Text color={isBackFocused ? "blue" : "gray"} bold={isBackFocused}>
-            ← back
+            {isBackFocused ? "→ " : "  "}← back
           </Text>
         </Box>
       )}

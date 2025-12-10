@@ -16,6 +16,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
         
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -110,6 +112,19 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           
+      - name: Get changelog
+        id: changelog
+        run: |
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          if [ -z "$LAST_TAG" ]; then
+            COMMITS=$(git log --pretty=format:"- %s" -n 20)
+          else
+            COMMITS=$(git log ${LAST_TAG}..HEAD --pretty=format:"- %s")
+          fi
+          echo "commits<<EOF" >> $GITHUB_OUTPUT
+          echo "$COMMITS" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
       - name: Create Git Tag
         run: |
           git config user.name "github-actions[bot]"
@@ -125,10 +140,11 @@ jobs:
           tag_name: v${{ steps.version.outputs.version }}
           release_name: Release v${{ steps.version.outputs.version }}
           body: |
-            ## 🚀 Release v${{ steps.version.outputs.version }}
-            
-            **Auto-published from commit:** ${{ github.sha }}
-            
+            ## Release v${{ steps.version.outputs.version }}
+
+            ### Changes
+            ${{ steps.changelog.outputs.commits }}
+
             ### Installation
             ```bash
             npm install -g cli-agents-fleet@${{ steps.version.outputs.version }}
@@ -136,14 +152,9 @@ jobs:
             npx cli-agents-fleet@${{ steps.version.outputs.version }}
             ```
 
-            ### What's New
-            - Latest changes from main branch
-            - Built and tested on Node.js 22+
-            - Automatically published on every push
-
             ### Links
-            - 📦 [NPM Package](https://www.npmjs.com/package/cli-agents-fleet)
-            - 📚 [Documentation](https://github.com/trancethehuman/cli-agents-fleet#readme)
-            - 🐛 [Report Issues](https://github.com/trancethehuman/cli-agents-fleet/issues)
+            - [NPM Package](https://www.npmjs.com/package/cli-agents-fleet)
+            - [Documentation](https://github.com/trancethehuman/cli-agents-fleet#readme)
+            - [Report Issues](https://github.com/trancethehuman/cli-agents-fleet/issues)
           draft: false
           prerelease: false
