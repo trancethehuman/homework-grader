@@ -6,31 +6,23 @@ interface SearchInputProps {
   placeholder?: string;
   isFocused: boolean;
   onChange: (value: string) => void;
-  minWidth?: number;
 }
 
 export const SearchInput: React.FC<SearchInputProps> = ({
   value,
   placeholder = "Search...",
   isFocused,
-  minWidth = 40,
 }) => {
-  const displayText = value || placeholder;
-  const isShowingPlaceholder = !value;
-
-  // Pad the display to maintain minimum width
-  const paddedText = displayText.padEnd(minWidth, ' ');
-
   return (
     <Box
       borderStyle="single"
       borderColor={isFocused ? "blue" : "gray"}
       paddingX={1}
+      flexGrow={1}
     >
-      <Text color={isShowingPlaceholder ? "gray" : "white"}>
-        {paddedText}
-      </Text>
+      <Text color="white">{value}</Text>
       {isFocused && <Text color="blue">█</Text>}
+      {!value && <Text color="gray">{placeholder}</Text>}
     </Box>
   );
 };

@@ -734,7 +734,6 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         if (hasExistingAuth) {
           // Try to use existing auth directly
           try {
-            console.log("🔍 Checking existing Notion authentication...");
             const token = await notionOAuthClient.ensureAuthenticated();
 
             // Validate the token with a test API call
@@ -745,16 +744,10 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
             const validation = await service.validateToken();
 
             if (validation.valid) {
-              console.log("✓ Notion authentication is valid");
+              console.clear();
               navigateToStep("notion-page-selector");
             } else {
-              console.log(
-                "❌ Notion token validation failed:",
-                validation.error
-              );
-              console.log("🔄 Auto-triggering OAuth re-authentication...");
-
-              // Clear the invalid token
+              // Clear the invalid token and re-authenticate
               storage.clearToken();
 
               // Automatically start OAuth without user intervention
@@ -764,7 +757,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
                 const revalidation = await service.validateToken();
 
                 if (revalidation.valid) {
-                  console.log("✓ Re-authentication successful");
+                  console.clear();
                   navigateToStep("notion-page-selector");
                 } else {
                   throw new Error(
@@ -777,20 +770,11 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
               }
             }
           } catch (e: any) {
-            console.log(
-              "❌ Notion authentication error:",
-              e.message || String(e)
-            );
-
             // Auto-trigger OAuth for authentication errors
             if (
               e.message?.includes("API token is invalid") ||
               e.message?.includes("unauthorized")
             ) {
-              console.log(
-                "🔄 Auto-triggering OAuth due to authentication error..."
-              );
-
               // Clear the invalid token
               storage.clearToken();
 
@@ -801,7 +785,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
                 const revalidation = await service.validateToken();
 
                 if (revalidation.valid) {
-                  console.log("✓ Re-authentication successful");
+                  console.clear();
                   navigateToStep("notion-page-selector");
                 } else {
                   throw new Error(
@@ -821,7 +805,6 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         } else {
           // No existing auth, perform OAuth
           try {
-            console.log("🔄 Starting fresh Notion authentication...");
             const token = await notionOAuthClient.ensureAuthenticated();
 
             // Validate the new token
@@ -832,7 +815,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
             const validation = await service.validateToken();
 
             if (validation.valid) {
-              console.log("✓ New Notion authentication successful");
+              console.clear();
               navigateToStep("notion-page-selector");
             } else {
               throw new Error(
@@ -841,10 +824,6 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
               );
             }
           } catch (e: any) {
-            console.log(
-              "❌ Notion authentication failed:",
-              e.message || String(e)
-            );
             let errorMessage = "Authentication failed";
             if (e.message?.includes("API token is invalid")) {
               errorMessage =
@@ -1816,7 +1795,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           color={selectedChunkingOption === 0 ? "green" : "white"}
           bold={selectedChunkingOption === 0}
         >
-          {selectedChunkingOption === 0 ? "→ " : "  "}Process with chunking
+          Process with chunking
         </Text>
         <Text dimColor>
           {" "}
@@ -1829,7 +1808,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           color={selectedChunkingOption === 1 ? "yellow" : "white"}
           bold={selectedChunkingOption === 1}
         >
-          {selectedChunkingOption === 1 ? "→ " : "  "}Skip large repositories{" "}
+          Skip large repositories{" "}
           {selectedChunkingOption === 1 ? "(recommended)" : ""}
         </Text>
         <Text dimColor> • Skip repositories that exceed context limits</Text>
@@ -2112,7 +2091,6 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           return (
             <Box key={index}>
               <Text color={isSelected ? "blue" : "white"} bold={isSelected}>
-                {isSelected ? "→ " : "  "}
                 {index + 1}. {property}
               </Text>
             </Box>
@@ -2191,7 +2169,6 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
             <Box key={index} flexDirection="column">
               <Box>
                 <Text color={isSelected ? "blue" : "white"} bold={isSelected}>
-                  {isSelected ? "→ " : "  "}
                   {index + 1}. {column.name}
                   {isSuggested ? " (suggested)" : ""}
                 </Text>
@@ -2516,7 +2493,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
             color={selectedNavOption === 0 ? "cyan" : "white"}
             bold={selectedNavOption === 0}
           >
-            {selectedNavOption === 0 ? "→ " : "  "}Continue to Column Selection
+            Continue to Column Selection
           </Text>
         </Box>
         <Box>
@@ -2524,7 +2501,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
             color={selectedNavOption === 1 ? "cyan" : "white"}
             bold={selectedNavOption === 1}
           >
-            {selectedNavOption === 1 ? "→ " : "  "}Back to Filter
+            Back to Filter
           </Text>
         </Box>
         <Text></Text>
@@ -2770,14 +2747,14 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         <Text>What would you like to do next?</Text>
         <Text></Text>
 
-        <Text color={selectedNavOption === 0 ? "cyan" : "white"}>
-          {selectedNavOption === 0 ? "→ " : "  "}Back to Save Options
+        <Text color={selectedNavOption === 0 ? "cyan" : "white"} bold={selectedNavOption === 0}>
+          Back to Save Options
         </Text>
-        <Text color={selectedNavOption === 1 ? "cyan" : "white"}>
-          {selectedNavOption === 1 ? "→ " : "  "}Choose Different Database
+        <Text color={selectedNavOption === 1 ? "cyan" : "white"} bold={selectedNavOption === 1}>
+          Choose Different Database
         </Text>
-        <Text color={selectedNavOption === 2 ? "cyan" : "white"}>
-          {selectedNavOption === 2 ? "→ " : "  "}Exit
+        <Text color={selectedNavOption === 2 ? "cyan" : "white"} bold={selectedNavOption === 2}>
+          Exit
         </Text>
 
         <Text></Text>
@@ -2806,8 +2783,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           color={selectedProcessingOption === 0 ? "blue" : "white"}
           bold={selectedProcessingOption === 0}
         >
-          {selectedProcessingOption === 0 ? "→ " : "  "}Grade repository code
-          only {selectedProcessingOption === 0 ? "(recommended)" : ""}
+          Grade repository code only {selectedProcessingOption === 0 ? "(recommended)" : ""}
         </Text>
         <Text dimColor>
           {" "}
@@ -2819,8 +2795,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           color={selectedProcessingOption === 1 ? "magenta" : "white"}
           bold={selectedProcessingOption === 1}
         >
-          {selectedProcessingOption === 1 ? "→ " : "  "}Test deployed
-          applications only
+          Test deployed applications only
         </Text>
         <Text dimColor>
           {" "}
@@ -2832,7 +2807,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           color={selectedProcessingOption === 2 ? "yellow" : "white"}
           bold={selectedProcessingOption === 2}
         >
-          {selectedProcessingOption === 2 ? "→ " : "  "}Do both
+          Do both
         </Text>
         <Text dimColor>
           {" "}

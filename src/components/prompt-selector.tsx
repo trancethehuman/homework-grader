@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Text, Box, useInput } from "ink";
 import { GradingPrompt, getGradingPrompts } from "../consts/grading-prompts.js";
+import { HelpFooter } from "./ui/HelpFooter.js";
 
 interface PromptSelectorProps {
   onSelect: (prompt: GradingPrompt) => void;
@@ -97,7 +98,6 @@ export const PromptSelector: React.FC<PromptSelectorProps> = ({
           <Box key={index} flexDirection="column" marginBottom={1}>
             <Box>
               <Text color={isSelected ? "blue" : "white"} bold={isSelected}>
-                {isSelected ? "→ " : "  "}
                 {prompt.name}
               </Text>
             </Box>
@@ -111,10 +111,14 @@ export const PromptSelector: React.FC<PromptSelectorProps> = ({
       })}
 
       <Text></Text>
-      <Text color="cyan">Commands:</Text>
-      <Text color="green">• Enter = select prompt</Text>
-      <Text color="yellow">• 'p' = preview selected prompt</Text>
-      <Text color="red">• 'b' or Esc = go back</Text>
+      <HelpFooter
+        hints={[
+          { keys: "↑/↓", action: "navigate" },
+          { keys: "Enter", action: "select" },
+          { keys: "'p'", action: "preview" },
+          { keys: "'b'", action: "back" },
+        ]}
+      />
     </Box>
   );
 };

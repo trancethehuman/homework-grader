@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { Text, Box, useInput } from "ink";
+import { HelpFooter } from "../ui/HelpFooter.js";
 
 export interface DatabaseProperty {
   name: string;
@@ -241,7 +242,6 @@ export const DatabaseFilter: React.FC<DatabaseFilterProps> = ({
           return (
             <Box key={option.id}>
               <Text color={isSelected ? "blue" : "white"} bold={isSelected}>
-                {isSelected ? "→ " : "  "}
                 <Text color={isChecked ? "green" : "gray"}>[{isChecked ? "x" : " "}]</Text>
                 {" "}{option.name}
               </Text>
@@ -255,13 +255,18 @@ export const DatabaseFilter: React.FC<DatabaseFilterProps> = ({
             color={valueIndex === options.length ? "blue" : (selectedValues.size > 0 ? "green" : "gray")}
             bold={valueIndex === options.length}
           >
-            {valueIndex === options.length ? "→ " : "  "}
             Done ({selectedValues.size} selected)
           </Text>
         </Box>
 
         <Text></Text>
-        <Text dimColor>↑/↓: navigate, Enter: toggle/apply, 'b': back</Text>
+        <HelpFooter
+          hints={[
+            { keys: "↑/↓", action: "navigate" },
+            { keys: "Enter", action: "toggle/apply" },
+            { keys: "'b'", action: "back" },
+          ]}
+        />
       </Box>
     );
   }
@@ -298,7 +303,6 @@ export const DatabaseFilter: React.FC<DatabaseFilterProps> = ({
       {/* Skip option */}
       <Box>
         <Text color={selectedRow === 0 ? "blue" : "white"} bold={selectedRow === 0}>
-          {selectedRow === 0 ? "→ " : "  "}
           Skip (process all rows)
         </Text>
       </Box>
@@ -315,7 +319,6 @@ export const DatabaseFilter: React.FC<DatabaseFilterProps> = ({
         return (
           <Box key={prop.name} marginBottom={0}>
             <Text color={isSelected ? "blue" : "white"} bold={isSelected}>
-              {isSelected ? "→ " : "  "}
               {prop.name}
             </Text>
             <Text dimColor> ({prop.type}) </Text>
@@ -345,13 +348,19 @@ export const DatabaseFilter: React.FC<DatabaseFilterProps> = ({
       {/* Back option */}
       <Box>
         <Text color={selectedRow === totalRows - 1 ? "blue" : "gray"} bold={selectedRow === totalRows - 1}>
-          {selectedRow === totalRows - 1 ? "→ " : "  "}
           ← back
         </Text>
       </Box>
 
       <Text></Text>
-      <Text dimColor>↑/↓: select property, ←/→: change filter, Enter: apply, 'b': back</Text>
+      <HelpFooter
+        hints={[
+          { keys: "↑/↓", action: "select property" },
+          { keys: "←/→", action: "change filter" },
+          { keys: "Enter", action: "apply" },
+          { keys: "'b'", action: "back" },
+        ]}
+      />
     </Box>
   );
 };

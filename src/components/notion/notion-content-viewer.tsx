@@ -38,14 +38,12 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
   const [content, setContent] = useState<any>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [navigableItems, setNavigableItems] = useState<FormattedBlock[]>([]);
-  const [currentPage, setCurrentPage] = useState(0);
   const [showProperties, setShowProperties] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [isSearchFocused, setIsSearchFocused] = useState(false);
-  const [isViewAllMode, setIsViewAllMode] = useState(false);
   const [loadingDots, setLoadingDots] = useState("");
-  const itemsPerPage = 10;
-  const maxSearchResults = 3;
+  const [scrollOffset, setScrollOffset] = useState(0);
+  const viewportSize = 8;
 
   const { handleBackInput } = useBackNavigation(() => onBack?.(), !!onBack);
 
@@ -58,8 +56,10 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
     );
   }, [navigableItems, searchTerm]);
 
-  const displayItems = isViewAllMode ? navigableItems : filteredItems;
-  const searchResultsItems = filteredItems.slice(0, maxSearchResults);
+  const allItems = filteredItems;
+  const visibleStartIndex = scrollOffset;
+  const visibleEndIndex = Math.min(scrollOffset + viewportSize, allItems.length);
+  const displayItems = allItems.slice(visibleStartIndex, visibleEndIndex);
 
   // Animate loading dots
   useEffect(() => {
@@ -149,6 +149,7 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
 
   useEffect(() => {
     setSelectedIndex(0);
+    setScrollOffset(0);
   }, [searchTerm]);
 
   useInput((input, key) => {
@@ -174,9 +175,9 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
 
     // Handle 's' key to focus search
     if (input === "s" && !isSearchFocused) {
-      setIsViewAllMode(false);
       setIsSearchFocused(true);
       setSelectedIndex(0);
+      setScrollOffset(0);
       return;
     }
 
@@ -194,8 +195,7 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
       !isSearchFocused &&
       contentType !== "database"
     ) {
-      const items = isViewAllMode ? displayItems : searchResultsItems;
-      const selectedItem = items[selectedIndex];
+      const selectedItem = allItems[selectedIndex];
       if (
         selectedItem &&
         (selectedItem.type === "child_database" ||
@@ -230,19 +230,20 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
     }
 
     // Handle search input when search is focused
-    if (isSearchFocused && !isViewAllMode) {
+    if (isSearchFocused) {
       if (key.return) {
-        if (searchResultsItems.length > 0) {
-          const item = searchResultsItems[0];
+        if (allItems.length > 0) {
+          const item = allItems[0];
           handleItemSelect(item);
         }
         return;
       }
 
       if (key.downArrow) {
-        if (searchResultsItems.length > 0) {
+        if (allItems.length > 0) {
           setIsSearchFocused(false);
           setSelectedIndex(0);
+          setScrollOffset(0);
         }
         return;
       }
@@ -260,67 +261,29 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
       return;
     }
 
-    // Handle view all mode
-    if (isViewAllMode) {
-      const totalPages = Math.ceil(displayItems.length / itemsPerPage);
-      const startIndex = currentPage * itemsPerPage;
-      const endIndex = Math.min(startIndex + itemsPerPage, displayItems.length);
-
-      if (key.upArrow) {
-        setSelectedIndex((prev) => {
-          const newIndex = Math.max(0, prev - 1);
-          if (newIndex < startIndex && currentPage > 0) {
-            setCurrentPage(currentPage - 1);
-            return newIndex;
-          }
-          return newIndex;
-        });
-      } else if (key.downArrow) {
-        setSelectedIndex((prev) => {
-          const newIndex = Math.min(displayItems.length - 1, prev + 1);
-          if (newIndex >= endIndex && currentPage < totalPages - 1) {
-            setCurrentPage(currentPage + 1);
-            return newIndex;
-          }
-          return newIndex;
-        });
-      } else if (key.leftArrow && currentPage > 0) {
-        setCurrentPage(currentPage - 1);
-        setSelectedIndex(Math.max(0, (currentPage - 1) * itemsPerPage));
-      } else if (key.rightArrow && currentPage < totalPages - 1) {
-        setCurrentPage(currentPage + 1);
-        setSelectedIndex(
-          Math.min(displayItems.length - 1, (currentPage + 1) * itemsPerPage)
-        );
-      } else if (key.return) {
-        if (displayItems[selectedIndex]) {
-          handleItemSelect(displayItems[selectedIndex]);
-        }
-      } else if (input === "b" || key.escape) {
-        onComplete(content);
-      }
-      return;
-    }
-
-    // Handle navigation in search results (not view all mode, not search focused)
-    if (!isViewAllMode && !isSearchFocused) {
-      const maxIndex = searchResultsItems.length;
-
+    // Handle navigation in list (not search focused)
+    if (!isSearchFocused) {
       if (key.upArrow) {
         if (selectedIndex === 0) {
           setIsSearchFocused(true);
         } else {
-          setSelectedIndex(selectedIndex - 1);
+          const newIndex = selectedIndex - 1;
+          setSelectedIndex(newIndex);
+          if (newIndex < scrollOffset) {
+            setScrollOffset(newIndex);
+          }
         }
       } else if (key.downArrow) {
-        setSelectedIndex(Math.min(maxIndex, selectedIndex + 1));
+        if (selectedIndex < allItems.length - 1) {
+          const newIndex = selectedIndex + 1;
+          setSelectedIndex(newIndex);
+          if (newIndex >= scrollOffset + viewportSize) {
+            setScrollOffset(newIndex - viewportSize + 1);
+          }
+        }
       } else if (key.return) {
-        if (selectedIndex < searchResultsItems.length) {
-          handleItemSelect(searchResultsItems[selectedIndex]);
-        } else if (selectedIndex === searchResultsItems.length) {
-          setIsViewAllMode(true);
-          setSelectedIndex(0);
-          setCurrentPage(0);
+        if (selectedIndex < allItems.length) {
+          handleItemSelect(allItems[selectedIndex]);
         }
       } else if (input === "b" || key.escape) {
         onComplete(content);
@@ -384,8 +347,6 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
         <BackButton onBack={() => onBack?.()} isVisible={!!onBack} />
 
         <Text dimColor>Fetching content...</Text>
-        <Text></Text>
-        <Text dimColor>'b' back, Ctrl+C to exit</Text>
       </Box>
     );
   }
@@ -402,8 +363,6 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
         <BackButton onBack={() => onBack?.()} isVisible={!!onBack} />
 
         <Text color="red">{error}</Text>
-        <Text></Text>
-        <Text dimColor>'b' go back, Ctrl+C to exit</Text>
       </Box>
     );
   }
@@ -426,7 +385,7 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
           <>
             {formatted.properties.map((prop, index) => (
               <Text key={index} dimColor>
-                • {prop.name}: {prop.value}{" "}
+                * {prop.name}: {prop.value}{" "}
                 {prop.type !== "rich_text" && `(${prop.type})`}
               </Text>
             ))}
@@ -434,11 +393,6 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
         ) : (
           <Text dimColor>No properties found</Text>
         )}
-
-        <Text></Text>
-        <Text dimColor>
-          'i' back to list, 'b' go back, Ctrl+C to exit
-        </Text>
       </Box>
     );
   }
@@ -450,101 +404,27 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
         <Text color="blue" bold>
           {formatted.icon} {formatted.title}
         </Text>
-        <Text>
-          {displayType} • {formatted.properties.length} properties
-        </Text>
+        <Text dimColor>{displayType}</Text>
         <Text></Text>
 
         <BackButton onBack={() => onBack?.()} isVisible={!!onBack} />
 
         <Text dimColor>No child pages or databases found.</Text>
-        <Text></Text>
-        <Text dimColor>
-          'i' view properties
-          {onStartGrading && contentType === "database" && ", 'g' grade database"}
-          , 'b' go back, Ctrl+C to exit
-        </Text>
       </Box>
     );
   }
 
-  // View All Mode
-  if (isViewAllMode) {
-    const totalPages = Math.ceil(displayItems.length / itemsPerPage);
-    const startIndex = currentPage * itemsPerPage;
-    const endIndex = Math.min(startIndex + itemsPerPage, displayItems.length);
-    const currentPageItems = displayItems.slice(startIndex, endIndex);
+  const showScrollIndicatorTop = scrollOffset > 0;
+  const showScrollIndicatorBottom = visibleEndIndex < allItems.length;
 
-    return (
-      <Box flexDirection="column">
-        <Text color="blue" bold>
-          {formatted.icon} {formatted.title}
-        </Text>
-        <Text>
-          {displayType} • {navigableItems.length} items
-        </Text>
-        <Text></Text>
-
-        <BackButton onBack={() => onBack?.()} isVisible={!!onBack} />
-
-        {totalPages > 1 && (
-          <Text dimColor>
-            Page {currentPage + 1} of {totalPages} | Items {startIndex + 1}-
-            {endIndex} of {displayItems.length}
-          </Text>
-        )}
-        <Text></Text>
-
-        {currentPageItems.map((item, pageIndex) => {
-          const actualIndex = startIndex + pageIndex;
-          const isSelected = actualIndex === selectedIndex;
-          const canGrade =
-            onStartGrading &&
-            contentType !== "database" &&
-            (item.type === "child_database" || item.type === "database_entry");
-
-          return (
-            <Box key={item.id} marginBottom={1}>
-              <Text color={isSelected ? "blue" : "white"} bold={isSelected}>
-                {isSelected ? "→ " : "  "}
-                {item.content}
-                {isSelected && canGrade && (
-                  <Text color="green"> [Press 'g' to grade]</Text>
-                )}
-              </Text>
-            </Box>
-          );
-        })}
-
-        <Text></Text>
-        <SearchInput
-          value={searchTerm}
-          placeholder="Search items..."
-          isFocused={isSearchFocused}
-          onChange={setSearchTerm}
-        />
-        <Text dimColor>
-          ↑/↓ navigate, ←/→ pages, Enter select, 's' search, 'i' info
-          {onStartGrading && contentType === "database" && ", 'g' grade database"}
-          {onStartGrading && contentType !== "database" && ", 'g' grade item"}
-          , 'b' back
-        </Text>
-      </Box>
-    );
-  }
-
-  // Default Search Mode
+  // Default list view with scrolling
   return (
     <Box flexDirection="column">
       <Text color="blue" bold>
         {formatted.icon} {formatted.title}
       </Text>
-      <Text>
-        {displayType} • {navigableItems.length} items
-      </Text>
+      <Text dimColor>{displayType}</Text>
       <Text></Text>
-
-      <BackButton onBack={() => onBack?.()} isVisible={!!onBack} />
 
       {searchTerm && filteredItems.length === 0 ? (
         <Box marginBottom={1}>
@@ -552,44 +432,32 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
         </Box>
       ) : (
         <>
-          {searchResultsItems.map((item, index) => {
-            const isSelected = !isSearchFocused && selectedIndex === index;
+          {showScrollIndicatorTop && (
+            <Text dimColor>  ↑ more above</Text>
+          )}
+
+          {displayItems.map((item, displayIndex) => {
+            const actualIndex = visibleStartIndex + displayIndex;
+            const isSelected = !isSearchFocused && selectedIndex === actualIndex;
             const canGrade =
               onStartGrading &&
               contentType !== "database" &&
               (item.type === "child_database" || item.type === "database_entry");
 
             return (
-              <Box key={item.id} marginBottom={1}>
+              <Box key={item.id}>
                 <Text color={isSelected ? "blue" : "white"} bold={isSelected}>
-                  {isSelected ? "→ " : "  "}
-                  {item.content}
-                  {isSelected && canGrade && (
-                    <Text color="green"> [Press 'g' to grade]</Text>
-                  )}
+                  {isSelected ? "→ " : "  "}{item.content}
                 </Text>
+                {isSelected && canGrade && (
+                  <Text color="green"> [g to grade]</Text>
+                )}
               </Box>
             );
           })}
 
-          {filteredItems.length > maxSearchResults && (
-            <Box marginBottom={1}>
-              <Text
-                color={
-                  !isSearchFocused && selectedIndex === searchResultsItems.length
-                    ? "blue"
-                    : "gray"
-                }
-                bold={
-                  !isSearchFocused && selectedIndex === searchResultsItems.length
-                }
-              >
-                {!isSearchFocused && selectedIndex === searchResultsItems.length
-                  ? "→ "
-                  : "  "}
-                View All ({filteredItems.length} total results)
-              </Text>
-            </Box>
+          {showScrollIndicatorBottom && (
+            <Text dimColor>  ↓ more below</Text>
           )}
         </>
       )}
@@ -597,16 +465,15 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
       <Text></Text>
       <SearchInput
         value={searchTerm}
-        placeholder="Search items..."
+        placeholder="Search..."
         isFocused={isSearchFocused}
         onChange={setSearchTerm}
       />
-      <Text dimColor>
-        Type to search, ↑/↓ navigate, Enter select, 'i' info
-        {onStartGrading && contentType === "database" && ", 'g' grade database"}
-        {onStartGrading && contentType !== "database" && ", 'g' grade item"}
-        , 'b' back
-      </Text>
+      {onBack && (
+        <Box>
+          <Text color="gray">← back</Text>
+        </Box>
+      )}
     </Box>
   );
 };

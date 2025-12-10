@@ -4,6 +4,7 @@ import { GradingResult } from "../lib/file-saver.js";
 import { GradingDatabaseService } from "../lib/notion/grading-database-service.js";
 import { NotionService } from "../lib/notion/notion-service.js";
 import { NotionOAuthClient } from "../lib/notion/oauth-client.js";
+import { HelpFooter } from "./ui/HelpFooter.js";
 
 export type SaveOption = "file" | "original-database" | "new-database" | "skip";
 
@@ -189,8 +190,7 @@ export const GradingSaveOptions: React.FC<GradingSaveOptionsProps> = ({
 
       {availableOptions.map((option, index) => (
         <Box key={option.key} marginY={0}>
-          <Text color={index === selectedIndex ? "cyan" : "white"}>
-            {index === selectedIndex ? "→ " : "  "}
+          <Text color={index === selectedIndex ? "cyan" : "white"} bold={index === selectedIndex}>
             {option.label}
           </Text>
         </Box>
@@ -203,9 +203,12 @@ export const GradingSaveOptions: React.FC<GradingSaveOptionsProps> = ({
         </Text>
       )}
       <Text></Text>
-      <Text color="gray" dimColor>
-        [Use arrow keys to navigate, press Enter to select]
-      </Text>
+      <HelpFooter
+        hints={[
+          { keys: "↑/↓", action: "navigate" },
+          { keys: "Enter", action: "select" },
+        ]}
+      />
     </Box>
   );
 };

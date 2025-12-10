@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Text, Box, useInput } from "ink";
 import { GitHubUrlDetector, GitHubUrlCandidate, GitHubUrlDetectionResult } from "../../lib/github-url-detector.js";
 import { BackButton, useBackNavigation } from "../ui/back-button.js";
+import { HelpFooter, ConfidenceBadge, ListRowDetails } from "../ui/index.js";
 
 interface GitHubColumnSelectorProps {
   notionContent: any;
@@ -306,18 +307,6 @@ export const GitHubColumnSelector: React.FC<GitHubColumnSelectorProps> = ({
     );
   }
 
-  const getConfidenceColor = (confidence: number) => {
-    if (confidence >= 80) return "green";
-    if (confidence >= 60) return "yellow";
-    return "red";
-  };
-
-  const getConfidenceLabel = (confidence: number) => {
-    if (confidence >= 80) return "High";
-    if (confidence >= 60) return "Medium";
-    return "Low";
-  };
-
   return (
     <Box flexDirection="column">
       <Text color="blue" bold>
@@ -328,38 +317,31 @@ export const GitHubColumnSelector: React.FC<GitHubColumnSelectorProps> = ({
         Found {detectionResult.candidates.length} potential column{detectionResult.candidates.length > 1 ? 's' : ''} with GitHub URLs.
         {detectionResult.topCandidate && ` Best match: ${detectionResult.topCandidate.propertyName}`}
       </Text>
-      <Text dimColor>
-        Use ↑/↓ arrows to navigate, Enter to select, 'q' for quick start with top match
-      </Text>
       <Text></Text>
 
       <BackButton onBack={() => onBack?.()} isVisible={!!onBack} />
 
       {detectionResult.candidates.map((candidate, index) => {
         const isSelected = selectedIndex === index;
-        const confidenceColor = getConfidenceColor(candidate.confidence);
-        const confidenceLabel = getConfidenceLabel(candidate.confidence);
 
         return (
           <Box key={candidate.propertyName} flexDirection="column" marginBottom={1}>
             <Box>
               <Text color={isSelected ? "blue" : "white"} bold={isSelected}>
-                {isSelected ? "→ " : "  "}
                 {candidate.propertyName}
               </Text>
               <Text dimColor> ({candidate.propertyType})</Text>
-              <Text color={confidenceColor}> [{confidenceLabel} confidence]</Text>
+              <Text> </Text>
+              <ConfidenceBadge confidence={candidate.confidence} showLabel={false} />
             </Box>
-            <Box marginLeft={4}>
-              <Text dimColor>
-                Found {candidate.totalUrls} GitHub URL{candidate.totalUrls > 1 ? 's' : ''}
-              </Text>
-            </Box>
+            <ListRowDetails>
+              Found {candidate.totalUrls} GitHub URL{candidate.totalUrls > 1 ? 's' : ''}
+            </ListRowDetails>
             {isSelected && candidate.sampleUrls.length > 0 && (
               <Box marginLeft={4} flexDirection="column">
                 <Text dimColor>Sample URLs:</Text>
                 {candidate.sampleUrls.map((url, urlIndex) => (
-                  <Text key={urlIndex} dimColor>  • {url}</Text>
+                  <Text key={urlIndex} dimColor>  * {url}</Text>
                 ))}
                 {candidate.totalUrls > candidate.sampleUrls.length && (
                   <Text dimColor>  ... and {candidate.totalUrls - candidate.sampleUrls.length} more</Text>
@@ -377,7 +359,7 @@ export const GitHubColumnSelector: React.FC<GitHubColumnSelectorProps> = ({
             Preview - GitHub URLs in selected column:
           </Text>
           {previewUrls.map((url, index) => (
-            <Text key={index} dimColor>  • {url}</Text>
+            <Text key={index} dimColor>  * {url}</Text>
           ))}
           {detectionResult.candidates[selectedIndex]?.totalUrls > previewUrls.length && (
             <Text dimColor>
@@ -388,9 +370,14 @@ export const GitHubColumnSelector: React.FC<GitHubColumnSelectorProps> = ({
       )}
 
       <Text></Text>
-      <Text dimColor>
-        Press Enter to select column, 'q' for quick start, 'b' or Escape to go back, Ctrl+C to exit
-      </Text>
+      <HelpFooter
+        hints={[
+          { keys: "Enter", action: "select column" },
+          { keys: "'q'", action: "quick start" },
+          { keys: "'b'", action: "back", condition: !!onBack },
+          { keys: "Ctrl+C", action: "exit" },
+        ]}
+      />
     </Box>
   );
 };

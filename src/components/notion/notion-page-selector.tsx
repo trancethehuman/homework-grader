@@ -44,16 +44,14 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showingDatabases, setShowingDatabases] = useState(false);
-  const [currentPage, setCurrentPage] = useState(0);
   const [searchTerm, setSearchTerm] = useState("");
   const [focusArea, setFocusArea] = useState<FocusArea>('search');
-  const [isViewAllMode, setIsViewAllMode] = useState(false);
   const [isStartingGrading, setIsStartingGrading] = useState(false);
   const [selectedDatabaseName, setSelectedDatabaseName] = useState("");
   const [loadingPhase, setLoadingPhase] = useState<LoadingPhase>("warming-up");
   const [loadingStartTime] = useState(Date.now());
-  const itemsPerPage = 10;
-  const maxSearchResults = 3;
+  const [scrollOffset, setScrollOffset] = useState(0);
+  const viewportSize = 8;
 
   const [nextCursor, setNextCursor] = useState<string | undefined>();
   const [hasMoreItems, setHasMoreItems] = useState(true);
@@ -76,8 +74,13 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
     );
   }, [baseItems, searchTerm]);
 
-  const displayItems = isViewAllMode ? baseItems : filteredItems;
-  const searchResultsItems = filteredItems.slice(0, maxSearchResults);
+  const allItems = filteredItems;
+  const hasLoadMoreOption = hasMoreItems && !searchTerm;
+  const totalItemsWithLoadMore = allItems.length + (hasLoadMoreOption ? 1 : 0);
+
+  const visibleStartIndex = scrollOffset;
+  const visibleEndIndex = Math.min(scrollOffset + viewportSize, totalItemsWithLoadMore);
+  const displayItems = allItems.slice(visibleStartIndex, Math.min(visibleEndIndex, allItems.length));
 
   useEffect(() => {
     const loadNotionData = async () => {
@@ -269,7 +272,6 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
 
     // Handle 's' key to focus search
     if (input === "s" && focusArea !== 'search') {
-      setIsViewAllMode(false);
       setFocusArea('search');
       setSelectedIndex(0);
       return;
@@ -277,8 +279,7 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
 
     // Handle 'g' key to start grading (only for databases)
     if (input === "g" && onStartGrading && focusArea === 'list') {
-      const items = isViewAllMode ? displayItems : searchResultsItems;
-      const currentItem = items[selectedIndex];
+      const currentItem = displayItems[selectedIndex];
       if (currentItem && "properties" in currentItem) {
         setIsStartingGrading(true);
         setSelectedDatabaseName(currentItem.title);
@@ -287,11 +288,11 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
       }
     }
 
-    // Handle 'd' key to toggle databases only (in view all mode)
-    if (input === "d" && isViewAllMode) {
+    // Handle 'd' key to toggle databases only
+    if (input === "d") {
       setShowingDatabases(!showingDatabases);
       setSelectedIndex(0);
-      setCurrentPage(0);
+      setScrollOffset(0);
       return;
     }
 
@@ -309,10 +310,10 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
     }
 
     // Handle search input when search is focused
-    if (focusArea === 'search' && !isViewAllMode) {
+    if (focusArea === 'search') {
       if (key.return) {
-        if (searchResultsItems.length > 0) {
-          const item = searchResultsItems[0];
+        if (displayItems.length > 0) {
+          const item = displayItems[0];
           const type = "properties" in item ? "database" : "page";
           onSelect(item.id, item.title, type);
         }
@@ -321,19 +322,26 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
 
       // Up arrow from search bar goes to the list above (only if there are items)
       if (key.upArrow) {
-        if (filteredItems.length > 0) {
+        if (totalItemsWithLoadMore > 0) {
           setFocusArea('list');
-          const hasViewAll = filteredItems.length > maxSearchResults;
-          const hasLoadMore = hasMoreItems && !searchTerm;
-          const lastIndex = searchResultsItems.length - 1 + (hasViewAll ? 1 : 0) + (hasLoadMore ? 1 : 0);
+          const lastIndex = totalItemsWithLoadMore - 1;
           setSelectedIndex(lastIndex);
+          // Scroll to show the last item
+          const newScrollOffset = Math.max(0, lastIndex - viewportSize + 1);
+          setScrollOffset(newScrollOffset);
         }
         return;
       }
 
-      // Down arrow from search bar goes to back button
-      if (key.downArrow && onBack) {
-        setFocusArea('back');
+      // Down arrow from search bar goes to first list item (circular navigation)
+      if (key.downArrow) {
+        if (totalItemsWithLoadMore > 0) {
+          setFocusArea('list');
+          setSelectedIndex(0);
+          setScrollOffset(0);
+        } else if (onBack) {
+          setFocusArea('back');
+        }
         return;
       }
 
@@ -350,77 +358,40 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
       return;
     }
 
-    // Handle view all mode
-    if (isViewAllMode) {
-      const totalPages = Math.ceil(displayItems.length / itemsPerPage);
-      const startIndex = currentPage * itemsPerPage;
-      const endIndex = Math.min(startIndex + itemsPerPage, displayItems.length);
-
-      if (key.upArrow) {
-        setSelectedIndex((prev) => {
-          const newIndex = Math.max(0, prev - 1);
-          if (newIndex < startIndex && currentPage > 0) {
-            setCurrentPage(currentPage - 1);
-            return newIndex;
-          }
-          return newIndex;
-        });
-      } else if (key.downArrow) {
-        setSelectedIndex((prev) => {
-          const newIndex = Math.min(displayItems.length - 1, prev + 1);
-          if (newIndex >= endIndex && currentPage < totalPages - 1) {
-            setCurrentPage(currentPage + 1);
-            return newIndex;
-          }
-          return newIndex;
-        });
-      } else if (key.leftArrow && currentPage > 0) {
-        setCurrentPage(currentPage - 1);
-        setSelectedIndex(Math.max(0, (currentPage - 1) * itemsPerPage));
-      } else if (key.rightArrow && currentPage < totalPages - 1) {
-        setCurrentPage(currentPage + 1);
-        setSelectedIndex(
-          Math.min(displayItems.length - 1, (currentPage + 1) * itemsPerPage)
-        );
-      } else if (key.return) {
-        if (displayItems[selectedIndex]) {
-          const item = displayItems[selectedIndex];
-          const type = "properties" in item ? "database" : "page";
-          onSelect(item.id, item.title, type);
-        }
-      }
-      return;
-    }
-
     // Handle navigation in list (search bar is at the bottom)
-    if (!isViewAllMode && focusArea === 'list') {
-      const hasViewAll = filteredItems.length > maxSearchResults;
-      const hasLoadMore = hasMoreItems && !searchTerm;
-      const viewAllIndex = searchResultsItems.length;
-      const loadMoreIndex = hasViewAll ? viewAllIndex + 1 : viewAllIndex;
-      const maxIndex = loadMoreIndex + (hasLoadMore ? 1 : 0);
+    if (focusArea === 'list') {
+      const loadMoreIndex = allItems.length;
 
       if (key.upArrow) {
         if (selectedIndex > 0) {
-          setSelectedIndex(selectedIndex - 1);
+          const newIndex = selectedIndex - 1;
+          setSelectedIndex(newIndex);
+          // Scroll up if needed
+          if (newIndex < scrollOffset) {
+            setScrollOffset(newIndex);
+          }
+        } else {
+          // At first item, wrap to search bar at bottom
+          setFocusArea('search');
         }
       } else if (key.downArrow) {
         // Down arrow at the last item goes to search bar
-        if (selectedIndex >= maxIndex - 1) {
+        if (selectedIndex >= totalItemsWithLoadMore - 1) {
           setFocusArea('search');
         } else {
-          setSelectedIndex(selectedIndex + 1);
+          const newIndex = selectedIndex + 1;
+          setSelectedIndex(newIndex);
+          // Scroll down if needed
+          if (newIndex >= scrollOffset + viewportSize) {
+            setScrollOffset(newIndex - viewportSize + 1);
+          }
         }
       } else if (key.return) {
-        if (selectedIndex < searchResultsItems.length) {
-          const item = searchResultsItems[selectedIndex];
+        if (selectedIndex < allItems.length) {
+          const item = allItems[selectedIndex];
           const type = "properties" in item ? "database" : "page";
           onSelect(item.id, item.title, type);
-        } else if (hasViewAll && selectedIndex === viewAllIndex) {
-          setIsViewAllMode(true);
-          setSelectedIndex(0);
-          setCurrentPage(0);
-        } else if (hasLoadMore && selectedIndex === loadMoreIndex) {
+        } else if (hasLoadMoreOption && selectedIndex === loadMoreIndex) {
           loadMore();
         }
       }
@@ -492,163 +463,28 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
     );
   }
 
-  // View All Mode
-  if (isViewAllMode) {
-    const totalPages = Math.ceil(displayItems.length / itemsPerPage);
-    const startIndex = currentPage * itemsPerPage;
-    const endIndex = Math.min(startIndex + itemsPerPage, displayItems.length);
-    const currentPageItems = displayItems.slice(startIndex, endIndex);
+  const loadMoreIndex = allItems.length;
+  const showScrollIndicatorTop = scrollOffset > 0;
+  const showScrollIndicatorBottom = visibleEndIndex < totalItemsWithLoadMore;
+  const showLoadMoreInViewport = hasLoadMoreOption && visibleEndIndex > allItems.length;
 
-    return (
-      <Box flexDirection="column">
-        <Text color="blue" bold>
-          Notion Workspace
-        </Text>
-        <Text>
-          {showingDatabases ? "Databases" : "Pages & Databases"} • {displayItems.length} items
-        </Text>
-        <Text></Text>
-
-        {showingDatabases && (
-          <Box marginBottom={1}>
-            <Text color="yellow">Showing databases only (press 'd' to show all)</Text>
-          </Box>
-        )}
-
-        {totalPages > 1 && (
-          <Text dimColor>
-            Page {currentPage + 1} of {totalPages} | Items {startIndex + 1}-
-            {endIndex} of {displayItems.length}
-          </Text>
-        )}
-        <Text></Text>
-
-        {currentPageItems.map((item, pageIndex) => {
-          const actualIndex = startIndex + pageIndex;
-          const isSelected = actualIndex === selectedIndex;
-          const isDatabase = "properties" in item;
-          const itemType = isDatabase ? "Database" : "Page";
-          const canGrade = isDatabase && onStartGrading;
-
-          return (
-            <Box key={item.id} marginBottom={1}>
-              <Text color={isSelected ? "blue" : "white"} bold={isSelected}>
-                {isSelected ? "→ " : "  "}
-                {item.title}
-              </Text>
-              <Text dimColor> ({itemType})</Text>
-              {isSelected && canGrade && (
-                <Text color="green"> [Press 'g' to grade]</Text>
-              )}
-            </Box>
-          );
-        })}
-
-        <Text></Text>
-        <Box>
-          <Text color={isSearchFocused ? "blue" : "white"} bold={isSearchFocused}>
-            {isSearchFocused ? "→ " : "  "}
-          </Text>
-          <SearchInput
-            value={searchTerm}
-            placeholder="Search pages and databases..."
-            isFocused={isSearchFocused}
-            onChange={setSearchTerm}
-          />
-        </Box>
-        {onBack && (
-          <Box>
-            <Text color={isBackFocused ? "blue" : "gray"} bold={isBackFocused}>
-              {isBackFocused ? "→ " : "  "}
-              ← back
-            </Text>
-          </Box>
-        )}
-        <Text></Text>
-        <Text dimColor>
-          ↑/↓ navigate, ←/→ pages, Enter select, 's' search, 'd' toggle databases
-          {onStartGrading && ", 'g' grade"}, 'b' back
-        </Text>
-      </Box>
-    );
-  }
-
-  // Default Search Mode
   return (
     <Box flexDirection="column">
       <Text color="blue" bold>
         Notion Workspace
       </Text>
-      <Text>
-        {pages.length} pages, {databases.length} databases
-      </Text>
       <Text></Text>
+
+      {showingDatabases && (
+        <Box marginBottom={1}>
+          <Text color="yellow">Showing databases only</Text>
+        </Box>
+      )}
 
       {searchTerm && filteredItems.length === 0 && (
         <Box marginBottom={1}>
           <Text color="yellow">No results found for "{searchTerm}"</Text>
         </Box>
-      )}
-      {filteredItems.length > 0 && (
-        <>
-          {searchResultsItems.map((item, index) => {
-            const isSelected = focusArea === 'list' && selectedIndex === index;
-            const isDatabase = "properties" in item;
-            const itemType = isDatabase ? "Database" : "Page";
-            const canGrade = isDatabase && onStartGrading;
-
-            return (
-              <Box key={item.id} marginBottom={1}>
-                <Text color={isSelected ? "blue" : "white"} bold={isSelected}>
-                  {isSelected ? "→ " : "  "}
-                  {item.title}
-                </Text>
-                <Text dimColor> ({itemType})</Text>
-                {isSelected && canGrade && (
-                  <Text color="green"> [Press 'g' to grade]</Text>
-                )}
-              </Box>
-            );
-          })}
-
-          {filteredItems.length > maxSearchResults && (
-            <Box marginBottom={1}>
-              <Text
-                color={
-                  focusArea === 'list' && selectedIndex === searchResultsItems.length
-                    ? "blue"
-                    : "gray"
-                }
-                bold={
-                  focusArea === 'list' && selectedIndex === searchResultsItems.length
-                }
-              >
-                {focusArea === 'list' && selectedIndex === searchResultsItems.length
-                  ? "→ "
-                  : "  "}
-                View All ({filteredItems.length} total results)
-              </Text>
-            </Box>
-          )}
-
-          {hasMoreItems && !searchTerm && (() => {
-            const loadMoreIdx = filteredItems.length > maxSearchResults
-              ? searchResultsItems.length + 1
-              : searchResultsItems.length;
-            const isLoadMoreSelected = focusArea === 'list' && selectedIndex === loadMoreIdx;
-            return (
-              <Box marginBottom={1}>
-                <Text
-                  color={isLoadMoreSelected ? "blue" : "gray"}
-                  bold={isLoadMoreSelected}
-                >
-                  {isLoadMoreSelected ? "→ " : "  "}
-                  {isLoadingMore ? "Loading..." : "Load more items..."}
-                </Text>
-              </Box>
-            );
-          })()}
-        </>
       )}
 
       {isSearching && (
@@ -657,31 +493,66 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
         </Box>
       )}
 
+      {allItems.length > 0 && (
+        <>
+          {showScrollIndicatorTop && (
+            <Text dimColor>  ↑ more above</Text>
+          )}
+
+          {displayItems.map((item, displayIndex) => {
+            const actualIndex = visibleStartIndex + displayIndex;
+            const isSelected = focusArea === 'list' && selectedIndex === actualIndex;
+            const isDatabase = "properties" in item;
+            const itemType = isDatabase ? "Database" : "Page";
+            const canGrade = isDatabase && onStartGrading;
+
+            return (
+              <Box key={item.id}>
+                <Text color={isSelected ? "blue" : "white"} bold={isSelected}>
+                  {isSelected ? "→ " : "  "}{item.title}
+                </Text>
+                <Text dimColor> ({itemType})</Text>
+                {isSelected && canGrade && (
+                  <Text color="green"> [g to grade]</Text>
+                )}
+              </Box>
+            );
+          })}
+
+          {showLoadMoreInViewport && (() => {
+            const isLoadMoreSelected = focusArea === 'list' && selectedIndex === loadMoreIndex;
+            return (
+              <Box>
+                <Text
+                  color={isLoadMoreSelected ? "blue" : "gray"}
+                  bold={isLoadMoreSelected}
+                >
+                  {isLoadMoreSelected ? "→ " : "  "}{isLoadingMore ? "Loading..." : "Load more..."}
+                </Text>
+              </Box>
+            );
+          })()}
+
+          {showScrollIndicatorBottom && !showLoadMoreInViewport && (
+            <Text dimColor>  ↓ more below</Text>
+          )}
+        </>
+      )}
+
       <Text></Text>
-      <Box>
-        <Text color={isSearchFocused ? "blue" : "white"} bold={isSearchFocused}>
-          {isSearchFocused ? "→ " : "  "}
-        </Text>
-        <SearchInput
-          value={searchTerm}
-          placeholder="Search pages and databases..."
-          isFocused={isSearchFocused}
-          onChange={setSearchTerm}
-        />
-      </Box>
+      <SearchInput
+        value={searchTerm}
+        placeholder="Search..."
+        isFocused={isSearchFocused}
+        onChange={setSearchTerm}
+      />
       {onBack && (
         <Box>
           <Text color={isBackFocused ? "blue" : "gray"} bold={isBackFocused}>
-            {isBackFocused ? "→ " : "  "}
             ← back
           </Text>
         </Box>
       )}
-      <Text></Text>
-      <Text dimColor>
-        ↑/↓ navigate, Enter select
-        {onStartGrading && ", 'g' grade"}, 'b' back
-      </Text>
     </Box>
   );
 };

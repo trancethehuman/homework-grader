@@ -1,6 +1,7 @@
 import React from "react";
 import { Text, Box } from "ink";
 import { useMenuSelector, MenuOption } from "../../hooks/useMenuSelector.js";
+import { HelpFooter, createHelpHints } from "./HelpFooter.js";
 
 export interface MenuSelectorProps<T> {
   title: string;
@@ -14,10 +15,6 @@ export interface MenuSelectorProps<T> {
   showExitHint?: boolean;
 }
 
-/**
- * Generic menu selector component with keyboard navigation.
- * Supports up/down arrows, Enter to select, and back navigation.
- */
 export function MenuSelector<T>({
   title,
   subtitle,
@@ -43,7 +40,6 @@ export function MenuSelector<T>({
       </Text>
       <Text></Text>
       {subtitle && <Text>{subtitle}</Text>}
-      <Text dimColor>Use ↑/↓ arrows to navigate, Enter to select</Text>
       <Text></Text>
 
       {options.map((option, index) => {
@@ -57,7 +53,6 @@ export function MenuSelector<T>({
                 color={isDisabled ? "gray" : isSelected ? highlightColor : "white"}
                 bold={isSelected}
               >
-                {isSelected ? "→ " : "  "}
                 {option.name}
                 {option.comingSoon && " (coming soon)"}
               </Text>
@@ -72,10 +67,14 @@ export function MenuSelector<T>({
       })}
 
       <Text></Text>
-      {showBackHint && onBack && (
-        <Text dimColor>Press 'b' or Escape to go back{showExitHint ? ", Ctrl+C to exit" : ""}</Text>
-      )}
-      {!onBack && showExitHint && <Text dimColor>Press Ctrl+C to exit</Text>}
+      <HelpFooter
+        hints={createHelpHints(
+          "navigate",
+          "select",
+          ["back", showBackHint && !!onBack],
+          ["exit", showExitHint]
+        )}
+      />
     </Box>
   );
 }

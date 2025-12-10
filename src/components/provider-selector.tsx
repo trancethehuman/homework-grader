@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Box, Text, useInput } from "ink";
 import { AI_PROVIDERS, AIProvider } from "../consts/ai-providers.js";
 import { PreferencesStorage } from "../lib/preferences-storage.js";
+import { HelpFooter } from "./ui/HelpFooter.js";
 
 interface ProviderSelectorProps {
   onSelect: (provider: AIProvider) => void;
@@ -73,7 +74,6 @@ export const ProviderSelector: React.FC<ProviderSelectorProps> = ({
           Previously selected: {savedProvider.name}
         </Text>
       )}
-      <Text dimColor>Use ↑/↓ arrows to navigate, Enter to select</Text>
       <Text></Text>
 
       {AI_PROVIDERS.map((provider, index) => {
@@ -82,7 +82,6 @@ export const ProviderSelector: React.FC<ProviderSelectorProps> = ({
           <Box key={provider.id} flexDirection="column" marginBottom={1}>
             <Box>
               <Text color={isSelected ? "blue" : "white"} bold={isSelected}>
-                {isSelected ? "→ " : "  "}
                 {provider.name}
               </Text>
             </Box>
@@ -94,11 +93,15 @@ export const ProviderSelector: React.FC<ProviderSelectorProps> = ({
       })}
 
       <Text></Text>
-      <Text dimColor>
-        {onTestMode ? "Press 't' for Browser Test Mode, " : ""}
-        {onBack ? "'b' to go back, " : ""}
-        Ctrl+C to exit
-      </Text>
+      <HelpFooter
+        hints={[
+          { keys: "↑/↓", action: "navigate" },
+          { keys: "Enter", action: "select" },
+          { keys: "'t'", action: "test mode", condition: !!onTestMode },
+          { keys: "'b'", action: "back", condition: !!onBack },
+          { keys: "Ctrl+C", action: "exit" },
+        ]}
+      />
     </Box>
   );
 };

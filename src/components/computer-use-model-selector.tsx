@@ -41,7 +41,6 @@ export const ComputerUseModelSelector: React.FC<ComputerUseModelSelectorProps> =
           <Box key={model.id} flexDirection="column" marginBottom={1}>
             <Box>
               <Text color={isSelected ? "blue" : "white"} bold={isSelected}>
-                {isSelected ? "→ " : "  "}
                 {model.name}
               </Text>
             </Box>
