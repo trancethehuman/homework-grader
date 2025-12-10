@@ -1,4 +1,4 @@
-import { Client } from "@notionhq/client";
+import { Client, LogLevel } from "@notionhq/client";
 import { DebugLogger } from "../utils/debug-logger.js";
 
 export interface NotionDataSource {
@@ -30,7 +30,8 @@ export class NotionDataSourceService {
     this.accessToken = accessToken;
     this.notion = new Client({
       auth: accessToken,
-      notionVersion: "2025-09-03"
+      notionVersion: "2025-09-03",
+      logLevel: LogLevel.ERROR,
     });
 
     DebugLogger.debugDataSource(` Data Source Service initialized with Notion API version: 2025-09-03`);

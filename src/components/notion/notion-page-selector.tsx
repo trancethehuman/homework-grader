@@ -20,6 +20,7 @@ import {
   ListRegionState,
   InputRegionState,
 } from "../../hooks/index.js";
+import { NotionUrlParser } from "../../lib/notion/notion-url-parser.js";
 
 const DEFAULT_PROXY_URL =
   process.env.NOTION_PROXY_URL || "https://notion-proxy-8xr3.onrender.com";
@@ -65,6 +66,9 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
   const [hasMoreItems, setHasMoreItems] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
+  const [isUrlFetching, setIsUrlFetching] = useState(false);
+  const [urlFetchError, setUrlFetchError] = useState<string | null>(null);
+  const [urlFetchedItem, setUrlFetchedItem] = useState<NotionPage | NotionDatabase | null>(null);
   const notionServiceRef = useRef<NotionService | null>(null);
 
   const viewportSize = 8;
@@ -135,13 +139,16 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
   const filteredItems = useMemo(() => {
+    if (urlFetchedItem) {
+      return [urlFetchedItem];
+    }
     if (!searchTerm.trim()) {
       return baseItems;
     }
     return baseItems.filter((item) =>
       item.title.toLowerCase().includes(searchTerm.toLowerCase())
     );
-  }, [baseItems, searchTerm]);
+  }, [baseItems, searchTerm, urlFetchedItem]);
 
   const allItems = filteredItems;
   const hasLoadMoreOption = hasMoreItems && !searchTerm;
@@ -299,6 +306,10 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
         return;
       }
 
+      if (NotionUrlParser.isNotionUrl(debouncedSearchTerm.trim())) {
+        return;
+      }
+
       setIsSearching(true);
       setLoadingPhase("searching");
 
@@ -324,6 +335,60 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
 
     performSearch();
   }, [debouncedSearchTerm]);
+
+  useEffect(() => {
+    const fetchFromUrl = async () => {
+      setUrlFetchError(null);
+      setUrlFetchedItem(null);
+
+      const trimmed = searchTerm.trim();
+      if (!trimmed || !NotionUrlParser.isNotionUrl(trimmed)) {
+        return;
+      }
+
+      const parseResult = NotionUrlParser.parseUrl(trimmed);
+      if (!parseResult.isValid || !parseResult.id) {
+        setUrlFetchError(parseResult.error || "Invalid Notion URL");
+        return;
+      }
+
+      if (!notionServiceRef.current) {
+        return;
+      }
+
+      setIsUrlFetching(true);
+
+      try {
+        const item = await notionServiceRef.current.getItemById(parseResult.id);
+
+        if (item.type === "database") {
+          const dbItem: NotionDatabase = {
+            id: item.id,
+            title: item.title,
+            url: item.url,
+            lastEditedTime: new Date().toISOString(),
+            properties: item.properties || {},
+          };
+          setUrlFetchedItem(dbItem);
+        } else {
+          const pageItem: NotionPage = {
+            id: item.id,
+            title: item.title,
+            url: item.url,
+            lastEditedTime: new Date().toISOString(),
+          };
+          setUrlFetchedItem(pageItem);
+        }
+      } catch (err: any) {
+        setUrlFetchError(err.message || "Failed to fetch from URL");
+      } finally {
+        setIsUrlFetching(false);
+      }
+    };
+
+    const timeoutId = setTimeout(fetchFromUrl, 500);
+    return () => clearTimeout(timeoutId);
+  }, [searchTerm]);
 
   const loadMore = async () => {
     if (
@@ -509,6 +574,24 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
         </Box>
       )}
 
+      {isUrlFetching && (
+        <Box marginBottom={1}>
+          <Text color="cyan">Fetching from URL...</Text>
+        </Box>
+      )}
+
+      {urlFetchError && (
+        <Box marginBottom={1}>
+          <Text color="red">{urlFetchError}</Text>
+        </Box>
+      )}
+
+      {urlFetchedItem && (
+        <Box marginBottom={1}>
+          <Text color="green">Found from URL (press Enter to select):</Text>
+        </Box>
+      )}
+
       {allItems.length > 0 && (
         <>
           {showScrollIndicatorTop && <Text dimColor> ↑ more above</Text>}
@@ -563,7 +646,7 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
       <Text></Text>
       <SearchInput
         value={searchTerm}
-        placeholder="Search..."
+        placeholder="Search or paste Notion URL..."
         isFocused={isSearchFocused}
         onChange={(value) => inputSetValue("search", value)}
       />

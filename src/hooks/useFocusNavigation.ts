@@ -397,7 +397,7 @@ export function useFocusNavigation(
           inputDeleteChar(currentRegion.id);
           return;
         }
-        if (input && input.length === 1 && !key.ctrl && !key.meta) {
+        if (input && input.length >= 1 && !key.ctrl && !key.meta) {
           inputAppendChar(currentRegion.id, input);
           return;
         }

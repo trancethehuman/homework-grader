@@ -1,4 +1,4 @@
-import { Client } from "@notionhq/client";
+import { Client, LogLevel } from "@notionhq/client";
 import { config } from "dotenv";
 import { NotionTokenStorage } from "./notion-token-storage.js";
 import { NotionDataSourceService } from "./data-source-service.js";
@@ -99,7 +99,8 @@ export class NotionService {
     this.currentToken = token;
     this.notion = new Client({
       auth: token,
-      notionVersion: "2025-09-03"
+      notionVersion: "2025-09-03",
+      logLevel: LogLevel.ERROR,
     });
 
     DebugLogger.debug(` Notion Service initialized with API version: 2025-09-03`);
@@ -1463,6 +1464,80 @@ export class NotionService {
    */
   getDataSourceService(): NotionDataSourceService | null {
     return this.dataSourceService;
+  }
+
+  /**
+   * Fetch a single page or database by ID
+   * Tries page first, then database if page fails
+   */
+  async getItemById(
+    id: string
+  ): Promise<{ id: string; title: string; type: "page" | "database"; url: string; properties?: Record<string, any> }> {
+    await this.ensureValidToken();
+
+    return await this.pageCircuitBreaker.execute(async () => {
+      return await ApiTimeoutHandler.withTimeout(async () => {
+        DebugLogger.debug(` Fetching item by ID: ${id}`);
+
+        try {
+          const page = await this.notion.pages.retrieve({ page_id: id });
+          const title = this.extractTitle(page);
+
+          DebugLogger.debug(` Found page: ${title}`);
+
+          return {
+            id: page.id,
+            title,
+            type: "page" as const,
+            url: (page as any).url || `https://notion.so/${id.replace(/-/g, "")}`,
+          };
+        } catch (pageError: any) {
+          DebugLogger.debug(` Page retrieval failed: ${pageError.message}, trying as database...`);
+
+          if (
+            pageError.code === "object_not_found" ||
+            pageError.code === "validation_error" ||
+            pageError.message?.includes("database")
+          ) {
+            try {
+              const database = await this.getDatabaseMetadata(id);
+              const title = this.extractTitle(database) || "Untitled Database";
+
+              DebugLogger.debug(` Found database: ${title}`);
+
+              return {
+                id: database.id || id,
+                title,
+                type: "database" as const,
+                url: (database as any).url || `https://notion.so/${id.replace(/-/g, "")}`,
+                properties: database.properties,
+              };
+            } catch (dbError: any) {
+              DebugLogger.debug(` Database retrieval also failed: ${dbError.message}`);
+
+              if (dbError.code === "object_not_found" || dbError.message?.includes("not found")) {
+                throw new Error(
+                  "Page or database not found. Make sure it is shared with your Notion integration."
+                );
+              }
+              if (dbError.code === "unauthorized" || dbError.code === "restricted_resource") {
+                throw new Error(
+                  "Access denied. Please share this page/database with your Notion integration."
+                );
+              }
+              throw new Error(`Failed to fetch from Notion: ${dbError.message}`);
+            }
+          }
+
+          if (pageError.code === "unauthorized" || pageError.code === "restricted_resource") {
+            throw new Error(
+              "Access denied. Please share this page/database with your Notion integration."
+            );
+          }
+          throw new Error(`Failed to fetch from Notion: ${pageError.message}`);
+        }
+      }, this.defaultTimeouts.page);
+    });
   }
 
 }
