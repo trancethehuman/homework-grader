@@ -212,7 +212,7 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
           const matchingBlock = originalBlocks.find((block: any) => {
             const blockTitle =
               block.child_database?.title || block.child_page?.title;
-            const itemTitle = selectedItem.content.replace(/^(📊|📄) /, "");
+            const itemTitle = selectedItem.content.replace(/^(|) /, "");
             return blockTitle === itemTitle && block.type === "child_database";
           });
 
@@ -339,7 +339,7 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
       const matchingBlock = originalBlocks.find((block: any) => {
         const blockTitle =
           block.child_database?.title || block.child_page?.title;
-        const itemTitle = item.content.replace(/^(📊|📄) /, "");
+        const itemTitle = item.content.replace(/^(|) /, "");
         return (
           blockTitle === itemTitle &&
           (block.type === "child_database" || block.type === "child_page")
@@ -348,7 +348,7 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
 
       if (matchingBlock) {
         const childId = matchingBlock.id;
-        let childTitle = item.content.replace(/^(📊|📄) /, "");
+        let childTitle = item.content.replace(/^(|) /, "");
         let itemContentType = "page";
 
         if (matchingBlock.type === "child_database") {

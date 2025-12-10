@@ -179,10 +179,10 @@ export const GradingSaveOptions: React.FC<GradingSaveOptionsProps> = ({
   return (
     <Box flexDirection="column" marginY={1}>
       <Text color="green" bold>
-        ✅ Grading completed for {gradingResults.length} repositories!
+         Grading completed for {gradingResults.length} repositories!
       </Text>
       <Text color="gray" dimColor>
-        📊 Usage logged to ~/.cli-agents-fleet/usage-log.json
+         Usage logged to ~/.cli-agents-fleet/usage-log.json
       </Text>
       <Text></Text>
       <Text>How would you like to save the results?</Text>

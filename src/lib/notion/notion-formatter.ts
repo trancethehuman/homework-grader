@@ -71,7 +71,7 @@ export class NotionFormatter {
     const entries = content.entries || [];
 
     const title = this.extractDatabaseTitle(database);
-    const icon = database.icon?.emoji || database.icon?.file?.url || "🗃️";
+    const icon = database.icon?.emoji || database.icon?.file?.url || "";
     const url = database.url || "";
     const createdTime = new Date(database.created_time).toLocaleString();
     const lastEditedTime = new Date(database.last_edited_time).toLocaleString();
@@ -141,20 +141,20 @@ export class NotionFormatter {
       
       case "child_database":
         const dbTitle = block.child_database?.title || "Untitled Database";
-        baseBlock.content = `📊 ${dbTitle}`;
+        baseBlock.content = ` ${dbTitle}`;
         (baseBlock as any).title = dbTitle;
         break;
       
       case "child_page":
         const pageTitle = block.child_page?.title || "Untitled Page";
-        baseBlock.content = `📄 ${pageTitle}`;
+        baseBlock.content = ` ${pageTitle}`;
         (baseBlock as any).title = pageTitle;
         break;
       
       case "image":
         const imageUrl = block.image?.external?.url || block.image?.file?.url || "";
         const caption = this.extractRichText(block.image?.caption || []);
-        baseBlock.content = `🖼️ Image${caption ? `: ${caption}` : ""}`;
+        baseBlock.content = ` Image${caption ? `: ${caption}` : ""}`;
         break;
       
       case "video":
@@ -178,7 +178,7 @@ export class NotionFormatter {
         break;
       
       case "callout":
-        const calloutIcon = block.callout?.icon?.emoji || "💡";
+        const calloutIcon = block.callout?.icon?.emoji || "";
         const calloutText = this.extractRichText(block.callout?.rich_text || []);
         baseBlock.content = `${calloutIcon} ${calloutText}`;
         break;
@@ -467,13 +467,13 @@ export class NotionFormatter {
     lines.push(`${formatted.icon} ${formatted.title}`);
     lines.push("=".repeat(80));
     lines.push(`📅 Created: ${formatted.createdTime}`);
-    lines.push(`✏️  Last edited: ${formatted.lastEditedTime}`);
+    lines.push(`  Last edited: ${formatted.lastEditedTime}`);
     lines.push(`🔗 URL: ${formatted.url}`);
     lines.push("=".repeat(80));
     
     // Properties section (like Notion)
     if (formatted.properties.length > 0) {
-      lines.push("📝 PROPERTIES:");
+      lines.push(" PROPERTIES:");
       lines.push("");
       formatted.properties.forEach((prop) => {
         const propLine = `${prop.name}: ${prop.value}`;
@@ -488,7 +488,7 @@ export class NotionFormatter {
     
     // Content section
     if (formatted.blocks.length > 0) {
-      const contentLabel = content.type === "database" ? "📊 DATABASE ENTRIES:" : "📄 CONTENT:";
+      const contentLabel = content.type === "database" ? " DATABASE ENTRIES:" : " CONTENT:";
       lines.push(contentLabel);
       lines.push("");
       
@@ -498,7 +498,7 @@ export class NotionFormatter {
         lines.push(`${prefix} ${typeInfo} ${block.content}`);
       });
     } else {
-      const emptyLabel = content.type === "database" ? "📊 DATABASE: (No entries found)" : "📄 CONTENT: (No blocks found)";
+      const emptyLabel = content.type === "database" ? " DATABASE: (No entries found)" : " CONTENT: (No blocks found)";
       lines.push(emptyLabel);
     }
     

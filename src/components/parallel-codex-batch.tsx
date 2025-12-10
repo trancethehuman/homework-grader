@@ -67,13 +67,13 @@ const getActivityMessage = (item: ThreadItem): string => {
     case "command_execution":
       return `$ Running: ${(item as any).command || "command"}`;
     case "file_change":
-      return "📝 Reading files...";
+      return " Reading files...";
     case "agent_message":
       return "💬 Generating feedback...";
     case "todo_list":
       return "📋 Planning tasks...";
     default:
-      return "⚙️ Processing...";
+      return " Processing...";
   }
 };
 
@@ -167,7 +167,7 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
               ? {
                   ...repo,
                   status: "cancelling",
-                  currentActivity: "⏭️ Skipping...",
+                  currentActivity: " Skipping...",
                 }
               : repo
           )
@@ -325,7 +325,7 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
                       return {
                         ...repo,
                         status: "initializing",
-                        currentActivity: "⚙️ Initializing Codex...",
+                        currentActivity: " Initializing Codex...",
                         itemCount: 0,
                       };
                     case "item_updated":
@@ -527,15 +527,15 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
       case "cloned":
         return "✓";
       case "initializing":
-        return `⚙️ `;
+        return ` `;
       case "analyzing":
-        return `🔍`;
+        return ``;
       case "streaming":
         return `💬`;
       case "cancelling":
         return `${spinnerFrames[spinnerFrame]}`;
       case "completed":
-        return "✅";
+        return "";
       case "error":
         return "✗";
       default:
@@ -724,7 +724,7 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
                   {repo.status === "error" && repo.error && (
                     <Text color={repo.isTimeout ? "yellow" : "red"} dimColor>
                       {repo.isTimeout
-                        ? "⏱️ Timeout (10 min): "
+                        ? " Timeout (10 min): "
                         : repo.failureType === "clone"
                         ? "Clone failed: "
                         : "Grading failed: "}

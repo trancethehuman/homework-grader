@@ -393,7 +393,7 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
           Preparing to Grade Database
         </Text>
         <Box marginTop={1} alignItems="center">
-          <Text>🎯</Text>
+          <Text></Text>
         </Box>
         <Box marginTop={1}>
           <Text color="cyan">

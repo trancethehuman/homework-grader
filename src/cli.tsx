@@ -37,7 +37,7 @@ async function processGitHubUrlsWithGitHubAPI(
     );
   } else {
     console.log(
-      `⚠ No GitHub token provided. Using unauthenticated requests (60 requests/hour)`
+      ` No GitHub token provided. Using unauthenticated requests (60 requests/hour)`
     );
     console.log(
       `  To avoid rate limiting, set GITHUB_TOKEN environment variable or provide token interactively`
@@ -110,13 +110,13 @@ async function processGitHubUrlsWithE2BSandbox(
     try {
       // Initialize sandbox once for all repositories
       console.log("\n" + "=".repeat(60));
-      console.log("🚀 E2B SANDBOX PROCESSING MODE");
+      console.log(" E2B SANDBOX PROCESSING MODE");
       console.log("=".repeat(60));
 
       await sandboxService.initialize();
 
       console.log("\n" + "=".repeat(60));
-      console.log("📦 REPOSITORY PROCESSING");
+      console.log(" REPOSITORY PROCESSING");
       console.log("=".repeat(60));
 
       // Process URLs sequentially in sandbox (no concurrent processing needed)
@@ -135,7 +135,7 @@ async function processGitHubUrlsWithE2BSandbox(
       }
 
       console.log("\n" + "=".repeat(60));
-      console.log("✅ ALL REPOSITORIES PROCESSED SUCCESSFULLY!");
+      console.log(" ALL REPOSITORIES PROCESSED SUCCESSFULLY!");
       console.log("=".repeat(60));
     } finally {
       // Always cleanup sandbox
@@ -173,7 +173,7 @@ async function processGitHubUrls(
         aiProvider
       );
     } catch (error) {
-      console.error("\n⚠️  E2B Sandbox processing failed:", error);
+      console.error("\n  E2B Sandbox processing failed:", error);
       console.log("\n🔄 Falling back to GitHub API approach...\n");
 
       // Fallback to GitHub API
@@ -227,7 +227,7 @@ async function main() {
     // Interactive mode - check if environment supports it
     if (!shouldUseInteractiveMode()) {
       console.error(
-        "\n❌ Interactive mode is not supported in this environment."
+        "\n Interactive mode is not supported in this environment."
       );
       console.error("Please use command-line arguments instead:");
       console.error("   cli-agents-fleet <csv-file>");
@@ -267,18 +267,18 @@ async function main() {
       );
     } catch (inkError) {
       // If Ink completely fails, provide fallback instructions
-      console.error("\n❌ Interactive mode failed to initialize.");
+      console.error("\n Interactive mode failed to initialize.");
       console.error(
         "   This usually happens when running in an unsupported environment."
       );
-      console.error("\n💡 Fallback options:");
+      console.error("\n Fallback options:");
       console.error("   1. Use command-line mode: cli-agents-fleet <csv-file>");
       console.error("   2. Try running in a different terminal");
       console.error(
         "   3. Check if you're running inside an IDE or script environment"
       );
       console.error(
-        "\n📄 For CSV processing, create a CSV file with GitHub URLs and run:"
+        "\n For CSV processing, create a CSV file with GitHub URLs and run:"
       );
       console.error("   cli-agents-fleet your-file.csv");
       console.error(

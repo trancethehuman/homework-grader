@@ -27,12 +27,12 @@ export class GradingDatabaseService {
     sourceDatabaseId?: string,
     options: DatabaseCreationOptions & { skipGithubUrlColumn?: string; processingMode?: 'code' | 'browser' | 'both' } = {}
   ): Promise<{ databaseId: string; created: boolean; updated: boolean }> {
-    DebugLogger.debug(`🏗️ Ensuring grading database exists...`);
-    DebugLogger.debug(`📊 Processing mode: ${options.processingMode || 'both'}`);
+    DebugLogger.debug(` Ensuring grading database exists...`);
+    DebugLogger.debug(` Processing mode: ${options.processingMode || 'both'}`);
 
     try {
       if (sourceDatabaseId) {
-        DebugLogger.debug(`🔧 Using existing database: ${sourceDatabaseId}`);
+        DebugLogger.debug(` Using existing database: ${sourceDatabaseId}`);
         // Check existing database and update schema if needed
         return await this.updateExistingDatabase(sourceDatabaseId, options);
       } else {
@@ -41,7 +41,7 @@ export class GradingDatabaseService {
         return await this.createNewGradingDatabase(options);
       }
     } catch (error: any) {
-      console.log(`❌ Failed to ensure grading database: ${error.message}`);
+      console.log(` Failed to ensure grading database: ${error.message}`);
       throw error; // Re-throw to preserve the original error
     }
   }
@@ -205,7 +205,7 @@ export class GradingDatabaseService {
     }) => Promise<'override' | 'override-all' | 'skip' | 'skip-all'>
   ): Promise<{ success: number; failed: number; skipped: number; errors: string[] }> {
     console.log(`💾 Saving ${results.length} grading results to Notion database...`);
-    DebugLogger.debug(`🔧 Processing mode: ${processingMode}`);
+    DebugLogger.debug(` Processing mode: ${processingMode}`);
 
     const overallStartTime = Date.now();
     const errors: string[] = [];
@@ -255,11 +255,11 @@ export class GradingDatabaseService {
               } else if (decision === 'skip-all') {
                 skipAll = true;
                 skipped++;
-                DebugLogger.debug(`⏭️ Skipping ${result.repositoryName} (skip-all selected)`);
+                DebugLogger.debug(` Skipping ${result.repositoryName} (skip-all selected)`);
                 continue;
               } else if (decision === 'skip') {
                 skipped++;
-                DebugLogger.debug(`⏭️ Skipping ${result.repositoryName} (user selected skip)`);
+                DebugLogger.debug(` Skipping ${result.repositoryName} (user selected skip)`);
                 continue;
               }
             }
@@ -268,7 +268,7 @@ export class GradingDatabaseService {
           // Skip if skip-all is active
           if (isUpdate && skipAll) {
             skipped++;
-            DebugLogger.debug(`⏭️ Skipping ${result.repositoryName} (skip-all active)`);
+            DebugLogger.debug(` Skipping ${result.repositoryName} (skip-all active)`);
             continue;
           }
 
@@ -310,12 +310,12 @@ export class GradingDatabaseService {
         } catch (error: any) {
           failed++;
           const errorMessage = `Failed to save ${result.repositoryName}: ${error.message}`;
-          DebugLogger.debug(`❌ Error: ${errorMessage}`);
+          DebugLogger.debug(` Error: ${errorMessage}`);
           errors.push(errorMessage);
         }
       }
     } catch (error: any) {
-      DebugLogger.debug(`❌ Database validation failed: ${error.message}`);
+      DebugLogger.debug(` Database validation failed: ${error.message}`);
       return {
         success: 0,
         failed: results.length,
@@ -328,13 +328,13 @@ export class GradingDatabaseService {
     const totalDuration = Date.now() - overallStartTime;
     const totalDurationSeconds = Math.round(totalDuration / 1000);
 
-    console.log(`✅ Saved ${success} results to Notion database${failed > 0 ? ` (${failed} failed)` : ''}${skipped > 0 ? ` (${skipped} skipped)` : ''}`);
+    console.log(` Saved ${success} results to Notion database${failed > 0 ? ` (${failed} failed)` : ''}${skipped > 0 ? ` (${skipped} skipped)` : ''}`);
 
     DebugLogger.debug(`\n🏁 Processing completed in ${totalDurationSeconds}s!`);
-    DebugLogger.debug(`📊 Final Results: ${success} succeeded, ${failed} failed, ${skipped} skipped out of ${results.length} repositories`);
+    DebugLogger.debug(` Final Results: ${success} succeeded, ${failed} failed, ${skipped} skipped out of ${results.length} repositories`);
 
     if (errors.length > 0) {
-      console.log(`⚠️ ${errors.length} repositories failed to save`);
+      console.log(` ${errors.length} repositories failed to save`);
     }
 
     return { success, failed, skipped, errors };
@@ -351,7 +351,7 @@ export class GradingDatabaseService {
     processingMode: 'code' | 'browser' | 'both' = 'both'
   ): Promise<{ success: number; failed: number; errors: string[] }> {
     console.log(`💾 Saving ${results.length} grading results to Notion database...`);
-    DebugLogger.debug(`🔧 Processing mode: ${processingMode}`);
+    DebugLogger.debug(` Processing mode: ${processingMode}`);
 
     const overallStartTime = Date.now();
     const errors: string[] = [];
@@ -378,18 +378,18 @@ export class GradingDatabaseService {
       const DELAY_BETWEEN_BATCHES = 1000; // 1 second delay between batches
       const totalBatches = Math.ceil(results.length / BATCH_SIZE);
 
-      DebugLogger.debug(`🚀 Starting batched parallel processing: ${results.length} repositories in ${totalBatches} batches`);
+      DebugLogger.debug(` Starting batched parallel processing: ${results.length} repositories in ${totalBatches} batches`);
 
       for (let i = 0; i < results.length; i += BATCH_SIZE) {
         const batch = results.slice(i, i + BATCH_SIZE);
         const batchNumber = Math.floor(i / BATCH_SIZE) + 1;
         const startIndex = i;
 
-        DebugLogger.debug(`📦 Processing batch ${batchNumber}/${totalBatches} (${batch.length} repositories)...`);
+        DebugLogger.debug(` Processing batch ${batchNumber}/${totalBatches} (${batch.length} repositories)...`);
 
         // Show batch start info
         const batchRepoNames = batch.map(r => r.repositoryName).join(', ');
-        DebugLogger.debug(`🚀 Starting batch ${batchNumber}: ${batchRepoNames}`);
+        DebugLogger.debug(` Starting batch ${batchNumber}: ${batchRepoNames}`);
 
         // Process batch in parallel using Promise.allSettled
         const batchStartTime = Date.now();
@@ -423,7 +423,7 @@ export class GradingDatabaseService {
             batchFailed++;
             failed++;
             const errorMessage = `Failed to save ${result.repositoryName}: ${batchResult.reason?.message || batchResult.reason}`;
-            DebugLogger.debug(`❌ Error: ${errorMessage}`);
+            DebugLogger.debug(` Error: ${errorMessage}`);
             errors.push(errorMessage);
           }
         });
@@ -435,11 +435,11 @@ export class GradingDatabaseService {
         const avgTimePerRepo = batchDuration / batch.length;
         const estimatedTimeRemaining = remainingCount > 0 ? Math.round((remainingCount * avgTimePerRepo) / 1000) : 0;
 
-        DebugLogger.debug(`✅ Batch ${batchNumber} completed in ${batchDuration}ms (${batchSuccess} success, ${batchFailed} failed)`);
-        DebugLogger.debug(`📊 Overall Progress: ${completedCount}/${results.length} (${progressPercent}%) | Success: ${success} | Failed: ${failed}`);
+        DebugLogger.debug(` Batch ${batchNumber} completed in ${batchDuration}ms (${batchSuccess} success, ${batchFailed} failed)`);
+        DebugLogger.debug(` Overall Progress: ${completedCount}/${results.length} (${progressPercent}%) | Success: ${success} | Failed: ${failed}`);
 
         if (remainingCount > 0) {
-          DebugLogger.debug(`⏱️ Estimated time remaining: ~${estimatedTimeRemaining}s (${Math.ceil(remainingCount / BATCH_SIZE)} batches left)`);
+          DebugLogger.debug(` Estimated time remaining: ~${estimatedTimeRemaining}s (${Math.ceil(remainingCount / BATCH_SIZE)} batches left)`);
         }
 
         // Wait before next batch (if more remain)
@@ -449,7 +449,7 @@ export class GradingDatabaseService {
         }
       }
     } catch (error: any) {
-      DebugLogger.debug(`❌ Database validation failed: ${error.message}`);
+      DebugLogger.debug(` Database validation failed: ${error.message}`);
       return {
         success: 0,
         failed: results.length,
@@ -462,10 +462,10 @@ export class GradingDatabaseService {
     const totalDurationSeconds = Math.round(totalDuration / 1000);
     const avgTimePerRepo = success > 0 ? Math.round(totalDuration / success) : 0;
 
-    console.log(`✅ Saved ${success} results to Notion database${failed > 0 ? ` (${failed} failed)` : ''}`);
+    console.log(` Saved ${success} results to Notion database${failed > 0 ? ` (${failed} failed)` : ''}`);
 
     DebugLogger.debug(`\n🏁 Batch processing completed in ${totalDurationSeconds}s!`);
-    DebugLogger.debug(`📊 Final Results: ${success} succeeded, ${failed} failed out of ${results.length} repositories`);
+    DebugLogger.debug(` Final Results: ${success} succeeded, ${failed} failed out of ${results.length} repositories`);
 
     if (success > 0) {
       DebugLogger.debug(`⚡ Performance: Processed ${success} repositories in ${totalDurationSeconds}s (${avgTimePerRepo}ms/repo avg)`);
@@ -473,7 +473,7 @@ export class GradingDatabaseService {
     }
 
     if (errors.length > 0) {
-      console.log(`⚠️ ${errors.length} repositories failed to save`);
+      console.log(` ${errors.length} repositories failed to save`);
     }
 
     return { success, failed, errors };
@@ -486,7 +486,7 @@ export class GradingDatabaseService {
     databaseId: string,
     processingMode: 'code' | 'browser' | 'both'
   ): Promise<void> {
-    DebugLogger.debug(`🔍 Validating database ${databaseId} for processing mode: ${processingMode}`);
+    DebugLogger.debug(` Validating database ${databaseId} for processing mode: ${processingMode}`);
 
     const databaseProperties = await this.notionService.getDatabaseProperties(databaseId);
     const missingProperties = NotionSchemaMapper.getMissingGradingProperties(
@@ -495,11 +495,11 @@ export class GradingDatabaseService {
     );
 
     if (Object.keys(missingProperties).length > 0) {
-      DebugLogger.debug(`❌ Database is missing required columns: ${Object.keys(missingProperties).join(', ')}`);
+      DebugLogger.debug(` Database is missing required columns: ${Object.keys(missingProperties).join(', ')}`);
       throw new Error(`Database is missing required grading columns: ${Object.keys(missingProperties).join(', ')}. Please run the schema update step first.`);
     }
 
-    DebugLogger.debug(`✅ Database validation passed - all required columns present`);
+    DebugLogger.debug(` Database validation passed - all required columns present`);
   }
 
   /**
@@ -651,7 +651,7 @@ export class GradingDatabaseService {
     databaseId: string,
     options: { skipGithubUrlColumn?: string; processingMode?: 'code' | 'browser' | 'both' } = {}
   ): Promise<{ databaseId: string; created: boolean; updated: boolean }> {
-    DebugLogger.debug(`🔧 Updating existing database ${databaseId} for processing mode: ${options.processingMode || 'both'}`);
+    DebugLogger.debug(` Updating existing database ${databaseId} for processing mode: ${options.processingMode || 'both'}`);
 
     try {
       DebugLogger.debug(`📋 Getting existing database properties...`);
@@ -659,7 +659,7 @@ export class GradingDatabaseService {
         databaseId
       );
 
-      DebugLogger.debug(`🔍 Checking for missing grading properties...`);
+      DebugLogger.debug(` Checking for missing grading properties...`);
       const missingProperties = NotionSchemaMapper.getMissingGradingProperties(
         existingProperties,
         {
@@ -669,7 +669,7 @@ export class GradingDatabaseService {
       );
 
       if (Object.keys(missingProperties).length > 0) {
-        console.log(`🔧 Adding ${Object.keys(missingProperties).length} required database columns...`);
+        console.log(` Adding ${Object.keys(missingProperties).length} required database columns...`);
 
         // Update database with missing properties
         await this.notionService.updateDatabaseSchema(
@@ -677,15 +677,15 @@ export class GradingDatabaseService {
           missingProperties
         );
 
-        console.log(`✅ Database schema updated successfully`);
+        console.log(` Database schema updated successfully`);
         return { databaseId, created: false, updated: true };
       }
 
       // Database already has all required properties
-      DebugLogger.debug(`✅ Database already has all required properties - no update needed`);
+      DebugLogger.debug(` Database already has all required properties - no update needed`);
       return { databaseId, created: false, updated: false };
     } catch (error: any) {
-      console.log(`❌ Failed to update database schema: ${error.message}`);
+      console.log(` Failed to update database schema: ${error.message}`);
       throw new Error(`Failed to update database schema: ${error.message}`);
     }
   }

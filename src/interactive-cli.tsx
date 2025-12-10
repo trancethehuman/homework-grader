@@ -510,7 +510,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
             sandboxService = new SandboxService();
             await sandboxService.initialize();
             console.log(
-              `🚀 Using sandbox for processing ${notionGitHubUrls.length} repositories`
+              ` Using sandbox for processing ${notionGitHubUrls.length} repositories`
             );
           } catch (sandboxError) {
             console.warn(
@@ -525,7 +525,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           if (sandboxService) {
             // Use parallel processing for sandbox (single sandbox, multiple repos)
             console.log(
-              `🚀 Processing ${notionGitHubUrls.length} repositories in parallel batches of ${SANDBOX_BATCH_SIZE}`
+              ` Processing ${notionGitHubUrls.length} repositories in parallel batches of ${SANDBOX_BATCH_SIZE}`
             );
 
             // Process URLs in batches for better performance and resource management
@@ -541,7 +541,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
               );
 
               console.log(
-                `\n📦 Processing batch ${batchNumber}/${totalBatches} (${batch.length} repositories)`
+                `\n Processing batch ${batchNumber}/${totalBatches} (${batch.length} repositories)`
               );
 
               // Process batch in parallel
@@ -1049,11 +1049,11 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
 
           if (result.failed > 0) {
             console.log(
-              `⚠️ Saved ${result.success} entries, ${result.failed} failed`
+              ` Saved ${result.success} entries, ${result.failed} failed`
             );
           } else {
             console.log(
-              `✅ Successfully saved ${result.success} grading results to Notion database`
+              ` Successfully saved ${result.success} grading results to Notion database`
             );
           }
 
@@ -2125,7 +2125,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
       <Box flexDirection="column">
         {error && (
           <>
-            <Text color="red">❌ {error}</Text>
+            <Text color="red"> {error}</Text>
             <Text></Text>
           </>
         )}
@@ -2269,7 +2269,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
       ? "Skipped (60 requests/hour limit)"
       : githubToken
       ? "✓ Token configured"
-      : "⚠ No token (60 requests/hour limit)";
+      : " No token (60 requests/hour limit)";
     return (
       <Box flexDirection="column">
         <Text color="blue" bold>
@@ -2644,7 +2644,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         <Text></Text>
         <Text color="gray" dimColor>
           {rowCount === 0
-            ? "⚠️  No rows match the filter criteria. Please adjust your filter or go back."
+            ? "  No rows match the filter criteria. Please adjust your filter or go back."
             : rowCount === 1
             ? "1 row will be processed for grading."
             : `${rowCount} rows will be processed for grading.`}
@@ -2686,7 +2686,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
               if (typeof githubUrls[0] === "string") {
                 // Legacy string array format - no pageIds available
                 console.log(
-                  "⚠️ Received string URLs without pageIds - new entries will be created"
+                  " Received string URLs without pageIds - new entries will be created"
                 );
                 urlsWithIds = (githubUrls as string[]).map((url) => ({
                   url,
@@ -2868,11 +2868,11 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
       <Box flexDirection="column" marginY={1}>
         {wasSuccessful ? (
           <Text color="green" bold>
-            ✅ Notion Save Complete!
+             Notion Save Complete!
           </Text>
         ) : (
           <Text color="red" bold>
-            ❌ Notion Save Failed
+             Notion Save Failed
           </Text>
         )}
         <Text></Text>
@@ -2918,7 +2918,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
     return (
       <Box flexDirection="column">
         <Text color="blue" bold>
-          🎯 Choose Processing Type
+           Choose Processing Type
         </Text>
         <Text></Text>
         <Text>
@@ -3008,7 +3008,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
               if (typeof deployedAppUrls[0] === "string") {
                 // Legacy string array format - no pageIds available
                 console.log(
-                  "⚠️ Received deployed URLs without pageIds - new entries will be created"
+                  " Received deployed URLs without pageIds - new entries will be created"
                 );
                 urlsWithIds = (deployedAppUrls as string[]).map((url) => ({
                   url,

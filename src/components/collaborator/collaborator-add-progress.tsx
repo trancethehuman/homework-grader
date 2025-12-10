@@ -153,7 +153,7 @@ export const CollaboratorAddProgress: React.FC<CollaboratorAddProgressProps> = (
       case "failed":
         return "✗";
       case "skipped":
-        return "⏭";
+        return "";
       default:
         return "○";
     }

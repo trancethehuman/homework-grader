@@ -56,7 +56,7 @@ export class RateLimiter {
       });
     }
 
-    console.log(`⚠️ Rate limit hit recorded, forcing cooldown period`);
+    console.log(` Rate limit hit recorded, forcing cooldown period`);
   }
 
   recordTokenUsage(inputTokens: number, outputTokens: number): void {
@@ -108,7 +108,7 @@ export class RateLimiter {
     }
 
     if (requestsInWindow >= effectiveLimit * 0.9) {
-      console.log(`⚠️ Approaching RPM limit (${requestsInWindow}/${this.provider.rateLimitRpm})`);
+      console.log(` Approaching RPM limit (${requestsInWindow}/${this.provider.rateLimitRpm})`);
     }
 
     const oldestRequest = this.requestTimestamps[0];
@@ -147,7 +147,7 @@ export class RateLimiter {
     const projectedTotal = totalTokensInWindow + estimatedTotal;
 
     if (projectedTotal >= effectiveLimit * 0.9 && projectedTotal < effectiveLimit) {
-      console.log(`⚠️ Approaching TPM limit (${Math.floor(totalTokensInWindow / 1000)}K/${Math.floor(this.provider.rateLimitTpm / 1000)}K)`);
+      console.log(` Approaching TPM limit (${Math.floor(totalTokensInWindow / 1000)}K/${Math.floor(this.provider.rateLimitTpm / 1000)}K)`);
     }
 
     if (projectedTotal <= effectiveLimit) {
@@ -183,7 +183,7 @@ export class RateLimiter {
       const projectedInput = inputTokensInWindow + estimatedInputTokens;
 
       if (projectedInput >= effectiveInputLimit * 0.9 && projectedInput < effectiveInputLimit) {
-        console.log(`⚠️ Approaching Input TPM limit (${Math.floor(inputTokensInWindow / 1000)}K/${Math.floor(this.provider.rateLimitInputTpm / 1000)}K)`);
+        console.log(` Approaching Input TPM limit (${Math.floor(inputTokensInWindow / 1000)}K/${Math.floor(this.provider.rateLimitInputTpm / 1000)}K)`);
       }
 
       if (projectedInput > effectiveInputLimit) {
@@ -200,7 +200,7 @@ export class RateLimiter {
       const projectedOutput = outputTokensInWindow + estimatedOutputTokens;
 
       if (projectedOutput >= effectiveOutputLimit * 0.9 && projectedOutput < effectiveOutputLimit) {
-        console.log(`⚠️ Approaching Output TPM limit (${Math.floor(outputTokensInWindow / 1000)}K/${Math.floor(this.provider.rateLimitOutputTpm / 1000)}K)`);
+        console.log(` Approaching Output TPM limit (${Math.floor(outputTokensInWindow / 1000)}K/${Math.floor(this.provider.rateLimitOutputTpm / 1000)}K)`);
       }
 
       if (projectedOutput > effectiveOutputLimit) {

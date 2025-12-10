@@ -35,14 +35,14 @@ export class ApiTimeoutHandler {
           await ApiTimeoutHandler.delay(retryDelayMs * attempt); // Exponential backoff
         }
 
-        DebugLogger.debug(`🚀 Starting ${operation} (timeout: ${timeoutMs}ms)`);
+        DebugLogger.debug(` Starting ${operation} (timeout: ${timeoutMs}ms)`);
 
         const result = await Promise.race([
           promise(),
           ApiTimeoutHandler.createTimeoutPromise<T>(timeoutMs, operation)
         ]);
 
-        DebugLogger.debug(`✅ ${operation} completed successfully`);
+        DebugLogger.debug(` ${operation} completed successfully`);
         return result;
 
       } catch (error) {
@@ -56,7 +56,7 @@ export class ApiTimeoutHandler {
             throw new TimeoutError(`${operation} timed out after ${retries + 1} attempts (${timeoutMs}ms each)`);
           }
         } else {
-          DebugLogger.debug(`❌ ${operation} failed: ${lastError.message} (attempt ${attempt + 1}/${retries + 1})`);
+          DebugLogger.debug(` ${operation} failed: ${lastError.message} (attempt ${attempt + 1}/${retries + 1})`);
 
           // For non-timeout errors, check if we should retry
           if (!ApiTimeoutHandler.shouldRetry(lastError) || attempt === retries) {
@@ -135,7 +135,7 @@ export class ApiTimeoutHandler {
   ): Promise<T[]> {
     const { operation = 'Concurrent API calls' } = config;
 
-    DebugLogger.debug(`🚀 Starting ${operations.length} concurrent operations: ${operation}`);
+    DebugLogger.debug(` Starting ${operations.length} concurrent operations: ${operation}`);
 
     const promises = operations.map((op, index) =>
       ApiTimeoutHandler.withTimeout(op, {
@@ -146,10 +146,10 @@ export class ApiTimeoutHandler {
 
     try {
       const results = await Promise.all(promises);
-      DebugLogger.debug(`✅ All ${operations.length} concurrent operations completed`);
+      DebugLogger.debug(` All ${operations.length} concurrent operations completed`);
       return results;
     } catch (error) {
-      DebugLogger.debug(`❌ Concurrent operations failed: ${error instanceof Error ? error.message : String(error)}`);
+      DebugLogger.debug(` Concurrent operations failed: ${error instanceof Error ? error.message : String(error)}`);
       throw error;
     }
   }
@@ -208,7 +208,7 @@ export class CircuitBreaker {
     this.failures = 0;
     if (this.state === 'HALF_OPEN') {
       this.state = 'CLOSED';
-      DebugLogger.debug(`✅ Circuit breaker for ${this.operation} reset to CLOSED`);
+      DebugLogger.debug(` Circuit breaker for ${this.operation} reset to CLOSED`);
     }
   }
 

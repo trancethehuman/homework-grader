@@ -27,7 +27,7 @@ export class SandboxService {
 
   async initialize(): Promise<void> {
     if (this.sandbox) {
-      console.log("ℹ Sandbox already initialized");
+      console.log(" Sandbox already initialized");
       return;
     }
 
@@ -35,7 +35,7 @@ export class SandboxService {
       throw new Error("E2B API key is required. Please provide it via constructor or E2B_API_KEY environment variable.");
     }
 
-    console.log("🚀 Initializing E2B Sandbox...");
+    console.log(" Initializing E2B Sandbox...");
     console.log(
       `   Timeout: ${ms(this.config.timeout || ms("5m"), { long: true })}`
     );
@@ -71,7 +71,7 @@ export class SandboxService {
     const cloneId = uuidv4().substring(0, 8);
     const localPath = `/tmp/repos/${repositoryInfo.owner}-${repositoryInfo.repo}-${cloneId}`;
 
-    console.log(`📦 Cloning ${repositoryInfo.owner}/${repositoryInfo.repo}...`);
+    console.log(` Cloning ${repositoryInfo.owner}/${repositoryInfo.repo}...`);
     console.log(`   Source: ${repositoryInfo.url}`);
     console.log(`   Target: ${localPath}`);
 
@@ -290,7 +290,7 @@ export class SandboxService {
     clonedRepo: ClonedRepository
   ): Promise<RepositoryContent> {
     console.log(
-      `⚙️  Processing repository ${clonedRepo.info.owner}/${clonedRepo.info.repo}...`
+      `  Processing repository ${clonedRepo.info.owner}/${clonedRepo.info.repo}...`
     );
 
     try {
@@ -300,7 +300,7 @@ export class SandboxService {
       const fileList = await this.getRepositoryFiles(clonedRepo);
 
       // Filter files and create initial structure
-      console.log(`🔍 Filtering files with ignore patterns...`);
+      console.log(` Filtering files with ignore patterns...`);
       const repositoryContent = this.fileProcessor.processFileList(
         fileList,
         clonedRepo.localPath,
@@ -324,7 +324,7 @@ export class SandboxService {
       );
 
       // Regenerate formatted content with actual file contents
-      console.log(`📝 Generating formatted output...`);
+      console.log(` Generating formatted output...`);
       repositoryContent.formattedContent = this.formatRepositoryContent(
         clonedRepo.info,
         repositoryContent.files
@@ -440,7 +440,7 @@ export class SandboxService {
 
   async cleanup(): Promise<void> {
     if (!this.sandbox) {
-      console.log("ℹ No sandbox to cleanup");
+      console.log(" No sandbox to cleanup");
       return;
     }
 
@@ -515,10 +515,10 @@ export class SandboxService {
 
         results.push({ url, success: true, result });
         console.log(
-          `✅ Repository ${currentProgress} completed in ${repoTime}ms`
+          ` Repository ${currentProgress} completed in ${repoTime}ms`
         );
       } catch (error: any) {
-        console.error(`❌ Repository ${currentProgress} failed:`, error);
+        console.error(` Repository ${currentProgress} failed:`, error);
         results.push({
           url,
           success: false,
@@ -530,7 +530,7 @@ export class SandboxService {
       const successCount = results.filter((r) => r.success).length;
       const failureCount = results.filter((r) => !r.success).length;
       console.log(
-        `📊 Progress: ${currentProgress}/${urls.length} | ✅ ${successCount} | ❌ ${failureCount}`
+        ` Progress: ${currentProgress}/${urls.length} |  ${successCount} |  ${failureCount}`
       );
     }
 

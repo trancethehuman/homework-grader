@@ -98,9 +98,9 @@ export async function safeRender<T>(element: React.ReactElement, options?: { exi
   const environmentInfo = checkInkEnvironment();
 
   if (!environmentInfo.isRawModeSupported) {
-    console.error('\n❌ Interactive mode is not supported in this environment:');
+    console.error('\n Interactive mode is not supported in this environment:');
     console.error(`   ${environmentInfo.reason}`);
-    console.error('\n💡 Possible solutions:');
+    console.error('\n Possible solutions:');
     console.error('   • Run in a proper terminal (not through an IDE or script)');
     console.error('   • Use a different terminal emulator');
     console.error('   • Run with proper TTY allocation if using Docker');
@@ -126,9 +126,9 @@ export async function safeRender<T>(element: React.ReactElement, options?: { exi
       // Add error handler for runtime Ink errors
       process.on('uncaughtException', (error) => {
         if (error.message.includes('Raw mode is not supported')) {
-          console.error('\n❌ Interactive mode failed at runtime:');
+          console.error('\n Interactive mode failed at runtime:');
           console.error('   Raw mode is not supported in this environment');
-          console.error('\n💡 Possible solutions:');
+          console.error('\n Possible solutions:');
           console.error('   • Run in a proper terminal (not through an IDE or script)');
           console.error('   • Use a different terminal emulator');
           console.error('   • Use command-line arguments instead of interactive mode');
@@ -142,9 +142,9 @@ export async function safeRender<T>(element: React.ReactElement, options?: { exi
       return app;
     } catch (renderError) {
       // Runtime Ink render error
-      console.error('\n❌ Interactive mode failed during render:');
+      console.error('\n Interactive mode failed during render:');
       console.error(`   ${renderError instanceof Error ? renderError.message : String(renderError)}`);
-      console.error('\n💡 Please try running in a different terminal or use command-line arguments instead.');
+      console.error('\n Please try running in a different terminal or use command-line arguments instead.');
 
       return {
         unmount: () => {},
@@ -154,9 +154,9 @@ export async function safeRender<T>(element: React.ReactElement, options?: { exi
       };
     }
   } catch (error) {
-    console.error('\n❌ Failed to initialize interactive mode:');
+    console.error('\n Failed to initialize interactive mode:');
     console.error(`   ${error instanceof Error ? error.message : String(error)}`);
-    console.error('\n💡 Please try running in a different terminal or use command-line arguments instead.');
+    console.error('\n Please try running in a different terminal or use command-line arguments instead.');
 
     return {
       unmount: () => {},

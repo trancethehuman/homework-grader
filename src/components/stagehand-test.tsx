@@ -140,7 +140,7 @@ export const StagehandTest: React.FC<StagehandTestProps> = ({ onBack }) => {
         </Text>
         <Text></Text>
         <Text color="yellow">
-          ⚠️  Browserbase API credentials not found
+            Browserbase API credentials not found
         </Text>
         <Text></Text>
         <Text>To use Stagehand testing, please set the following environment variables:</Text>
@@ -159,7 +159,7 @@ export const StagehandTest: React.FC<StagehandTestProps> = ({ onBack }) => {
           Running Stagehand Test...
         </Text>
         <Text></Text>
-        <Text>🚀 Initializing Stagehand with Browserbase</Text>
+        <Text> Initializing Stagehand with Browserbase</Text>
         <Text>⏳ Running test: {testOptions[selectedTest].name}</Text>
         <Text></Text>
         <Text dimColor>This may take a few moments...</Text>
@@ -205,7 +205,7 @@ export const StagehandTest: React.FC<StagehandTestProps> = ({ onBack }) => {
           🌐 Browser session open for viewing agent actions...
         </Text>
         <Text color="cyan">
-          ⏱️  Auto-closing in {countdown} seconds
+            Auto-closing in {countdown} seconds
         </Text>
         <Text></Text>
         <Text color="blue">Press 'c' to close browser session now</Text>

@@ -1,6 +1,6 @@
 export const MCP_EVALUATION_CHECKLIST = `**MCP Implementation Checklist (Evaluate silently, mention critical issues in feedback):**
 
-✅ Required Patterns:
+ Required Patterns:
 
 1. Client Abstraction Layer
    - Dedicated MCP client classes in /lib/mcp/client/ (or similar structure)
@@ -40,7 +40,7 @@ export const MCP_EVALUATION_CHECKLIST = `**MCP Implementation Checklist (Evaluat
 7. Error Handling & Logging
    - Try-catch blocks in all MCP async methods
    - Descriptive error messages with MCP server context
-   - Optional: Emoji-prefixed logs for visibility (🚀 🔧 ✅ 💥)
+   - Optional: Emoji-prefixed logs for visibility (   💥)
 
 8. Type Safety
    - Proper client type: Awaited<ReturnType<typeof experimental_createMCPClient>> | null
@@ -53,10 +53,10 @@ export const MCP_EVALUATION_CHECKLIST = `**MCP Implementation Checklist (Evaluat
    - Constructor accepts optional overrides
 
 🚨 Critical Issues to Flag:
-- ❌ Disconnecting before stream finishes → "closed client" errors
-- ❌ Creating new client per request → performance issues
-- ❌ Wrong SSE URL format → connection failures
-- ❌ Strict typing on tools → TypeScript errors
-- ❌ No client abstraction → scattered MCP logic across routes
-- ❌ Missing singleton pattern → repeated handshakes
-- ❌ Hardcoded credentials → security risk`;
+-  Disconnecting before stream finishes → "closed client" errors
+-  Creating new client per request → performance issues
+-  Wrong SSE URL format → connection failures
+-  Strict typing on tools → TypeScript errors
+-  No client abstraction → scattered MCP logic across routes
+-  Missing singleton pattern → repeated handshakes
+-  Hardcoded credentials → security risk`;

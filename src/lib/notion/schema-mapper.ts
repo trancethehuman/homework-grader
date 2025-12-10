@@ -311,23 +311,23 @@ export class NotionSchemaMapper {
     const existingProperties = Object.keys(databaseProperties);
     const missingProperties: Record<string, NotionProperty> = {};
 
-    DebugLogger.debug(`🔍 Checking for missing grading properties (mode: ${processingMode})`);
+    DebugLogger.debug(` Checking for missing grading properties (mode: ${processingMode})`);
     DebugLogger.debug(`📋 Required properties:`, Object.keys(requiredProperties));
     DebugLogger.debug(`📋 Existing properties:`, existingProperties);
 
     for (const [propertyName, propertyConfig] of Object.entries(requiredProperties)) {
       if (!existingProperties.includes(propertyName)) {
         missingProperties[propertyName] = propertyConfig;
-        DebugLogger.debug(`❌ Missing property: ${propertyName} (${propertyConfig.type})`);
+        DebugLogger.debug(` Missing property: ${propertyName} (${propertyConfig.type})`);
       } else {
-        DebugLogger.debug(`✅ Found existing property: ${propertyName}`);
+        DebugLogger.debug(` Found existing property: ${propertyName}`);
       }
     }
 
     if (Object.keys(missingProperties).length === 0) {
-      DebugLogger.debug(`✅ All required grading properties exist in database`);
+      DebugLogger.debug(` All required grading properties exist in database`);
     } else {
-      DebugLogger.debug(`📝 Will add ${Object.keys(missingProperties).length} missing properties:`, Object.keys(missingProperties));
+      DebugLogger.debug(` Will add ${Object.keys(missingProperties).length} missing properties:`, Object.keys(missingProperties));
     }
 
     return missingProperties;

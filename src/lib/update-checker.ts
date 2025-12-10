@@ -63,7 +63,7 @@ export class UpdateChecker {
 
     try {
       console.log(''); // Empty line for spacing
-      console.log('📦 Update available!');
+      console.log(' Update available!');
       console.log(`   Current: ${this.notifier.update.current}`);
       console.log(`   Latest:  ${this.notifier.update.latest}`);
       console.log('');

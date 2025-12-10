@@ -46,7 +46,7 @@ export const PromptSelector: React.FC<PromptSelectorProps> = ({
     return (
       <Box flexDirection="column">
         <Text color="blue" bold>
-          📄 Prompt Preview: {selectedPrompt.name}
+           Prompt Preview: {selectedPrompt.name}
         </Text>
         <Text></Text>
         <Text color="gray" wrap="wrap">
@@ -80,7 +80,7 @@ export const PromptSelector: React.FC<PromptSelectorProps> = ({
   return (
     <Box flexDirection="column">
       <Text color="blue" bold>
-        📝 Select Grading Prompt
+         Select Grading Prompt
       </Text>
       <Text></Text>
       <Text>

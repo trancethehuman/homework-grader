@@ -264,7 +264,7 @@ export class NotionOAuthClient {
       operation: 'OAuth Start (with cold server handling)'
     });
 
-    DebugLogger.debug('✅ OAuth flow initiated, opening browser...');
+    DebugLogger.debug(' OAuth flow initiated, opening browser...');
 
     // Open browser with timeout (non-blocking fallback)
     let browserOpened = false;
@@ -274,16 +274,16 @@ export class NotionOAuthClient {
         return Promise.resolve();
       }, this.oauthTimeouts.browser);
       browserOpened = true;
-      DebugLogger.debug('✅ Browser opened successfully');
+      DebugLogger.debug(' Browser opened successfully');
     } catch (error) {
-      DebugLogger.debug(`⚠️ Browser auto-open failed: ${error instanceof Error ? error.message : String(error)}`);
+      DebugLogger.debug(` Browser auto-open failed: ${error instanceof Error ? error.message : String(error)}`);
     }
 
     // Always provide console instructions for manual OAuth
     console.log('\n🔐 Notion OAuth Authentication Required');
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     if (browserOpened) {
-      console.log('✅ Browser should have opened automatically');
+      console.log(' Browser should have opened automatically');
       console.log('🔗 If no browser opened, manually visit:');
     } else {
       console.log('🔗 Please manually open this URL in your browser:');
@@ -297,7 +297,7 @@ export class NotionOAuthClient {
 
     // Poll for token with enhanced timeout handling
     const token = await this.pollForTokenWithTimeout(state, 120000, 2000);
-    DebugLogger.debug('✅ OAuth authentication completed successfully');
+    DebugLogger.debug(' OAuth authentication completed successfully');
     return token;
   }
 
@@ -327,7 +327,7 @@ export class NotionOAuthClient {
         });
 
         if (token.status === "complete" && token.token) {
-          DebugLogger.debug(`✅ OAuth token received after ${attempts} attempts in ${Date.now() - start}ms`);
+          DebugLogger.debug(` OAuth token received after ${attempts} attempts in ${Date.now() - start}ms`);
           return token.token as NotionOAuthToken;
         }
 
@@ -341,12 +341,12 @@ export class NotionOAuthClient {
           const remaining = Math.round((totalTimeoutMs - elapsed) / 1000);
           console.log(`⏳ Waiting for OAuth completion... ${remaining}s remaining`);
           if (elapsed > 30000) { // After 30 seconds, remind user
-            console.log('💡 If you haven\'t opened the browser yet, please visit the URL above');
+            console.log(' If you haven\'t opened the browser yet, please visit the URL above');
           }
         }
 
       } catch (error) {
-        DebugLogger.debug(`⚠️ OAuth poll attempt ${attempts} failed: ${error instanceof Error ? error.message : String(error)}`);
+        DebugLogger.debug(` OAuth poll attempt ${attempts} failed: ${error instanceof Error ? error.message : String(error)}`);
 
         // If we're close to the total timeout, don't wait the full interval
         const elapsed = Date.now() - start;

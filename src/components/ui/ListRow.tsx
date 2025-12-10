@@ -136,7 +136,7 @@ export const StatusIndicator: React.FC<StatusIndicatorProps> = ({
     loading: { icon: "◐", color: "cyan" },
     success: { icon: "✓", color: "green" },
     error: { icon: "✗", color: "red" },
-    warning: { icon: "⚠", color: "yellow" },
+    warning: { icon: "", color: "yellow" },
     cancelling: { icon: "⏳", color: "yellow" },
   };
 

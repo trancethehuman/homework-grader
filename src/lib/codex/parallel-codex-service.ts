@@ -87,7 +87,7 @@ export class ParallelCodexService {
         const owner = match?.[1] || "unknown";
         const repo = match?.[2]?.replace(/\.git$/, "") || "unknown";
 
-        console.warn(`⚠️  Failed to clone ${owner}/${repo}: ${errorMessage}`);
+        console.warn(`  Failed to clone ${owner}/${repo}: ${errorMessage}`);
 
         failures.push({
           url,
@@ -117,7 +117,7 @@ export class ParallelCodexService {
     const totalStartTime = Date.now();
 
     if (this.clonedRepos.length === 0) {
-      console.warn("⚠️  No repositories successfully cloned. Skipping grading phase.");
+      console.warn("  No repositories successfully cloned. Skipping grading phase.");
       return {
         results: [],
         cloneFailures: this.cloneFailures,
@@ -223,10 +223,10 @@ export class ParallelCodexService {
         try {
           if (fs.existsSync(repo.localPath)) {
             fs.rmSync(repo.localPath, { recursive: true, force: true });
-            console.log(`🗑️  Cleaned up ${repo.owner}/${repo.repo}`);
+            console.log(`  Cleaned up ${repo.owner}/${repo.repo}`);
           }
         } catch (cleanupError) {
-          console.warn(`⚠️  Failed to cleanup ${repo.owner}/${repo.repo}:`, cleanupError);
+          console.warn(`  Failed to cleanup ${repo.owner}/${repo.repo}:`, cleanupError);
         }
 
         return gradingResult;
@@ -261,10 +261,10 @@ export class ParallelCodexService {
         try {
           if (fs.existsSync(repo.localPath)) {
             fs.rmSync(repo.localPath, { recursive: true, force: true });
-            console.log(`🗑️  Cleaned up ${repo.owner}/${repo.repo} (after error)`);
+            console.log(`  Cleaned up ${repo.owner}/${repo.repo} (after error)`);
           }
         } catch (cleanupError) {
-          console.warn(`⚠️  Failed to cleanup ${repo.owner}/${repo.repo}:`, cleanupError);
+          console.warn(`  Failed to cleanup ${repo.owner}/${repo.repo}:`, cleanupError);
         }
 
         return gradingResult;
@@ -290,7 +290,7 @@ export class ParallelCodexService {
     if (this.tempDir && fs.existsSync(this.tempDir)) {
       try {
         fs.rmSync(this.tempDir, { recursive: true, force: true });
-        console.log(`🗑️  Cleaned up temp directory`);
+        console.log(`  Cleaned up temp directory`);
       } catch (error) {
         console.error(`Failed to cleanup temp directory: ${error}`);
       }
@@ -307,7 +307,7 @@ export class ParallelCodexService {
 
   abort(): void {
     this.abortController.abort();
-    console.log("⚠️  Abort signal sent to parallel grading");
+    console.log("  Abort signal sent to parallel grading");
   }
 
   skipRepo(owner: string, repo: string): void {
@@ -315,7 +315,7 @@ export class ParallelCodexService {
     const controller = this.repoAbortControllers.get(repoKey);
     if (controller) {
       controller.abort();
-      console.log(`⏭️  Skip signal sent to ${owner}/${repo}`);
+      console.log(`  Skip signal sent to ${owner}/${repo}`);
     }
   }
 

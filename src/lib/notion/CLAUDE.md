@@ -34,12 +34,12 @@ This file contains all Notion-specific guidance for the homework grading system.
 
 **CRITICAL**: In the 2025-09-03 API version, the traditional `databases.query()` method is deprecated. Database content must be queried using the Data Source API.
 
-### ⚠️ CRITICAL: Always Use SDK Methods, Never Raw HTTP Requests
+### CRITICAL: Always Use SDK Methods, Never Raw HTTP Requests
 
 **DO NOT** use raw HTTP requests with `notion.request()` - they cause `invalid_request_url` errors:
 
 ```typescript
-// ❌ WRONG - Will fail with invalid_request_url
+// WRONG - Will fail with invalid_request_url
 const response = await notion.request({
   path: `/v1/data_sources/${dataSourceId}/query`,
   method: 'post',
@@ -50,7 +50,7 @@ const response = await notion.request({
 **ALWAYS** use the SDK's built-in methods:
 
 ```typescript
-// ✅ CORRECT - Use SDK method
+// CORRECT - Use SDK method
 const response = await notion.dataSources.query({
   data_source_id: dataSourceId,
   filter,
@@ -386,7 +386,7 @@ const pagesFromDatabase = response.results.filter(result => {
 
 ### Common Pitfalls and Solutions
 
-**❌ Wrong: Wrapping single value in `or` array**
+**Wrong: Wrapping single value in `or` array**
 ```json
 {
   "or": [
@@ -395,7 +395,7 @@ const pagesFromDatabase = response.results.filter(result => {
 }
 ```
 
-**✅ Right: Simple object for single value**
+**Right: Simple object for single value**
 ```json
 {
   "property": "Status",
@@ -403,7 +403,7 @@ const pagesFromDatabase = response.results.filter(result => {
 }
 ```
 
-**❌ Wrong: Using non-existent operators**
+**Wrong: Using non-existent operators**
 ```json
 {
   "property": "Week Number",
@@ -411,7 +411,7 @@ const pagesFromDatabase = response.results.filter(result => {
 }
 ```
 
-**✅ Right: Correct operator name**
+**Right: Correct operator name**
 ```json
 {
   "property": "Week Number",
@@ -419,7 +419,7 @@ const pagesFromDatabase = response.results.filter(result => {
 }
 ```
 
-**❌ Wrong: Using `equals` for multi-select**
+**Wrong: Using `equals` for multi-select**
 ```json
 {
   "property": "Tags",
@@ -427,7 +427,7 @@ const pagesFromDatabase = response.results.filter(result => {
 }
 ```
 
-**✅ Right: Use `contains` for multi-select**
+**Right: Use `contains` for multi-select**
 ```json
 {
   "property": "Tags",
@@ -480,10 +480,10 @@ The system implements server-side filtering for Notion databases with a user-fri
 5. **Grading**: Only filtered rows are processed
 
 This ensures:
-- ✅ Efficient API usage (only filtered data is fetched)
-- ✅ Accurate row counts shown to user
-- ✅ Only intended rows are graded
-- ✅ Clear user feedback before processing
+- Efficient API usage (only filtered data is fetched)
+- Accurate row counts shown to user
+- Only intended rows are graded
+- Clear user feedback before processing
 
 ## Notion API Development Rules
 

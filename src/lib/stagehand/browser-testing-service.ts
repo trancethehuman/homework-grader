@@ -139,7 +139,7 @@ export class BrowserTestingService {
     urls: Array<{ url: string; pageId?: string }>,
     onProgress?: (progress: BrowserTestingProgress) => void
   ): Promise<BrowserTestResult[]> {
-    console.log(`🚀 Starting browser testing for ${urls.length} deployed URLs...`);
+    console.log(` Starting browser testing for ${urls.length} deployed URLs...`);
     console.log(`   Processing sequentially with isolated sessions for reliability`);
     console.log(`   Test duration per URL: ${BROWSER_TESTING_CONFIG.TEST_DURATION_MS / 1000}s`);
 
@@ -195,7 +195,7 @@ export class BrowserTestingService {
 
       // Brief pause between tests to be respectful to resources
       if (i < urls.length - 1) {
-        console.log("  ⏸️  Brief pause before next test...");
+        console.log("    Brief pause before next test...");
         await new Promise(resolve => setTimeout(resolve, 2000));
       }
     }
@@ -217,7 +217,7 @@ export class BrowserTestingService {
     
     try {
       // Create isolated Stagehand instance for this URL
-      console.log(`    🔧 Creating isolated Stagehand session...`);
+      console.log(`     Creating isolated Stagehand session...`);
       
       const stagehandConfig: any = {
         env: "BROWSERBASE",
@@ -256,7 +256,7 @@ export class BrowserTestingService {
           await stagehand.close?.();
           console.log(`    ✓ Cleaned up isolated session for ${url}`);
         } catch (cleanupError) {
-          console.warn(`    ⚠ Warning during session cleanup for ${url}:`, cleanupError);
+          console.warn(`     Warning during session cleanup for ${url}:`, cleanupError);
         }
       }
     }
@@ -316,7 +316,7 @@ export class BrowserTestingService {
           console.log(`    ✓ Successfully loaded ${url} on attempt ${attempt}`);
         } catch (navError) {
           lastError = navError instanceof Error ? navError : new Error(String(navError));
-          console.log(`    ⚠️  Attempt ${attempt} failed for ${url}: ${lastError.message}`);
+          console.log(`      Attempt ${attempt} failed for ${url}: ${lastError.message}`);
           
           if (attempt < maxRetries) {
             console.log(`    Waiting ${BROWSER_TESTING_CONFIG.RETRY_DELAY_MS / 1000} seconds before retry...`);
@@ -347,7 +347,7 @@ export class BrowserTestingService {
         
         console.log(`    ✓ Page readiness checks completed`);
       } catch (readinessError) {
-        console.log(`    ⚠️ Page readiness checks failed, continuing anyway: ${readinessError}`);
+        console.log(`     Page readiness checks failed, continuing anyway: ${readinessError}`);
         actions.push("Page readiness checks failed, continuing anyway");
       }
 

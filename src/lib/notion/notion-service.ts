@@ -102,12 +102,12 @@ export class NotionService {
       notionVersion: "2025-09-03"
     });
 
-    DebugLogger.debug(`🔧 Notion Service initialized with API version: 2025-09-03`);
+    DebugLogger.debug(` Notion Service initialized with API version: 2025-09-03`);
 
     // Initialize data source service for 2025-09-03 API features
     if (token) {
       this.dataSourceService = new NotionDataSourceService(token);
-      DebugLogger.debug(`🔧 Data Source Service initialized and ready`);
+      DebugLogger.debug(` Data Source Service initialized and ready`);
     }
   }
 
@@ -197,7 +197,7 @@ export class NotionService {
 
   private async performTokenValidation(): Promise<{ valid: boolean; error?: string }> {
     try {
-      DebugLogger.debug("🔍 Validating Notion token...");
+      DebugLogger.debug(" Validating Notion token...");
 
       // Create a promise that rejects after 15 seconds
       const timeoutPromise = new Promise<never>((_, reject) => {
@@ -216,7 +216,7 @@ export class NotionService {
       return { valid: true };
     } catch (error: any) {
       const errorMessage = error.message || String(error);
-      console.log("❌ Token validation failed:", errorMessage);
+      console.log(" Token validation failed:", errorMessage);
 
       if (errorMessage.includes("API token is invalid") ||
           errorMessage.includes("unauthorized") ||
@@ -227,7 +227,7 @@ export class NotionService {
           DebugLogger.debug("🧹 Clearing invalid token from storage");
           this.storage.clearToken();
         } else {
-          console.log("⚠️ Explicit token is invalid, but not clearing storage");
+          console.log(" Explicit token is invalid, but not clearing storage");
         }
         this.clearValidationCache(); // Clear cache for invalid tokens
         return {
@@ -260,7 +260,7 @@ export class NotionService {
 
     return await this.searchCircuitBreaker.execute(async () => {
       return await ApiTimeoutHandler.withTimeout(async () => {
-        DebugLogger.debug('🔍 Starting to fetch all pages from Notion...');
+        DebugLogger.debug(' Starting to fetch all pages from Notion...');
         const pages: NotionPage[] = [];
         let hasMore = true;
         let nextCursor: string | undefined;
@@ -300,11 +300,11 @@ export class NotionService {
           nextCursor = response.next_cursor || undefined;
 
           if (hasMore) {
-            DebugLogger.debug(`📄 Fetched ${pageCount} pages so far, continuing...`);
+            DebugLogger.debug(` Fetched ${pageCount} pages so far, continuing...`);
           }
         }
 
-        DebugLogger.debug(`✅ Successfully fetched ${pages.length} pages from Notion`);
+        DebugLogger.debug(` Successfully fetched ${pages.length} pages from Notion`);
         return pages;
       }, this.defaultTimeouts.search);
     });
@@ -319,7 +319,7 @@ export class NotionService {
 
     return await this.searchCircuitBreaker.execute(async () => {
       return await ApiTimeoutHandler.withTimeout(async () => {
-        DebugLogger.debug('🗄️ Starting to fetch all databases from Notion...');
+        DebugLogger.debug(' Starting to fetch all databases from Notion...');
         const databases: NotionDatabase[] = [];
         let hasMore = true;
         let nextCursor: string | undefined;
@@ -357,7 +357,7 @@ export class NotionService {
                   properties: dsItem.properties || {},
                 });
               } else {
-                DebugLogger.debug(`⚠️ Data source has no parent database_id: ${dsItem.id}`);
+                DebugLogger.debug(` Data source has no parent database_id: ${dsItem.id}`);
               }
             }
           }
@@ -367,11 +367,11 @@ export class NotionService {
           batchCount++;
 
           if (hasMore) {
-            DebugLogger.debug(`🗄️ Processed batch ${batchCount}, found ${databases.length} databases so far, continuing...`);
+            DebugLogger.debug(` Processed batch ${batchCount}, found ${databases.length} databases so far, continuing...`);
           }
         }
 
-        DebugLogger.debug(`✅ Successfully fetched ${databases.length} databases from Notion`);
+        DebugLogger.debug(` Successfully fetched ${databases.length} databases from Notion`);
         return databases;
       }, this.defaultTimeouts.search);
     });
@@ -386,7 +386,7 @@ export class NotionService {
 
     return await this.searchCircuitBreaker.execute(async () => {
       return await ApiTimeoutHandler.withTimeout(async () => {
-        DebugLogger.debug(`🔍 Fetching initial ${limit} items from Notion...`);
+        DebugLogger.debug(` Fetching initial ${limit} items from Notion...`);
 
         const pages: NotionPage[] = [];
         const databases: NotionDatabase[] = [];
@@ -421,7 +421,7 @@ export class NotionService {
           }
         }
 
-        DebugLogger.debug(`✅ Fetched ${pages.length} pages and ${databases.length} databases`);
+        DebugLogger.debug(` Fetched ${pages.length} pages and ${databases.length} databases`);
 
         return {
           pages,
@@ -451,7 +451,7 @@ export class NotionService {
 
     return await this.searchCircuitBreaker.execute(async () => {
       return await ApiTimeoutHandler.withTimeout(async () => {
-        DebugLogger.debug(`🔍 Searching Notion for: "${query}" (filter: ${filter})`);
+        DebugLogger.debug(` Searching Notion for: "${query}" (filter: ${filter})`);
 
         const pages: NotionPage[] = [];
         const databases: NotionDatabase[] = [];
@@ -504,7 +504,7 @@ export class NotionService {
           }
         }
 
-        DebugLogger.debug(`✅ Search found ${pages.length} pages and ${databases.length} databases`);
+        DebugLogger.debug(` Search found ${pages.length} pages and ${databases.length} databases`);
 
         return {
           pages,
@@ -525,7 +525,7 @@ export class NotionService {
 
     return await this.searchCircuitBreaker.execute(async () => {
       return await ApiTimeoutHandler.withTimeout(async () => {
-        DebugLogger.debug(`🔍 Loading more items from cursor...`);
+        DebugLogger.debug(` Loading more items from cursor...`);
 
         const pages: NotionPage[] = [];
         const databases: NotionDatabase[] = [];
@@ -561,7 +561,7 @@ export class NotionService {
           }
         }
 
-        DebugLogger.debug(`✅ Loaded ${pages.length} more pages and ${databases.length} more databases`);
+        DebugLogger.debug(` Loaded ${pages.length} more pages and ${databases.length} more databases`);
 
         return {
           pages,
@@ -612,13 +612,13 @@ export class NotionService {
    */
   async getDatabaseContent(databaseId: string): Promise<any> {
     try {
-      DebugLogger.debug(`📊 Starting database content fetch for: ${databaseId}`);
+      DebugLogger.debug(` Starting database content fetch for: ${databaseId}`);
 
       const database = await this.getDatabaseMetadata(databaseId);
       DebugLogger.debug(`✓ Database metadata retrieved successfully`);
 
       // Use the enhanced data source service for better fallback handling
-      DebugLogger.debug(`🔍 Querying database entries using data source service...`);
+      DebugLogger.debug(` Querying database entries using data source service...`);
 
       if (!this.dataSourceService) {
         throw new Error('Data source service not initialized. Please ensure authentication is complete.');
@@ -646,7 +646,7 @@ export class NotionService {
         type: "database",
       };
     } catch (error: any) {
-      DebugLogger.debug(`❌ Failed to get database content for ${databaseId}:`, error.message);
+      DebugLogger.debug(` Failed to get database content for ${databaseId}:`, error.message);
 
       // Provide user-friendly error messages
       if (error.message.includes('invalid_request_url')) {
@@ -722,7 +722,7 @@ export class NotionService {
 
       return database;
     } catch (retrievalError: any) {
-      console.log(`⚠️ Standard database retrieve failed for ${databaseId}: ${retrievalError.message}`);
+      console.log(` Standard database retrieve failed for ${databaseId}: ${retrievalError.message}`);
 
       // Use data source service to get database metadata
       if (!this.dataSourceService) {
@@ -734,7 +734,7 @@ export class NotionService {
         return metadata;
       } catch (error: any) {
         // If data source approach fails, try to find the database in our discovery results
-        console.log(`⚠️ Data source metadata failed for ${databaseId}, trying discovery fallback: ${error.message}`);
+        console.log(` Data source metadata failed for ${databaseId}, trying discovery fallback: ${error.message}`);
 
         try {
           const databases = await this.getAllDatabases();
@@ -752,7 +752,7 @@ export class NotionService {
             };
           }
         } catch (discoveryError: any) {
-          console.log(`⚠️ Discovery fallback also failed: ${discoveryError.message}`);
+          console.log(` Discovery fallback also failed: ${discoveryError.message}`);
         }
 
         if (error.code === 'object_not_found') {
@@ -887,7 +887,7 @@ export class NotionService {
 
     // Helper function to query using search API as fallback
     const queryUsingSearchAPI = async (): Promise<any[]> => {
-      DebugLogger.debug(`🔍 Using search API fallback for database ${databaseId}`);
+      DebugLogger.debug(` Using search API fallback for database ${databaseId}`);
       if (clientFilter) {
         DebugLogger.debug(`📋 Client-side filter will be applied: ${clientFilter.propertyName} (${clientFilter.filterType})`);
       }
@@ -921,7 +921,7 @@ export class NotionService {
       if (clientFilter) {
         const unfilteredCount = results.length;
         const filteredResults = this.applyClientSideFilter(results, clientFilter);
-        DebugLogger.debug(`🔍 Client-side filter applied: ${unfilteredCount} → ${filteredResults.length} pages`);
+        DebugLogger.debug(` Client-side filter applied: ${unfilteredCount} → ${filteredResults.length} pages`);
         return filteredResults;
       }
 
@@ -930,13 +930,13 @@ export class NotionService {
 
     try {
       // First get the database to obtain data_source_id
-      DebugLogger.debug(`🔍 Getting database metadata for ${databaseId}`);
+      DebugLogger.debug(` Getting database metadata for ${databaseId}`);
       const database = await this.getDatabaseMetadata(databaseId);
       const dataSourceId = (database as any).data_source_id;
 
       if (!dataSourceId) {
         // No data source ID, use search API
-        DebugLogger.debug(`📊 No data source found, using search API for ${databaseId}`);
+        DebugLogger.debug(` No data source found, using search API for ${databaseId}`);
         const results = await queryUsingSearchAPI();
         DebugLogger.debug(`✓ Successfully queried via search: ${results.length} results`);
         return results;
@@ -944,15 +944,15 @@ export class NotionService {
 
       // Check if this data source has consistently failed before
       if (this.failedDataSources.has(dataSourceId)) {
-        DebugLogger.debug(`⏭️ Skipping known failed data source ${dataSourceId}, using search API`);
-        DebugLogger.debug(`📊 Skipping known failed data source, using search API for ${databaseId}`);
+        DebugLogger.debug(` Skipping known failed data source ${dataSourceId}, using search API`);
+        DebugLogger.debug(` Skipping known failed data source, using search API for ${databaseId}`);
         const results = await queryUsingSearchAPI();
         DebugLogger.debug(`✓ Successfully queried via search fallback: ${results.length} results`);
         return results;
       }
 
       // Try data source query first
-      DebugLogger.debug(`🔍 Attempting data source query for ${dataSourceId}`);
+      DebugLogger.debug(` Attempting data source query for ${dataSourceId}`);
 
       try {
         const results: any[] = [];
@@ -961,7 +961,7 @@ export class NotionService {
         let pageCount = 0;
 
         while (hasMore) {
-          DebugLogger.debug(`🔍 Data source query request using SDK method:`, {
+          DebugLogger.debug(` Data source query request using SDK method:`, {
             data_source_id: dataSourceId,
             hasFilter: !!filter,
             hasSorts: !!sorts,
@@ -991,7 +991,7 @@ export class NotionService {
 
       } catch (dataSourceError: any) {
         // Data source query failed, try search fallback
-        console.log(`⚠️ Data source query failed (${dataSourceError.code}), falling back to search API`);
+        console.log(` Data source query failed (${dataSourceError.code}), falling back to search API`);
 
         // Clear validation cache if we get invalid_request_url errors - may indicate stale cache
         if (dataSourceError.code === 'invalid_request_url') {
@@ -1001,7 +1001,7 @@ export class NotionService {
           // Track this data source as failed to avoid retrying
           if (dataSourceId) {
             this.failedDataSources.add(dataSourceId);
-            DebugLogger.debug(`❌ Added data source ${dataSourceId} to failed list (${this.failedDataSources.size} total failed)`);
+            DebugLogger.debug(` Added data source ${dataSourceId} to failed list (${this.failedDataSources.size} total failed)`);
           }
         }
 
@@ -1011,7 +1011,7 @@ export class NotionService {
           return results;
         } catch (searchError: any) {
           // Both methods failed
-          console.error(`❌ Both query methods failed`);
+          console.error(` Both query methods failed`);
           console.error(`  Data source error: ${dataSourceError.message}`);
           console.error(`  Search API error: ${searchError.message}`);
 
@@ -1029,7 +1029,7 @@ export class NotionService {
 
     } catch (error: any) {
       // Handle top-level errors (like getDatabaseMetadata failures)
-      console.error(`❌ Failed to query database ${databaseId}:`, error.message);
+      console.error(` Failed to query database ${databaseId}:`, error.message);
       throw new Error(`Database query failed: ${error.message}`);
     }
   }
@@ -1122,11 +1122,11 @@ export class NotionService {
     await this.ensureValidToken();
 
     if (Object.keys(properties).length === 0) {
-      DebugLogger.debugDataSource(`ℹ️ No properties to add to database ${databaseId}`);
+      DebugLogger.debugDataSource(` No properties to add to database ${databaseId}`);
       return { success: true, message: "No properties to add" };
     }
 
-    DebugLogger.debugDataSource(`🔧 Updating database schema using 2025-09-03 Data Source API`);
+    DebugLogger.debugDataSource(` Updating database schema using 2025-09-03 Data Source API`);
     DebugLogger.debugDataSource(`📋 Adding ${Object.keys(properties).length} new properties:`, Object.keys(properties));
 
     // Get database metadata to access data sources
@@ -1139,7 +1139,7 @@ export class NotionService {
       throw new Error(`No data sources found for database ${databaseId}. Cannot update schema without data source access.`);
     }
 
-    DebugLogger.debugDataSource(`📊 Found ${dataSourceIds.length} data source(s) for database ${databaseId}`);
+    DebugLogger.debugDataSource(` Found ${dataSourceIds.length} data source(s) for database ${databaseId}`);
 
     const maxRetries = 3;
     const results: any[] = [];
@@ -1150,11 +1150,11 @@ export class NotionService {
       let lastError: any;
       let success = false;
 
-      DebugLogger.debugDataSource(`🔧 Updating schema for data source: ${dataSourceId}`);
+      DebugLogger.debugDataSource(` Updating schema for data source: ${dataSourceId}`);
 
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
-          DebugLogger.debugDataSource(`🔧 Updating data source ${dataSourceId} (attempt ${attempt}/${maxRetries})`);
+          DebugLogger.debugDataSource(` Updating data source ${dataSourceId} (attempt ${attempt}/${maxRetries})`);
 
           // Use the new Data Source API via request() until SDK adds native support
           const response = await this.notion.request({
@@ -1165,16 +1165,16 @@ export class NotionService {
             }
           });
 
-          DebugLogger.debugDataSource(`✅ Data source ${dataSourceId} schema updated successfully on attempt ${attempt}`);
+          DebugLogger.debugDataSource(` Data source ${dataSourceId} schema updated successfully on attempt ${attempt}`);
           results.push(response);
           success = true;
           break;
 
         } catch (error: any) {
           lastError = error;
-          DebugLogger.debugDataSource(`❌ Data source schema update failed on attempt ${attempt}:`, error.message);
-          DebugLogger.debugDataSource(`❌ Error code:`, error.code);
-          DebugLogger.debugDataSource(`❌ Data source ID:`, dataSourceId);
+          DebugLogger.debugDataSource(` Data source schema update failed on attempt ${attempt}:`, error.message);
+          DebugLogger.debugDataSource(` Error code:`, error.code);
+          DebugLogger.debugDataSource(` Data source ID:`, dataSourceId);
 
           // If this is a final failure or a non-retryable error, break
           if (attempt === maxRetries || this.isNonRetryableError(error)) {
@@ -1191,13 +1191,13 @@ export class NotionService {
       if (!success) {
         const errorMessage = this.getDataSourceErrorMessage(lastError);
         errors.push(`Data source ${dataSourceId}: ${errorMessage}`);
-        DebugLogger.debugDataSource(`❌ All ${maxRetries} attempts failed for data source ${dataSourceId}`);
+        DebugLogger.debugDataSource(` All ${maxRetries} attempts failed for data source ${dataSourceId}`);
       }
     }
 
     // Check if any data source updates succeeded
     if (results.length > 0) {
-      DebugLogger.debugDataSource(`✅ Successfully updated ${results.length}/${dataSourceIds.length} data sources`);
+      DebugLogger.debugDataSource(` Successfully updated ${results.length}/${dataSourceIds.length} data sources`);
 
       // Verify the columns were actually created by checking the updated database
       await this.verifyColumnsCreated(databaseId, Object.keys(properties));
@@ -1212,7 +1212,7 @@ export class NotionService {
     }
 
     // All data source updates failed
-    DebugLogger.debugDataSource(`❌ All data source schema updates failed`);
+    DebugLogger.debugDataSource(` All data source schema updates failed`);
     throw new Error(`Database schema update failed: All ${dataSourceIds.length} data source(s) failed to update. Errors: ${errors.join('; ')}`);
   }
 
@@ -1262,7 +1262,7 @@ export class NotionService {
    */
   private async verifyColumnsCreated(databaseId: string, expectedColumns: string[]): Promise<void> {
     try {
-      DebugLogger.debugDataSource(`🔍 Verifying columns were created: ${expectedColumns.join(', ')}`);
+      DebugLogger.debugDataSource(` Verifying columns were created: ${expectedColumns.join(', ')}`);
 
       // Wait a moment for Notion to process the schema change
       await new Promise(resolve => setTimeout(resolve, 1000));
@@ -1273,13 +1273,13 @@ export class NotionService {
       const missingColumns = expectedColumns.filter(col => !existingColumns.includes(col));
 
       if (missingColumns.length > 0) {
-        DebugLogger.debugDataSource(`❌ Columns were not created: ${missingColumns.join(', ')}`);
+        DebugLogger.debugDataSource(` Columns were not created: ${missingColumns.join(', ')}`);
         throw new Error(`Schema update appeared to succeed but columns were not created: ${missingColumns.join(', ')}`);
       }
 
-      DebugLogger.debugDataSource(`✅ All columns verified as created: ${expectedColumns.join(', ')}`);
+      DebugLogger.debugDataSource(` All columns verified as created: ${expectedColumns.join(', ')}`);
     } catch (error: any) {
-      DebugLogger.debugDataSource(`❌ Column verification failed:`, error.message);
+      DebugLogger.debugDataSource(` Column verification failed:`, error.message);
       throw new Error(`Failed to verify column creation: ${error.message}`);
     }
   }
@@ -1312,16 +1312,16 @@ export class NotionService {
     if (this.dataSourceService) {
       try {
         dataSourceId = await this.dataSourceService.findDataSourceForDatabase(databaseId);
-        DebugLogger.debugDataSource(`🔍 Found data source ID for page creation: ${dataSourceId}`);
+        DebugLogger.debugDataSource(` Found data source ID for page creation: ${dataSourceId}`);
       } catch (error: any) {
-        DebugLogger.debugDataSource(`⚠️ Could not find data source ID, falling back to database ID: ${error.message}`);
+        DebugLogger.debugDataSource(` Could not find data source ID, falling back to database ID: ${error.message}`);
       }
     }
 
     // Try data source approach first (2025-09-03 API)
     if (dataSourceId) {
       try {
-        DebugLogger.debugDataSource(`📝 Creating page with data source parent: ${dataSourceId}`);
+        DebugLogger.debugDataSource(` Creating page with data source parent: ${dataSourceId}`);
         const response = await this.notion.pages.create({
           parent: {
             type: "data_source_id" as any,
@@ -1329,17 +1329,17 @@ export class NotionService {
           } as any,
           properties,
         });
-        DebugLogger.debugDataSource(`✅ Page created successfully using data source API`);
+        DebugLogger.debugDataSource(` Page created successfully using data source API`);
         return response;
       } catch (dataSourceError: any) {
-        DebugLogger.debugDataSource(`❌ Data source page creation failed: ${dataSourceError.message}, falling back to database ID`);
+        DebugLogger.debugDataSource(` Data source page creation failed: ${dataSourceError.message}, falling back to database ID`);
         // Fall through to database ID approach
       }
     }
 
     // Fallback to database ID approach (legacy API)
     try {
-      DebugLogger.debugDataSource(`📝 Creating page with database parent: ${databaseId}`);
+      DebugLogger.debugDataSource(` Creating page with database parent: ${databaseId}`);
       const response = await this.notion.pages.create({
         parent: {
           type: "database_id",
@@ -1347,10 +1347,10 @@ export class NotionService {
         },
         properties,
       });
-      DebugLogger.debugDataSource(`✅ Page created successfully using database ID API`);
+      DebugLogger.debugDataSource(` Page created successfully using database ID API`);
       return response;
     } catch (databaseError: any) {
-      DebugLogger.debugDataSource(`❌ Database page creation failed: ${databaseError.message}`);
+      DebugLogger.debugDataSource(` Database page creation failed: ${databaseError.message}`);
       throw new Error(`Failed to create database entry: ${databaseError.message}`);
     }
   }
@@ -1391,7 +1391,7 @@ export class NotionService {
             ...combinedSchema
           };
         } catch (schemaError: any) {
-          DebugLogger.debugDataSource(`⚠️ Failed to get combined schema, using basic properties: ${schemaError.message}`);
+          DebugLogger.debugDataSource(` Failed to get combined schema, using basic properties: ${schemaError.message}`);
           // Fall back to basic properties if enhanced schema fails
           return database.properties || {};
         }
@@ -1400,7 +1400,7 @@ export class NotionService {
       // Fallback to basic database properties with null safety
       return database.properties || {};
     } catch (error: any) {
-      DebugLogger.debugDataSource(`❌ Failed to get database properties for ${databaseId}: ${error.message}`);
+      DebugLogger.debugDataSource(` Failed to get database properties for ${databaseId}: ${error.message}`);
       // Return empty object to prevent "Cannot convert undefined or null to object" errors
       return {};
     }

@@ -302,18 +302,18 @@ export async function getRepoScores(
 
   if (estimatedTokens <= maxContentTokens) {
     console.log(
-      `📊 Content size: ${estimatedTokens} tokens (within ${contextLimit} limit)`
+      ` Content size: ${estimatedTokens} tokens (within ${contextLimit} limit)`
     );
     return await processStandardGrading(repoContent, provider, selectedPrompt, rateLimiter);
   }
 
   console.log(
-    `⚠️  Large repository detected: ${estimatedTokens} tokens exceeds ${maxContentTokens} limit`
+    `  Large repository detected: ${estimatedTokens} tokens exceeds ${maxContentTokens} limit`
   );
 
   if (chunkingPreference === "skip") {
     console.log(
-      `⏭️  Skipping large repository as requested by user preference`
+      `  Skipping large repository as requested by user preference`
     );
     throw new Error(
       `Repository too large (${estimatedTokens} tokens > ${maxContentTokens} limit). Skipped by user preference.`
@@ -323,12 +323,12 @@ export async function getRepoScores(
   console.log(`🔄 Processing repository in chunks with parallel processing...`);
 
   const chunks = splitRepositoryContent(repoContent, maxContentTokens);
-  console.log(`📦 Split into ${chunks.length} chunks for parallel processing`);
+  console.log(` Split into ${chunks.length} chunks for parallel processing`);
 
   // Process chunks in parallel for better performance
   const chunkPromises = chunks.map(async (chunk) => {
     console.log(
-      `⚙️  Starting chunk ${chunk.chunkIndex}/${chunk.totalChunks}...`
+      `  Starting chunk ${chunk.chunkIndex}/${chunk.totalChunks}...`
     );
     try {
       // Note: We can't pass previous feedbacks in parallel mode, so each chunk is independent
@@ -337,14 +337,14 @@ export async function getRepoScores(
       return chunkFeedback;
     } catch (error) {
       console.warn(
-        `⚠️  Failed to process chunk ${chunk.chunkIndex}:`,
+        `  Failed to process chunk ${chunk.chunkIndex}:`,
         error instanceof Error ? error.message : String(error)
       );
       return null;
     }
   });
 
-  console.log(`🚀 Processing ${chunks.length} chunks in parallel...`);
+  console.log(` Processing ${chunks.length} chunks in parallel...`);
   const chunkResults = await Promise.all(chunkPromises);
   const chunkFeedbacks = chunkResults.filter(
     (result): result is ChunkFeedback => result !== null
@@ -474,7 +474,7 @@ async function processStandardGrading(
         errorMsg.includes("Too Many Requests");
 
       console.warn(
-        `⚠️  Grading attempt ${attempt} failed:`,
+        `  Grading attempt ${attempt} failed:`,
         errorMsg
       );
 

@@ -12,7 +12,7 @@ interface GradingModeSelectorProps {
 }
 
 const categories: MenuCategory[] = [
-  { id: "analyze", name: "ANALYZE CODE", icon: "📊" },
+  { id: "analyze", name: "ANALYZE CODE", icon: "" },
   { id: "repo-mgmt", name: "GITHUB MANAGEMENT", icon: "👥" },
   { id: "research", name: "RESEARCH", icon: "🔬" },
 ];

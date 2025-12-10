@@ -170,7 +170,7 @@ export function saveBrowserTestResults(
           writeFileSync(screenshotPath, buffer);
           console.log(`  ✓ Saved screenshot: ${screenshotFileName}`);
         } catch (error) {
-          console.warn(`  ⚠ Failed to save screenshot ${screenshotFileName}:`, error);
+          console.warn(`   Failed to save screenshot ${screenshotFileName}:`, error);
         }
       });
     }
