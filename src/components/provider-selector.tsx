@@ -23,15 +23,17 @@ export const ProviderSelector: React.FC<ProviderSelectorProps> = ({
       try {
         const preferences = await preferencesStorage.loadPreferences();
         if (preferences.selectedProvider) {
-          const provider = AI_PROVIDERS.find(p => p.id === preferences.selectedProvider);
+          const provider = AI_PROVIDERS.find((p) => p.id === preferences.selectedProvider);
           if (provider) {
             setSavedProvider(provider);
-            const providerIndex = AI_PROVIDERS.findIndex(p => p.id === preferences.selectedProvider);
+            const providerIndex = AI_PROVIDERS.findIndex(
+              (p) => p.id === preferences.selectedProvider
+            );
             setSelectedIndex(providerIndex >= 0 ? providerIndex : 0);
           }
         }
-      } catch (error) {
-        console.error('Error loading saved provider:', error);
+      } catch {
+        // Silently ignore preference loading errors
       }
     };
 
@@ -46,54 +48,57 @@ export const ProviderSelector: React.FC<ProviderSelectorProps> = ({
     } else if (key.return) {
       const selectedProvider = AI_PROVIDERS[selectedIndex];
 
-      // Save the selected provider to preferences
-      preferencesStorage.savePreferences({
-        selectedProvider: selectedProvider.id
-      }).catch(error => {
-        console.error('Error saving provider preference:', error);
-      });
+      preferencesStorage
+        .savePreferences({ selectedProvider: selectedProvider.id })
+        .catch(() => {
+          // Silently ignore preference saving errors
+        });
 
       onSelect(selectedProvider);
-    } else if (input === 't' && onTestMode) {
+    } else if (input === "t" && onTestMode) {
       onTestMode();
-    } else if ((input === 'b' || key.escape) && onBack) {
+    } else if ((input === "b" || key.escape) && onBack) {
       onBack();
     }
   });
 
   return (
     <Box flexDirection="column">
-      <Box marginBottom={1}>
-        <Text color="cyan" bold>
-          Select AI Provider for Grading:
-        </Text>
-      </Box>
+      <Text color="cyan" bold>
+        Select AI Provider for Grading
+      </Text>
+      <Text></Text>
       {savedProvider && (
-        <Box marginBottom={1}>
-          <Text color="green">
-            Previously selected: {savedProvider.name}
-          </Text>
-        </Box>
-      )}
-      <Box flexDirection="column">
-        {AI_PROVIDERS.map((provider, index) => (
-          <Box key={provider.id} marginBottom={1}>
-            <Text color={index === selectedIndex ? "green" : "white"}>
-              {index === selectedIndex ? "► " : "  "}
-              {provider.name}
-            </Text>
-            <Text color="gray" dimColor>
-              {" - "}
-              {provider.description}
-            </Text>
-          </Box>
-        ))}
-      </Box>
-      <Box marginTop={1}>
-        <Text color="yellow">
-          Use ↑/↓ arrows to navigate, Enter to select, 't' for Browser Test Mode, 'b' to go back
+        <Text color="green" dimColor>
+          Previously selected: {savedProvider.name}
         </Text>
-      </Box>
+      )}
+      <Text dimColor>Use ↑/↓ arrows to navigate, Enter to select</Text>
+      <Text></Text>
+
+      {AI_PROVIDERS.map((provider, index) => {
+        const isSelected = index === selectedIndex;
+        return (
+          <Box key={provider.id} flexDirection="column" marginBottom={1}>
+            <Box>
+              <Text color={isSelected ? "blue" : "white"} bold={isSelected}>
+                {isSelected ? "→ " : "  "}
+                {provider.name}
+              </Text>
+            </Box>
+            <Box marginLeft={4}>
+              <Text dimColor>{provider.description}</Text>
+            </Box>
+          </Box>
+        );
+      })}
+
+      <Text></Text>
+      <Text dimColor>
+        {onTestMode ? "Press 't' for Browser Test Mode, " : ""}
+        {onBack ? "'b' to go back, " : ""}
+        Ctrl+C to exit
+      </Text>
     </Box>
   );
 };

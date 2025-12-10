@@ -1,7 +1,8 @@
-import React, { useState } from "react";
-import { Text, Box, useInput } from "ink";
+import React from "react";
+import { Text, Box } from "ink";
 import * as fs from "fs";
 import * as path from "path";
+import { useTextInput } from "../hooks/useTextInput.js";
 
 interface LocalRepoPathInputProps {
   onSubmit: (repoPath: string) => void;
@@ -14,43 +15,30 @@ export const LocalRepoPathInput: React.FC<LocalRepoPathInputProps> = ({
   onBack,
   currentDirectory,
 }) => {
-  const [input, setInput] = useState("");
-  const [error, setError] = useState<string | null>(null);
-
-  const validatePath = (inputPath: string): { valid: boolean; error?: string } => {
+  const validatePath = (inputPath: string): { valid: boolean; message?: string } => {
     const pathToValidate = inputPath.trim() || currentDirectory;
     const resolvedPath = path.resolve(pathToValidate);
 
     if (!fs.existsSync(resolvedPath)) {
-      return { valid: false, error: "Path does not exist" };
+      return { valid: false, message: "Path does not exist" };
     }
 
     const stats = fs.statSync(resolvedPath);
     if (!stats.isDirectory()) {
-      return { valid: false, error: "Path must be a directory" };
+      return { valid: false, message: "Path must be a directory" };
     }
 
     return { valid: true };
   };
 
-  useInput((char, key) => {
-    if (key.return) {
-      const pathToSubmit = input.trim() || currentDirectory;
-      const validation = validatePath(input);
-      if (validation.valid) {
-        onSubmit(path.resolve(pathToSubmit));
-      } else {
-        setError(validation.error || "Invalid path");
-      }
-    } else if (key.backspace || key.delete) {
-      setInput((prev) => prev.slice(0, -1));
-      setError(null);
-    } else if (key.escape || (char === "b" && input === "")) {
-      onBack();
-    } else if (char && !key.ctrl) {
-      setInput((prev) => prev + char);
-      setError(null);
-    }
+  const { input, error } = useTextInput({
+    onSubmit: (value) => {
+      const pathToSubmit = value.trim() || currentDirectory;
+      onSubmit(path.resolve(pathToSubmit));
+    },
+    onBack,
+    validate: validatePath,
+    allowBackWhenEmpty: true,
   });
 
   return (

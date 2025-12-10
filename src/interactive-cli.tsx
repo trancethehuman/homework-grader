@@ -1,9 +1,14 @@
 import React, { useState, useEffect } from "react";
 import { Text, Box, useInput, useApp } from "ink";
 import * as fs from "fs";
-import * as path from "path";
-import csv from "csv-parser";
 import open from "open";
+import {
+  CSVColumn,
+  CSVAnalysis,
+  validateAndAnalyzeCSV,
+  loadGitHubUrlsFromColumn,
+} from "./lib/csv-utils.js";
+import { GitHubUrlParser } from "./lib/github-url-parser.js";
 import { TokenStorage } from "./lib/token-storage.js";
 import { E2BTokenStorage } from "./lib/e2b-token-storage.js";
 import { GitHubService } from "./github/github-service.js";
@@ -81,24 +86,14 @@ import {
   DatabaseProperty,
   FilterCriteria,
 } from "./components/notion/database-filter.js";
+import { convertFilterToNotionAPI } from "./lib/notion/filter-converter.js";
 import { PromptSelector } from "./components/prompt-selector.js";
 import {
   GradingPrompt,
   getDefaultGradingPrompt,
 } from "./consts/grading-prompts.js";
 
-export interface CSVColumn {
-  name: string;
-  index: number;
-  sampleValues: string[];
-}
-
-export interface CSVAnalysis {
-  filePath: string;
-  columns: CSVColumn[];
-  totalRows: number;
-  suggestedGitHubColumn?: CSVColumn;
-}
+export type { CSVColumn, CSVAnalysis } from "./lib/csv-utils.js";
 
 interface InteractiveCSVProps {
   onComplete: (
@@ -280,9 +275,13 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
   const [isFilteredWorkflow, setIsFilteredWorkflow] = useState(false);
   const { exit } = useApp();
 
-  // Helper function to navigate to a new step and clear any existing errors
-  const navigateToStep = (newStep: Step) => {
+  // Helper function to navigate to a new step and optionally clear errors
+  const navigateToStep = (
+    newStep: Step,
+    options?: { preserveError?: boolean }
+  ) => {
     // Clear console when moving between major workflow steps for cleaner UX
+    // But don't clear if we're preserving an error (so user can see error message)
     const majorSteps: Step[] = [
       "data-source-select",
       "notion-page-selector",
@@ -293,187 +292,16 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
       "complete",
     ];
 
-    if (majorSteps.includes(newStep) && newStep !== step) {
+    const shouldPreserveError = options?.preserveError ?? false;
+
+    if (majorSteps.includes(newStep) && newStep !== step && !shouldPreserveError) {
       console.clear();
     }
 
-    setError(null); // Clear any existing error messages
-    setStep(newStep);
-  };
-
-  // Convert FilterCriteria to Notion API filter format
-  // Based on Notion Data Source API documentation (2025-09-03)
-  const convertFilterToNotionAPI = (criteria: FilterCriteria): any => {
-    const propertyName = criteria.propertyName;
-
-    switch (criteria.filterType) {
-      case "include":
-        if (criteria.propertyType === "select") {
-          const values = criteria.value as string[];
-          // Single value: return simple filter
-          if (values.length === 1) {
-            return {
-              property: propertyName,
-              select: { equals: values[0] },
-            };
-          }
-          // Multiple values: use OR compound filter
-          return {
-            or: values.map((val: string) => ({
-              property: propertyName,
-              select: { equals: val },
-            })),
-          };
-        } else if (criteria.propertyType === "multi_select") {
-          const values = criteria.value as string[];
-          // For multi-select, use "contains" for each value with OR
-          if (values.length === 1) {
-            return {
-              property: propertyName,
-              multi_select: { contains: values[0] },
-            };
-          }
-          return {
-            or: values.map((val: string) => ({
-              property: propertyName,
-              multi_select: { contains: val },
-            })),
-          };
-        }
-        break;
-
-      case "exclude":
-        if (criteria.propertyType === "select") {
-          const values = criteria.value as string[];
-          // Use does_not_equal with AND for excluding multiple values
-          if (values.length === 1) {
-            return {
-              property: propertyName,
-              select: { does_not_equal: values[0] },
-            };
-          }
-          return {
-            and: values.map((val: string) => ({
-              property: propertyName,
-              select: { does_not_equal: val },
-            })),
-          };
-        } else if (criteria.propertyType === "multi_select") {
-          const values = criteria.value as string[];
-          // Use does_not_contain with AND
-          if (values.length === 1) {
-            return {
-              property: propertyName,
-              multi_select: { does_not_contain: values[0] },
-            };
-          }
-          return {
-            and: values.map((val: string) => ({
-              property: propertyName,
-              multi_select: { does_not_contain: val },
-            })),
-          };
-        }
-        break;
-
-      case "contains":
-        return {
-          property: propertyName,
-          rich_text: { contains: criteria.value as string },
-        };
-
-      case "not_contains":
-        return {
-          property: propertyName,
-          rich_text: { does_not_contain: criteria.value as string },
-        };
-
-      case "equals":
-        if (criteria.propertyType === "checkbox") {
-          return {
-            property: propertyName,
-            checkbox: { equals: criteria.value as boolean },
-          };
-        } else if (criteria.propertyType === "number") {
-          return {
-            property: propertyName,
-            number: { equals: criteria.value as number },
-          };
-        }
-        break;
-
-      case "not_equals":
-        if (criteria.propertyType === "checkbox") {
-          return {
-            property: propertyName,
-            checkbox: { equals: !(criteria.value as boolean) },
-          };
-        } else if (criteria.propertyType === "number") {
-          return {
-            property: propertyName,
-            number: { does_not_equal: criteria.value as number },
-          };
-        }
-        break;
-
-      case "greater_than":
-        return {
-          property: propertyName,
-          number: { greater_than: criteria.value as number },
-        };
-
-      case "less_than":
-        return {
-          property: propertyName,
-          number: { less_than: criteria.value as number },
-        };
-
-      case "is_empty":
-        if (criteria.propertyType === "select") {
-          return {
-            property: propertyName,
-            select: { is_empty: true },
-          };
-        } else if (criteria.propertyType === "multi_select") {
-          return {
-            property: propertyName,
-            multi_select: { is_empty: true },
-          };
-        } else if (
-          criteria.propertyType === "rich_text" ||
-          criteria.propertyType === "title"
-        ) {
-          return {
-            property: propertyName,
-            rich_text: { is_empty: true },
-          };
-        }
-        break;
-
-      case "is_not_empty":
-        if (criteria.propertyType === "select") {
-          return {
-            property: propertyName,
-            select: { is_not_empty: true },
-          };
-        } else if (criteria.propertyType === "multi_select") {
-          return {
-            property: propertyName,
-            multi_select: { is_not_empty: true },
-          };
-        } else if (
-          criteria.propertyType === "rich_text" ||
-          criteria.propertyType === "title"
-        ) {
-          return {
-            property: propertyName,
-            rich_text: { is_not_empty: true },
-          };
-        }
-        break;
+    if (!shouldPreserveError) {
+      setError(null); // Clear any existing error messages only if not preserving
     }
-
-    return undefined;
+    setStep(newStep);
   };
 
   // Fetch filtered database content when filter is applied
@@ -1073,7 +901,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
                 }`
               );
               setNotionNavigationStack([]);
-              navigateToStep("data-source-select");
+              navigateToStep("data-source-select", { preserveError: true });
             }
           } else {
             setError(
@@ -1082,7 +910,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
               }`
             );
             setNotionNavigationStack([]);
-            navigateToStep("data-source-select");
+            navigateToStep("data-source-select", { preserveError: true });
           }
         }
       };
@@ -1176,117 +1004,6 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
     originalDatabaseId,
     selectedGitHubColumn,
   ]);
-
-  const validateAndAnalyzeCSV = async (
-    filePath: string
-  ): Promise<CSVAnalysis> => {
-    if (!fs.existsSync(filePath)) {
-      throw new Error(`File not found: ${filePath}`);
-    }
-
-    if (path.extname(filePath).toLowerCase() !== ".csv") {
-      throw new Error(
-        `Invalid file type. Expected .csv file, got: ${path.extname(filePath)}`
-      );
-    }
-
-    const columns: CSVColumn[] = [];
-    const sampleData: Record<string, string[]> = {};
-    let totalRows = 0;
-    let headerProcessed = false;
-
-    return new Promise((resolve, reject) => {
-      fs.createReadStream(filePath)
-        .pipe(csv())
-        .on("data", (row: Record<string, string>) => {
-          if (!headerProcessed) {
-            Object.keys(row).forEach((columnName, index) => {
-              columns.push({
-                name: columnName,
-                index,
-                sampleValues: [],
-              });
-              sampleData[columnName] = [];
-            });
-            headerProcessed = true;
-          }
-
-          Object.entries(row).forEach(([columnName, value]) => {
-            if (sampleData[columnName].length < 3 && value && value.trim()) {
-              sampleData[columnName].push(value.trim());
-            }
-          });
-
-          totalRows++;
-        })
-        .on("end", () => {
-          columns.forEach((column) => {
-            column.sampleValues = sampleData[column.name] || [];
-          });
-
-          const suggestedGitHubColumn = columns.find((column) => {
-            const nameContainsGitHub = column.name
-              .toLowerCase()
-              .includes("github");
-            const hasGitHubUrls = column.sampleValues.some((value) =>
-              value.toLowerCase().includes("github.com")
-            );
-            return nameContainsGitHub || hasGitHubUrls;
-          });
-
-          resolve({
-            filePath,
-            columns,
-            totalRows,
-            suggestedGitHubColumn,
-          });
-        })
-        .on("error", (error: any) => {
-          reject(new Error(`Error reading CSV file: ${error.message}`));
-        });
-    });
-  };
-
-  const loadGitHubUrlsFromColumn = async (
-    filePath: string,
-    columnName: string
-  ): Promise<string[]> => {
-    const urls: string[] = [];
-    const urlSet = new Set<string>();
-
-    return new Promise((resolve, reject) => {
-      fs.createReadStream(filePath)
-        .pipe(csv())
-        .on("data", (row: Record<string, string>) => {
-          const value = row[columnName];
-          if (value && isValidGitHubURL(value)) {
-            const normalizedUrl = value.trim().toLowerCase();
-            if (!urlSet.has(normalizedUrl)) {
-              urlSet.add(normalizedUrl);
-              urls.push(value.trim());
-            }
-          }
-        })
-        .on("end", () => {
-          resolve(urls);
-        })
-        .on("error", (error: any) => {
-          reject(new Error(`Error reading CSV file: ${error.message}`));
-        });
-    });
-  };
-
-  const isValidGitHubURL = (url: string): boolean => {
-    if (!url || typeof url !== "string") {
-      return false;
-    }
-
-    const trimmedUrl = url.trim();
-    return (
-      (trimmedUrl.startsWith("http://") || trimmedUrl.startsWith("https://")) &&
-      trimmedUrl.includes("github.com")
-    );
-  };
 
   useInput(async (inputChar, key) => {
     if (step === "github-token") {
@@ -2600,7 +2317,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           onError={(error) => {
             setError(error);
             setNotionNavigationStack([]);
-            navigateToStep("data-source-select");
+            navigateToStep("data-source-select", { preserveError: true });
           }}
           onBack={() => {
             // Clear navigation stack when returning to data source select

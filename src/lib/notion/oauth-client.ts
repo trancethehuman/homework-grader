@@ -40,6 +40,23 @@ export class NotionOAuthClient {
     this.storage = new NotionTokenStorage();
   }
 
+  /**
+   * Warm up the proxy server with a lightweight health check request.
+   * This helps detect cold starts early and gives users feedback.
+   * @returns true if the server responded, false if it timed out or failed
+   */
+  async warmUpProxy(): Promise<boolean> {
+    try {
+      const response = await fetch(`${this.proxyBaseUrl}/health`, {
+        method: "GET",
+        signal: AbortSignal.timeout(60000), // 60s for cold start
+      });
+      return response.ok;
+    } catch {
+      return false;
+    }
+  }
+
   async ensureAuthenticated(): Promise<NotionOAuthToken> {
     const existing = this.storage.getToken();
 

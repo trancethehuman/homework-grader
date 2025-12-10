@@ -12,6 +12,7 @@ import { SandboxFileProcessor } from "./sandbox-file-processor.js";
 import { AIProvider } from "../../consts/ai-providers.js";
 import { getRepoScores } from "../../grader/grader.js";
 import { RateLimiter } from "../rate-limiter.js";
+import { GitHubUrlParser } from "../github-url-parser.js";
 
 export class SandboxService {
   private sandbox: Sandbox | null = null;
@@ -56,25 +57,7 @@ export class SandboxService {
   }
 
   parseGitHubUrl(url: string): RepositoryInfo | null {
-    const githubRegex = /github\.com\/([^\/]+)\/([^\/]+)/;
-    const match = url.match(githubRegex);
-
-    if (!match) {
-      return null;
-    }
-
-    const owner = match[1];
-    let repo = match[2];
-
-    // Remove .git suffix if present
-    if (repo.endsWith(".git")) {
-      repo = repo.slice(0, -4);
-    }
-
-    // Remove any trailing slashes or additional path components
-    repo = repo.split("/")[0];
-
-    return { owner, repo, url };
+    return GitHubUrlParser.parseWithUrl(url);
   }
 
   async cloneRepository(

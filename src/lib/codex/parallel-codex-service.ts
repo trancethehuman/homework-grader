@@ -13,6 +13,7 @@ import {
   ThreadItem,
   Usage,
 } from "./codex-types.js";
+import { GitHubUrlParser } from "../github-url-parser.js";
 
 export interface RepoEventData {
   type: 'initializing' | 'item_updated' | 'item_completed' | 'turn_completed' | 'error';
@@ -35,14 +36,7 @@ export class ParallelCodexService {
   }
 
   private parseGitHubUrl(url: string): { owner: string; repo: string } {
-    const match = url.match(/github\.com\/([^\/]+)\/([^\/]+)/);
-    if (!match) {
-      throw new Error(`Invalid GitHub URL: ${url}`);
-    }
-    return {
-      owner: match[1],
-      repo: match[2].replace(/\.git$/, ""),
-    };
+    return GitHubUrlParser.parseOrThrow(url);
   }
 
   async cloneRepositories(

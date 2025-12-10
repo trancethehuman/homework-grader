@@ -1,5 +1,6 @@
-import React, { useState } from "react";
-import { Text, Box, useInput } from "ink";
+import React from "react";
+import { Text, Box } from "ink";
+import { useTextInput } from "../hooks/useTextInput.js";
 
 interface ManualUrlInputProps {
   onComplete: (urls: string[]) => void;
@@ -10,57 +11,54 @@ export const ManualUrlInput: React.FC<ManualUrlInputProps> = ({
   onComplete,
   onBack,
 }) => {
-  const [input, setInput] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const validateUrls = (value: string): { valid: boolean; message?: string } => {
+    const trimmedInput = value.trim();
+    if (!trimmedInput) {
+      return { valid: false, message: "Please enter at least one GitHub URL" };
+    }
 
-  useInput((char, key) => {
-    if (key.return) {
-      const trimmedInput = input.trim();
-      if (!trimmedInput) {
-        setError("Please enter at least one GitHub URL");
-        return;
+    const urls = trimmedInput
+      .split(",")
+      .map((url) => url.trim())
+      .filter((url) => url.length > 0);
+
+    if (urls.length === 0) {
+      return { valid: false, message: "Please enter at least one valid GitHub URL" };
+    }
+
+    const invalidUrls = urls.filter((url) => {
+      try {
+        const urlObj = new URL(url);
+        return !urlObj.hostname.includes("github.com");
+      } catch {
+        return true;
       }
+    });
 
-      // Parse comma-separated URLs
-      const urls = trimmedInput
+    if (invalidUrls.length > 0) {
+      return {
+        valid: false,
+        message: `Invalid GitHub URLs: ${invalidUrls.slice(0, 3).join(", ")}${
+          invalidUrls.length > 3 ? "..." : ""
+        }`,
+      };
+    }
+
+    return { valid: true };
+  };
+
+  const { input, error } = useTextInput({
+    onSubmit: (value) => {
+      const urls = value
+        .trim()
         .split(",")
         .map((url) => url.trim())
         .filter((url) => url.length > 0);
-
-      if (urls.length === 0) {
-        setError("Please enter at least one valid GitHub URL");
-        return;
-      }
-
-      // Validate URLs
-      const invalidUrls = urls.filter((url) => {
-        try {
-          const urlObj = new URL(url);
-          return !urlObj.hostname.includes("github.com");
-        } catch {
-          return true;
-        }
-      });
-
-      if (invalidUrls.length > 0) {
-        setError(
-          `Invalid GitHub URLs: ${invalidUrls.slice(0, 3).join(", ")}${
-            invalidUrls.length > 3 ? "..." : ""
-          }`
-        );
-        return;
-      }
-
       onComplete(urls);
-    } else if (key.backspace || key.delete) {
-      setInput((prev) => prev.slice(0, -1));
-      setError(null);
-    } else if (input.length === 0 && (char === "b" || key.escape)) {
-      onBack();
-    } else if (char && !key.ctrl && !key.meta) {
-      setInput((prev) => prev + char);
-      setError(null);
-    }
+    },
+    onBack,
+    validate: validateUrls,
+    allowBackWhenEmpty: true,
   });
 
   return (

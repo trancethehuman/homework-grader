@@ -1,6 +1,5 @@
-import { readFileSync, writeFileSync, existsSync, mkdirSync, unlinkSync } from "fs";
-import { join } from "path";
-import { homedir } from "os";
+import { readFileSync, writeFileSync, existsSync, unlinkSync } from "fs";
+import { BaseJsonStorage } from "../base-storage.js";
 
 export interface NotionOAuthToken {
   access_token: string;
@@ -13,112 +12,89 @@ export interface NotionOAuthToken {
   expires_at?: number;
 }
 
-export class NotionTokenStorage {
-  private readonly configDir: string;
-  private readonly tokenFile: string;
+/**
+ * Utility for securely storing and retrieving Notion OAuth tokens.
+ * Extends BaseJsonStorage with backup and expiry functionality.
+ */
+export class NotionTokenStorage extends BaseJsonStorage<NotionOAuthToken> {
+  private readonly backupPath: string;
 
   constructor() {
-    const platform = process.platform;
-    if (platform === "win32") {
-      this.configDir = join(
-        process.env.APPDATA || homedir(),
-        "homework-grader"
-      );
-    } else if (platform === "darwin") {
-      this.configDir = join(
-        homedir(),
-        "Library",
-        "Application Support",
-        "homework-grader"
-      );
-    } else {
-      this.configDir = join(
-        process.env.XDG_CONFIG_HOME || join(homedir(), ".config"),
-        "homework-grader"
-      );
-    }
-    this.tokenFile = join(this.configDir, "notion-oauth-token.json");
+    super("notion-oauth-token.json");
+    this.backupPath = `${this.filePath}.backup`;
   }
 
-  private ensureConfigDir(): void {
-    if (!existsSync(this.configDir)) {
-      mkdirSync(this.configDir, { recursive: true, mode: 0o700 });
-    }
-  }
-
-  saveToken(token: NotionOAuthToken): void {
+  /**
+   * Validates that the token has a valid access_token.
+   */
+  protected validate(token: NotionOAuthToken): void {
     if (!token || !token.access_token) {
       throw new Error("Invalid Notion token");
     }
-
-    // Validate token structure
-    if (typeof token.access_token !== 'string' || token.access_token.trim().length === 0) {
+    if (typeof token.access_token !== "string" || token.access_token.trim().length === 0) {
       throw new Error("Invalid access token format");
     }
+  }
 
+  /**
+   * Saves a Notion OAuth token with backup.
+   */
+  saveToken(token: NotionOAuthToken): void {
+    this.validate(token);
     this.ensureConfigDir();
 
     // Create backup of existing token before overwriting
-    if (existsSync(this.tokenFile)) {
+    if (existsSync(this.filePath)) {
       try {
-        const backupFile = `${this.tokenFile}.backup`;
-        const existingData = readFileSync(this.tokenFile, "utf8");
-        writeFileSync(backupFile, existingData, { mode: 0o600 });
+        const existingData = readFileSync(this.filePath, "utf8");
+        writeFileSync(this.backupPath, existingData, { mode: 0o600 });
       } catch (error) {
         console.warn("Failed to create token backup:", error instanceof Error ? error.message : String(error));
       }
     }
 
-    const data = JSON.stringify(token, null, 2);
-    writeFileSync(this.tokenFile, data, { mode: 0o600 });
+    this.save(token);
   }
 
+  /**
+   * Retrieves the saved Notion OAuth token with backup recovery.
+   */
   getToken(): NotionOAuthToken | null {
-    if (!existsSync(this.tokenFile)) {
-      return null;
-    }
-    try {
-      const data = readFileSync(this.tokenFile, "utf8");
+    const token = this.load();
 
-      // Check if file is empty or corrupted
-      if (!data || data.trim().length === 0) {
-        console.warn("Token file is empty, attempting recovery from backup");
-        return this.recoverFromBackup();
-      }
-
-      const token = JSON.parse(data);
-
+    if (token) {
       // Validate token structure
-      if (!token || !token.access_token) {
+      if (!token.access_token) {
         console.warn("Token file contains invalid data, attempting recovery from backup");
         return this.recoverFromBackup();
       }
-
       return token;
-    } catch (error) {
-      console.warn("Failed to parse token file, attempting recovery from backup:", error instanceof Error ? error.message : String(error));
-      return this.recoverFromBackup();
     }
+
+    // Try recovery from backup if main file failed
+    return this.recoverFromBackup();
   }
 
+  /**
+   * Attempts to recover token from backup file.
+   */
   private recoverFromBackup(): NotionOAuthToken | null {
-    const backupFile = `${this.tokenFile}.backup`;
-    if (!existsSync(backupFile)) {
+    if (!existsSync(this.backupPath)) {
       return null;
     }
 
     try {
-      const backupData = readFileSync(backupFile, "utf8");
+      const backupData = readFileSync(this.backupPath, "utf8");
       if (!backupData || backupData.trim().length === 0) {
         return null;
       }
 
-      const token = JSON.parse(backupData);
+      const token = JSON.parse(backupData) as NotionOAuthToken;
       if (!token || !token.access_token) {
         return null;
       }
 
-      console.log("🔄 Recovered token from backup, saving as primary");
+      console.log("Recovered token from backup, saving as primary");
       this.saveToken(token);
       return token;
     } catch (error) {
@@ -127,31 +103,40 @@ export class NotionTokenStorage {
     }
   }
 
+  /**
+   * Clears both the token file and backup.
+   */
   clearToken(): void {
-    const filesToClear = [this.tokenFile, `${this.tokenFile}.backup`];
+    const filesToClear = [this.filePath, this.backupPath];
 
     for (const file of filesToClear) {
       if (existsSync(file)) {
         try {
           unlinkSync(file);
-          console.log(`🗑️  Deleted token file: ${file}`);
         } catch (error) {
           console.warn(`Failed to delete ${file}:`, error instanceof Error ? error.message : String(error));
           // Fallback to clearing content if deletion fails
           try {
             writeFileSync(file, "", { mode: 0o600 });
-            console.log(`📝 Cleared content of ${file}`);
-          } catch {}
+          } catch {
+            // Ignore secondary failure
+          }
         }
       }
     }
   }
 
+  /**
+   * Checks if a valid, non-expired token is stored.
+   */
   hasToken(): boolean {
     const token = this.getToken();
     return !!(token && token.access_token && !this.isTokenExpired(token));
   }
 
+  /**
+   * Checks if the token is expired or will expire soon.
+   */
   isTokenExpired(token?: NotionOAuthToken): boolean {
     if (!token) {
       const storedToken = this.getToken();
@@ -167,8 +152,10 @@ export class NotionTokenStorage {
     return Date.now() >= (token.expires_at - bufferTime);
   }
 
+  /**
+   * Alias for hasToken() - checks if a valid, non-expired token exists.
+   */
   hasValidToken(): boolean {
-    const token = this.getToken();
-    return !!(token && token.access_token && !this.isTokenExpired(token));
+    return this.hasToken();
   }
 }

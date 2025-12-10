@@ -1,5 +1,6 @@
-import React, { useState } from "react";
-import { Text, Box, useInput } from "ink";
+import React from "react";
+import { Text, Box } from "ink";
+import { useTextInput } from "../hooks/useTextInput.js";
 
 interface ParallelInstanceSelectorProps {
   onSubmit: (count: number) => void;
@@ -10,46 +11,36 @@ export const ParallelInstanceSelector: React.FC<ParallelInstanceSelectorProps> =
   onSubmit,
   onBack,
 }) => {
-  const [input, setInput] = useState("4");
-  const [error, setError] = useState<string | null>(null);
-
-  const validateCount = (value: string): { valid: boolean; error?: string; count?: number } => {
+  const validateCount = (value: string): { valid: boolean; message?: string } => {
     const trimmed = value.trim();
 
     if (trimmed === "") {
-      return { valid: false, error: "Please enter a number" };
+      return { valid: false, message: "Please enter a number" };
     }
 
     const num = parseInt(trimmed, 10);
 
     if (isNaN(num)) {
-      return { valid: false, error: "Must be a valid number" };
+      return { valid: false, message: "Must be a valid number" };
     }
 
     if (num < 1) {
-      return { valid: false, error: "Must be at least 1" };
+      return { valid: false, message: "Must be at least 1" };
     }
 
-    return { valid: true, count: num };
+    return { valid: true };
   };
 
-  useInput((char, key) => {
-    if (key.return) {
-      const validation = validateCount(input);
-      if (validation.valid && validation.count) {
-        onSubmit(validation.count);
-      } else {
-        setError(validation.error || "Invalid input");
-      }
-    } else if (key.backspace || key.delete) {
-      setInput((prev) => prev.slice(0, -1));
-      setError(null);
-    } else if (key.escape || (char === "b" && input === "")) {
-      onBack();
-    } else if (char && !key.ctrl && /[0-9]/.test(char)) {
-      setInput((prev) => prev + char);
-      setError(null);
-    }
+  const { input, error } = useTextInput({
+    initialValue: "4",
+    onSubmit: (value) => {
+      const num = parseInt(value.trim(), 10);
+      onSubmit(num);
+    },
+    onBack,
+    validate: validateCount,
+    allowBackWhenEmpty: true,
+    filter: (char: string) => /[0-9]/.test(char),
   });
 
   return (

@@ -10,7 +10,10 @@ import { NotionOAuthClient } from "../../lib/notion/oauth-client.js";
 import { NotionTokenStorage } from "../../lib/notion/notion-token-storage.js";
 import { BackButton, useBackNavigation } from "../ui/back-button.js";
 import { ApiTimeoutHandler, TimeoutError, CircuitBreakerError } from "../../lib/notion/api-timeout-handler.js";
-import { NotionDataLoading } from "./notion-data-loading.js";
+import { NotionDataLoading, LoadingPhase } from "./notion-data-loading.js";
+
+const DEFAULT_PROXY_URL =
+  process.env.NOTION_PROXY_URL || "https://notion-proxy-8xr3.onrender.com";
 
 interface NotionPageSelectorProps {
   onSelect: (pageId: string, pageTitle: string, type: "page" | "database") => void;
@@ -47,6 +50,8 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
   const [isViewAllMode, setIsViewAllMode] = useState(false);
   const [isStartingGrading, setIsStartingGrading] = useState(false);
   const [selectedDatabaseName, setSelectedDatabaseName] = useState("");
+  const [loadingPhase, setLoadingPhase] = useState<LoadingPhase>("warming-up");
+  const [loadingStartTime] = useState(Date.now());
   const itemsPerPage = 10;
   const maxSearchResults = 3;
 
@@ -74,6 +79,7 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
     const loadNotionData = async () => {
       try {
         setIsLoading(true);
+        setLoadingPhase("warming-up");
 
         // Use cached data if available (and not empty)
         if (
@@ -86,6 +92,19 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
           setIsLoading(false);
           return;
         }
+
+        // Phase 1: Warm up the proxy server with a lightweight request
+        // This helps detect cold start early and gives user feedback
+        try {
+          await fetch(`${DEFAULT_PROXY_URL}/health`, {
+            method: "GET",
+            signal: AbortSignal.timeout(5000), // Quick check - if it fails, we'll retry during OAuth
+          });
+        } catch {
+          // Ignore warmup errors - the main OAuth flow will handle cold starts
+        }
+
+        setLoadingPhase("authenticating");
 
         // Otherwise fetch fresh data with enhanced timeout and error handling
         const oauth = new NotionOAuthClient();
@@ -108,6 +127,8 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
           retries: 1,
           operation: 'OAuth Authentication'
         });
+
+        setLoadingPhase("fetching");
 
         const notionService = new NotionService(token.access_token);
 
@@ -132,7 +153,9 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
         let shouldRetriggerAuth = false;
 
         if (err instanceof TimeoutError) {
-          errorMessage = `Operation timed out: ${err.message}\n\nThis may be due to:\n• Slow network connection\n• Notion proxy server starting up (takes ~60s when idle)\n• Heavy load on Notion's API\n\nPlease try again in a moment.`;
+          errorMessage = `Connection timed out. This often happens when the server is starting up after being idle.\n\nPlease try again - the second attempt usually works much faster!`;
+          // Don't trigger re-auth for timeouts - just let user retry
+          shouldRetriggerAuth = false;
         } else if (err instanceof CircuitBreakerError) {
           errorMessage = `Service temporarily unavailable: ${err.message}\n\nThe Notion API is experiencing issues. Please try again in a few minutes.`;
         } else if (err instanceof Error) {
@@ -347,8 +370,8 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
   if (isLoading) {
     return (
       <NotionDataLoading
-        title="Loading Notion Data"
-        message="Connecting to your workspace and fetching pages and databases..."
+        phase={loadingPhase}
+        startTime={loadingStartTime}
       />
     );
   }

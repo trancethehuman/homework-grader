@@ -3,6 +3,7 @@ import { Text, Box, useInput } from "ink";
 import { NotionService, NotionDatabase } from "../lib/notion/notion-service.js";
 import { NotionOAuthClient } from "../lib/notion/oauth-client.js";
 import { NotionTokenStorage } from "../lib/notion/notion-token-storage.js";
+import { LoadingState, ErrorState, EmptyState } from "./ui/StateDisplays.js";
 
 interface NotionDatabaseSelectorProps {
   onSelect: (databaseId: string, databaseTitle: string) => void;
@@ -40,8 +41,9 @@ export const NotionDatabaseSelector: React.FC<NotionDatabaseSelectorProps> = ({
         setDatabases(allDatabases);
         setError(null);
         setIsLoading(false);
-      } catch (err: any) {
-        setError(err.message || "Failed to load Notion databases");
+      } catch (err: unknown) {
+        const errorMessage = err instanceof Error ? err.message : "Failed to load Notion databases";
+        setError(errorMessage);
         setIsLoading(false);
       }
     };
@@ -59,51 +61,39 @@ export const NotionDatabaseSelector: React.FC<NotionDatabaseSelectorProps> = ({
     } else if (key.return && databases.length > 0) {
       const selected = databases[selectedIndex];
       onSelect(selected.id, selected.title);
-    } else if ((input === 'b' || key.escape) && onBack) {
+    } else if ((input === "b" || key.escape) && onBack) {
       onBack();
     }
   });
 
   if (isLoading) {
-    return (
-      <Box flexDirection="column">
-        <Text color="cyan">Loading Notion databases...</Text>
-      </Box>
-    );
+    return <LoadingState message="Loading Notion databases..." />;
   }
 
   if (error) {
     return (
-      <Box flexDirection="column">
-        <Text color="red">Error: {error}</Text>
-        {onBack && (
-          <>
-            <Text></Text>
-            <Text dimColor>Press 'b' to go back</Text>
-          </>
-        )}
-      </Box>
+      <ErrorState
+        message={error}
+        showBackHint={!!onBack}
+      />
     );
   }
 
   if (databases.length === 0) {
     return (
-      <Box flexDirection="column">
-        <Text color="yellow">No Notion databases found.</Text>
-        <Text dimColor>Please create a database in Notion first.</Text>
-        {onBack && (
-          <>
-            <Text></Text>
-            <Text dimColor>Press 'b' to go back</Text>
-          </>
-        )}
-      </Box>
+      <EmptyState
+        message="No Notion databases found."
+        hint="Please create a database in Notion first."
+        showBackHint={!!onBack}
+      />
     );
   }
 
   return (
     <Box flexDirection="column">
-      <Text color="blue" bold>Select Notion Database</Text>
+      <Text color="blue" bold>
+        Select Notion Database
+      </Text>
       <Text></Text>
       <Text dimColor>Choose a database to save your grading results:</Text>
       <Text></Text>
@@ -111,8 +101,8 @@ export const NotionDatabaseSelector: React.FC<NotionDatabaseSelectorProps> = ({
       <Box flexDirection="column">
         {databases.slice(0, 10).map((db, index) => (
           <Box key={db.id}>
-            <Text color={index === selectedIndex ? 'cyan' : 'white'}>
-              {index === selectedIndex ? '▸ ' : '  '}
+            <Text color={index === selectedIndex ? "cyan" : "white"}>
+              {index === selectedIndex ? "▸ " : "  "}
               {db.title}
             </Text>
           </Box>
@@ -123,7 +113,7 @@ export const NotionDatabaseSelector: React.FC<NotionDatabaseSelectorProps> = ({
       {databases.length > 10 && (
         <Text dimColor>Showing 10 of {databases.length} databases</Text>
       )}
-      <Text dimColor>↑/↓: navigate | Enter: select{onBack ? ' | b: back' : ''}</Text>
+      <Text dimColor>↑/↓: navigate | Enter: select{onBack ? " | b: back" : ""}</Text>
     </Box>
   );
 };

@@ -3,11 +3,7 @@ import { DEFAULT_IGNORED_EXTENSIONS } from "../consts/ignored-extensions.js";
 import { getRepoScores } from "../grader/grader.js";
 import { AIProvider } from "../consts/ai-providers.js";
 import { RateLimiter } from "../lib/rate-limiter.js";
-
-interface GitHubRepoInfo {
-  owner: string;
-  repo: string;
-}
+import { GitHubUrlParser, GitHubRepoInfo } from "../lib/github-url-parser.js";
 
 interface FileContent {
   path: string;
@@ -245,18 +241,7 @@ export class GitHubService {
   }
 
   parseGitHubUrl(url: string): GitHubRepoInfo | null {
-    const githubUrlRegex =
-      /^https?:\/\/github\.com\/([^\/]+)\/([^\/]+)(?:\/.*)?$/;
-    const match = url.match(githubUrlRegex);
-
-    if (!match) {
-      return null;
-    }
-
-    return {
-      owner: match[1],
-      repo: match[2].replace(/\.git$/, ""),
-    };
+    return GitHubUrlParser.parse(url);
   }
 
   async getAllFiles(owner: string, repo: string): Promise<FileContent[]> {

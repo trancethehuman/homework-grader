@@ -3,6 +3,8 @@ import { Text, Box } from "ink";
 import { CodexService } from "../lib/codex/codex-service.js";
 import type { ThreadItem } from "../lib/codex/codex-types.js";
 import type { GradingPrompt } from "../consts/grading-prompts.js";
+import { useSpinner } from "../hooks/useSpinner.js";
+import { ErrorState } from "./ui/StateDisplays.js";
 
 interface CodexStartingProps {
   repoPath: string;
@@ -15,7 +17,7 @@ interface ChronologicalItem {
   id: string;
   type: "reasoning" | "command" | "file_change" | "agent_message" | "todo_list";
   timestamp: number;
-  data: any;
+  data: Record<string, unknown>;
 }
 
 export const CodexStarting: React.FC<CodexStartingProps> = ({
@@ -30,33 +32,11 @@ export const CodexStarting: React.FC<CodexStartingProps> = ({
     cached: number;
     output: number;
   } | null>(null);
-  const [spinnerDots, setSpinnerDots] = useState("");
-  const [spinnerFrame, setSpinnerFrame] = useState(0);
   const [items, setItems] = useState<ChronologicalItem[]>([]);
-  const [streamingAgentMessage, setStreamingAgentMessage] =
-    useState<string>("");
+  const [streamingAgentMessage, setStreamingAgentMessage] = useState<string>("");
   const [finalFeedback, setFinalFeedback] = useState<string>("");
 
-  const spinnerFrames = ["⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"];
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setSpinnerDots((prev) => {
-        if (prev.length >= 3) return "";
-        return prev + ".";
-      });
-    }, 500);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setSpinnerFrame((prev) => (prev + 1) % spinnerFrames.length);
-    }, 100);
-
-    return () => clearInterval(interval);
-  }, []);
+  const spinner = useSpinner({ active: status === "running" || status === "initializing" });
 
   useEffect(() => {
     const startCodex = async () => {
@@ -108,7 +88,7 @@ export const CodexStarting: React.FC<CodexStartingProps> = ({
               ]);
             } else if (item.type === "file_change") {
               const changes = item.changes || [];
-              changes.forEach((change: any, index: number) => {
+              changes.forEach((change: { kind: string; path: string }, index: number) => {
                 setItems((prev) => [
                   ...prev,
                   {
@@ -164,26 +144,26 @@ export const CodexStarting: React.FC<CodexStartingProps> = ({
       case "reasoning":
         return (
           <Text key={item.id} color="magenta">
-            {item.data.text}
+            {item.data.text as string}
           </Text>
         );
       case "command":
         return (
           <Text key={item.id} color="blue">
-            $ {item.data.command} ({item.data.status})
+            $ {item.data.command as string} ({item.data.status as string})
           </Text>
         );
       case "file_change":
         return (
           <Text key={item.id} color="green">
-            📝 {item.data.kind}: {item.data.path}
+            {item.data.kind as string}: {item.data.path as string}
           </Text>
         );
       case "agent_message":
         return (
           <Box key={item.id} flexDirection="column" marginY={1}>
             <Text color="cyan" dimColor>
-              {item.data.text}
+              {item.data.text as string}
             </Text>
           </Box>
         );
@@ -191,14 +171,16 @@ export const CodexStarting: React.FC<CodexStartingProps> = ({
         return (
           <Box key={item.id} flexDirection="column" marginY={1}>
             <Text color="yellow" bold>
-              📋 Tasks:
+              Tasks:
             </Text>
-            {item.data.items.map((todo: any, i: number) => (
-              <Text key={i} dimColor>
-                {" "}
-                {todo.completed ? "✓" : "○"} {todo.text}
-              </Text>
-            ))}
+            {(item.data.items as Array<{ completed: boolean; text: string }>).map(
+              (todo, i: number) => (
+                <Text key={i} dimColor>
+                  {" "}
+                  {todo.completed ? "✓" : "○"} {todo.text}
+                </Text>
+              )
+            )}
           </Box>
         );
       default:
@@ -220,7 +202,7 @@ export const CodexStarting: React.FC<CodexStartingProps> = ({
 
       {status === "running" && (
         <>
-          <Text color="cyan">⚡ Analyzing repository...</Text>
+          <Text color="cyan">{spinner} Analyzing repository...</Text>
           <Text></Text>
 
           {items.map((item) => renderItem(item))}
@@ -244,9 +226,7 @@ export const CodexStarting: React.FC<CodexStartingProps> = ({
           )}
 
           <Text></Text>
-          <Text color="blue">
-            {spinnerFrames[spinnerFrame]} Loading{spinnerDots}
-          </Text>
+          <Text color="blue">{spinner} Loading...</Text>
         </>
       )}
 
@@ -296,16 +276,15 @@ export const CodexStarting: React.FC<CodexStartingProps> = ({
       )}
 
       {status === "error" && (
-        <>
-          <Text color="red">✗ Error occurred during grading</Text>
-          <Text></Text>
-          <Text color="red">{error}</Text>
-          <Text></Text>
-          <Text dimColor>Common issues:</Text>
-          <Text dimColor>• Make sure you're in a Git repository</Text>
-          <Text dimColor>• Check that Codex is properly installed</Text>
-          <Text dimColor>• Verify you have the necessary permissions</Text>
-        </>
+        <ErrorState
+          message={error || "Unknown error occurred"}
+          suggestions={[
+            "Make sure you're in a Git repository",
+            "Check that Codex is properly installed",
+            "Verify you have the necessary permissions",
+          ]}
+          showBackHint={false}
+        />
       )}
 
       <Text></Text>
