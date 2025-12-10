@@ -1,7 +1,7 @@
 import React from "react";
 import { MenuSelector, MenuOption } from "./ui/MenuSelector.js";
 
-export type GradingMode = "local" | "batch";
+export type GradingMode = "local" | "batch" | "collaborator";
 
 interface GradingModeSelectorProps {
   onSelect: (mode: GradingMode) => void;
@@ -17,6 +17,11 @@ const options: MenuOption<GradingMode>[] = [
     id: "batch",
     name: "Remote repo(s)",
     description: "Grade multiple repositories from CSV, Notion, or manual input",
+  },
+  {
+    id: "collaborator",
+    name: "Bulk add GitHub users to a repo",
+    description: "Add multiple users as read-only collaborators to a repository",
   },
 ];
 

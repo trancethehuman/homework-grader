@@ -33,6 +33,27 @@ interface RateLimitInfo {
   limit: number;
 }
 
+export interface GitHubRepoResult {
+  owner: string;
+  repo: string;
+  fullName: string;
+  description: string | null;
+  private: boolean;
+  permissions: {
+    admin: boolean;
+    push: boolean;
+    pull: boolean;
+  };
+}
+
+export interface AddCollaboratorResult {
+  username: string;
+  success: boolean;
+  error?: string;
+  invitationId?: number;
+  status?: "invited" | "already_collaborator";
+}
+
 export class GitHubService {
   private octokit: Octokit;
   private ignoredExtensions: Set<string>;
@@ -414,5 +435,168 @@ export class GitHubService {
     });
 
     return { content: concatenatedContent, scores: scoresPromise };
+  }
+
+  /**
+   * Gets the authenticated user's information
+   */
+  async getAuthenticatedUser(): Promise<{ login: string; name: string | null; avatar_url: string }> {
+    const response = await this.executeWithRateLimit(() =>
+      this.octokit.rest.users.getAuthenticated()
+    );
+    return {
+      login: response.data.login,
+      name: response.data.name,
+      avatar_url: response.data.avatar_url,
+    };
+  }
+
+  /**
+   * Lists repositories the authenticated user has access to
+   */
+  async listUserRepositories(perPage: number = 20): Promise<GitHubRepoResult[]> {
+    const response = await this.executeWithRateLimit(() =>
+      this.octokit.rest.repos.listForAuthenticatedUser({
+        per_page: perPage,
+        sort: "updated",
+        affiliation: "owner,collaborator,organization_member",
+      })
+    );
+
+    return response.data.map((repo) => ({
+      owner: repo.owner?.login || "",
+      repo: repo.name,
+      fullName: repo.full_name,
+      description: repo.description,
+      private: repo.private,
+      permissions: {
+        admin: repo.permissions?.admin || false,
+        push: repo.permissions?.push || false,
+        pull: repo.permissions?.pull || false,
+      },
+    }));
+  }
+
+  /**
+   * Searches repositories the user has access to
+   */
+  async searchRepositories(query: string, perPage: number = 20): Promise<GitHubRepoResult[]> {
+    if (!query.trim()) {
+      return this.listUserRepositories(perPage);
+    }
+
+    const response = await this.executeWithRateLimit(() =>
+      this.octokit.rest.search.repos({
+        q: query,
+        per_page: perPage,
+        sort: "updated",
+      })
+    );
+
+    return response.data.items.map((repo) => ({
+      owner: repo.owner?.login || "",
+      repo: repo.name,
+      fullName: repo.full_name,
+      description: repo.description,
+      private: repo.private,
+      permissions: {
+        admin: repo.permissions?.admin || false,
+        push: repo.permissions?.push || false,
+        pull: repo.permissions?.pull || false,
+      },
+    }));
+  }
+
+  /**
+   * Adds a collaborator to a repository with read (pull) permission
+   */
+  async addCollaborator(
+    owner: string,
+    repo: string,
+    username: string
+  ): Promise<AddCollaboratorResult> {
+    try {
+      const response = await this.executeWithRateLimit(() =>
+        this.octokit.rest.repos.addCollaborator({
+          owner,
+          repo,
+          username,
+          permission: "pull", // Read-only access
+        })
+      );
+
+      return {
+        username,
+        success: true,
+        invitationId: response.data?.id,
+        status: response.status === 201 ? "invited" : "already_collaborator",
+      };
+    } catch (error: any) {
+      let errorMessage = error.message || "Unknown error";
+
+      if (error.status === 404) {
+        errorMessage = "User not found or repository not accessible";
+      } else if (error.status === 403) {
+        errorMessage = "Permission denied - you need admin access to this repository";
+      } else if (error.status === 422) {
+        // User is already a collaborator or validation failed
+        if (error.message?.includes("already")) {
+          return {
+            username,
+            success: true,
+            status: "already_collaborator",
+          };
+        }
+        errorMessage = error.message || "Validation failed";
+      }
+
+      return {
+        username,
+        success: false,
+        error: errorMessage,
+      };
+    }
+  }
+
+  /**
+   * Batch adds collaborators with progress callback
+   */
+  async addCollaboratorsBatch(
+    owner: string,
+    repo: string,
+    usernames: string[],
+    onProgress?: (current: number, total: number, result: AddCollaboratorResult) => void,
+    abortSignal?: AbortSignal
+  ): Promise<AddCollaboratorResult[]> {
+    const results: AddCollaboratorResult[] = [];
+
+    for (let i = 0; i < usernames.length; i++) {
+      if (abortSignal?.aborted) {
+        // Mark remaining as skipped
+        for (let j = i; j < usernames.length; j++) {
+          results.push({
+            username: usernames[j].trim(),
+            success: false,
+            error: "Aborted by user",
+          });
+        }
+        break;
+      }
+
+      const username = usernames[i].trim();
+      if (!username) continue;
+
+      const result = await this.addCollaborator(owner, repo, username);
+      results.push(result);
+
+      onProgress?.(i + 1, usernames.length, result);
+
+      // Small delay between requests to be respectful
+      if (i < usernames.length - 1) {
+        await new Promise((resolve) => setTimeout(resolve, 200));
+      }
+    }
+
+    return results;
   }
 }

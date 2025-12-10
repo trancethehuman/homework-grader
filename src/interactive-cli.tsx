@@ -92,6 +92,17 @@ import {
   GradingPrompt,
   getDefaultGradingPrompt,
 } from "./consts/grading-prompts.js";
+import {
+  GitHubRepoSearchSelector,
+  CollaboratorDataSourceSelector,
+  CollaboratorUsernameInput,
+  CollaboratorCsvColumnSelector,
+  CollaboratorNotionColumnSelector,
+  CollaboratorAddProgress,
+  CollaboratorAddSummary,
+  CollaboratorResults,
+} from "./components/collaborator/index.js";
+import type { CollaboratorDataSource } from "./components/collaborator/collaborator-data-source-selector.js";
 
 export type { CSVColumn, CSVAnalysis } from "./lib/csv-utils.js";
 
@@ -155,7 +166,18 @@ type Step =
   | "analyzing"
   | "select"
   | "loading"
-  | "complete";
+  | "complete"
+  | "collaborator-github-auth"
+  | "collaborator-repo-search"
+  | "collaborator-data-source"
+  | "collaborator-manual-input"
+  | "collaborator-csv-input"
+  | "collaborator-csv-column-select"
+  | "collaborator-notion-loading"
+  | "collaborator-notion-page-select"
+  | "collaborator-notion-column"
+  | "collaborator-adding"
+  | "collaborator-summary";
 
 export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
   onComplete,
@@ -273,6 +295,23 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
   >([]);
   // Track if we arrived at column selection from filtered workflow (vs view workflow)
   const [isFilteredWorkflow, setIsFilteredWorkflow] = useState(false);
+
+  // Collaborator workflow state
+  const [collaboratorTargetRepo, setCollaboratorTargetRepo] = useState<{
+    owner: string;
+    repo: string;
+    fullName: string;
+  } | null>(null);
+  const [collaboratorUsernames, setCollaboratorUsernames] = useState<string[]>([]);
+  const [collaboratorDataSource, setCollaboratorDataSource] = useState<CollaboratorDataSource | null>(null);
+  const [collaboratorResults, setCollaboratorResults] = useState<CollaboratorResults | null>(null);
+  const [collaboratorCsvPath, setCollaboratorCsvPath] = useState("");
+  const [collaboratorCsvAnalysis, setCollaboratorCsvAnalysis] = useState<CSVAnalysis | null>(null);
+  const [collaboratorCsvInput, setCollaboratorCsvInput] = useState("");
+  const [collaboratorNotionContent, setCollaboratorNotionContent] = useState<any>(null);
+  const [collaboratorNotionDatabaseId, setCollaboratorNotionDatabaseId] = useState<string>("");
+  const [collaboratorNotionDatabaseTitle, setCollaboratorNotionDatabaseTitle] = useState<string>("");
+
   const { exit } = useApp();
 
   // Helper function to navigate to a new step and optionally clear errors
@@ -344,6 +383,52 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
       fetchFilteredContent();
     }
   }, [step, notionApiSelectedPageId, databaseFilterCriteria]);
+
+  // Handle collaborator Notion loading - just authenticate and move to page selection
+  useEffect(() => {
+    if (step === "collaborator-notion-loading") {
+      const authenticateNotion = async () => {
+        try {
+          await notionOAuthClient.ensureAuthenticated();
+          navigateToStep("collaborator-notion-page-select");
+        } catch (err) {
+          setError(
+            `Failed to authenticate with Notion: ${
+              err instanceof Error ? err.message : String(err)
+            }`
+          );
+          navigateToStep("collaborator-data-source", { preserveError: true });
+        }
+      };
+
+      authenticateNotion();
+    }
+  }, [step, notionOAuthClient]);
+
+  // Load collaborator Notion database content when database is selected
+  useEffect(() => {
+    if (step === "collaborator-notion-column" && collaboratorNotionDatabaseId && !collaboratorNotionContent) {
+      const loadDatabaseContent = async () => {
+        try {
+          const token = await notionOAuthClient.ensureAuthenticated();
+          const notionService = new NotionService(token.access_token);
+          const content = await notionService.queryDatabaseWithEnhancedSchema(
+            collaboratorNotionDatabaseId
+          );
+          setCollaboratorNotionContent(content);
+        } catch (err) {
+          setError(
+            `Failed to load database content: ${
+              err instanceof Error ? err.message : String(err)
+            }`
+          );
+          navigateToStep("collaborator-notion-page-select", { preserveError: true });
+        }
+      };
+
+      loadDatabaseContent();
+    }
+  }, [step, collaboratorNotionDatabaseId, collaboratorNotionContent, notionOAuthClient]);
 
   // Process GitHub URLs when entering notion-processing step
   useEffect(() => {
@@ -1373,6 +1458,87 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           navigateToStep("complete");
         }
       }
+    } else if (step === "collaborator-github-auth") {
+      if (key.return) {
+        const newToken = input.trim();
+        if (newToken) {
+          setValidatingToken(true);
+          (async () => {
+            try {
+              const githubService = new GitHubService(newToken);
+              const validation = await githubService.validateToken();
+
+              if (validation.valid) {
+                try {
+                  tokenStorage.saveToken(newToken);
+                } catch (err) {
+                  // Token saving error is handled gracefully
+                }
+                setGithubToken(newToken);
+                setTokenValid(true);
+                setError(null);
+                navigateToStep("collaborator-repo-search");
+              } else {
+                setError(validation.error || "Invalid token");
+                setTokenValid(false);
+              }
+            } catch (error) {
+              setError("Failed to validate token");
+              setTokenValid(false);
+            } finally {
+              setValidatingToken(false);
+            }
+          })();
+        }
+        setInput("");
+      } else if (key.backspace || key.delete) {
+        setInput((prev) => prev.slice(0, -1));
+      } else if (inputChar === "o" && !input) {
+        open(
+          "https://github.com/settings/tokens/new?description=homework-grader&scopes=repo"
+        );
+      } else if (inputChar === "b" && !input) {
+        navigateToStep("grading-mode-select");
+      } else if (
+        inputChar &&
+        !key.ctrl &&
+        !key.meta &&
+        !key.escape &&
+        !key.return
+      ) {
+        setInput((prev) => prev + inputChar);
+      }
+    } else if (step === "collaborator-csv-input") {
+      if (key.return && collaboratorCsvInput.trim()) {
+        const csvPath = collaboratorCsvInput.trim();
+        if (!fs.existsSync(csvPath)) {
+          setError("File not found: " + csvPath);
+          return;
+        }
+        try {
+          const csvAnalysis = await validateAndAnalyzeCSV(csvPath);
+          setCollaboratorCsvAnalysis(csvAnalysis);
+          setCollaboratorCsvPath(csvPath);
+          setError(null);
+          navigateToStep("collaborator-csv-column-select");
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "Failed to analyze CSV");
+        }
+      } else if (key.backspace || key.delete) {
+        setCollaboratorCsvInput((prev) => prev.slice(0, -1));
+        setError(null);
+      } else if ((inputChar === "b" || key.escape) && !collaboratorCsvInput) {
+        navigateToStep("collaborator-data-source");
+      } else if (
+        inputChar &&
+        !key.ctrl &&
+        !key.meta &&
+        !key.escape &&
+        !key.return
+      ) {
+        setCollaboratorCsvInput((prev) => prev + inputChar);
+        setError(null);
+      }
     }
 
     if (key.ctrl && inputChar === "c") {
@@ -1460,6 +1626,15 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
               navigateToStep("local-tool-select");
             } else if (mode === "batch") {
               navigateToStep("data-source-select");
+            } else if (mode === "collaborator") {
+              // Check if we already have a valid GitHub token
+              const storedToken = tokenStorage.getToken();
+              if (storedToken) {
+                setGithubToken(storedToken);
+                navigateToStep("collaborator-repo-search");
+              } else {
+                navigateToStep("collaborator-github-auth");
+              }
             }
           }}
         />
@@ -2950,6 +3125,282 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           }}
           onBack={() => {
             navigateToStep("processing-choice");
+          }}
+        />
+      </Box>
+    );
+  }
+
+  // ================== COLLABORATOR WORKFLOW STEPS ==================
+
+  if (step === "collaborator-github-auth") {
+    return (
+      <Box flexDirection="column">
+        <Text color="blue" bold>
+          GitHub Authentication Required
+        </Text>
+        <Text></Text>
+        <Text>
+          To add collaborators to a repository, you need to authenticate with GitHub.
+        </Text>
+        <Text></Text>
+        <Text dimColor>
+          Your token needs the 'repo' scope for private repos or 'public_repo' for public repos.
+        </Text>
+        <Text></Text>
+        <Box
+          borderStyle="single"
+          borderColor={error ? "red" : "blue"}
+          paddingX={1}
+        >
+          <Text>{input ? "*".repeat(input.length) : ""}</Text>
+          <Text color="blue">█</Text>
+        </Box>
+        {error && (
+          <Box marginTop={1}>
+            <Text color="red">{error}</Text>
+          </Box>
+        )}
+        <Text></Text>
+        <Text dimColor>
+          Press 'o' to open GitHub token page, Enter to submit, 'b' to go back
+        </Text>
+        {githubToken && (
+          <Box marginTop={1}>
+            <Text dimColor>
+              Authenticated as: {githubToken.slice(0, 8)}...
+            </Text>
+          </Box>
+        )}
+      </Box>
+    );
+  }
+
+  if (step === "collaborator-repo-search" && githubToken) {
+    return (
+      <Box flexDirection="column">
+        <GitHubRepoSearchSelector
+          githubToken={githubToken}
+          onSelect={(repo) => {
+            setCollaboratorTargetRepo(repo);
+            navigateToStep("collaborator-data-source");
+          }}
+          onBack={() => {
+            navigateToStep("grading-mode-select");
+          }}
+          onError={(err) => {
+            setError(err);
+            navigateToStep("collaborator-github-auth", { preserveError: true });
+          }}
+        />
+      </Box>
+    );
+  }
+
+  if (step === "collaborator-data-source" && collaboratorTargetRepo) {
+    return (
+      <Box flexDirection="column">
+        <CollaboratorDataSourceSelector
+          targetRepo={collaboratorTargetRepo.fullName}
+          onSelect={(source) => {
+            setCollaboratorDataSource(source);
+            if (source === "manual") {
+              navigateToStep("collaborator-manual-input");
+            } else if (source === "csv") {
+              setCollaboratorCsvInput("");
+              navigateToStep("collaborator-csv-input");
+            } else if (source === "notion") {
+              navigateToStep("collaborator-notion-loading");
+            }
+          }}
+          onBack={() => {
+            navigateToStep("collaborator-repo-search");
+          }}
+        />
+      </Box>
+    );
+  }
+
+  if (step === "collaborator-manual-input" && collaboratorTargetRepo) {
+    return (
+      <Box flexDirection="column">
+        <CollaboratorUsernameInput
+          targetRepo={collaboratorTargetRepo.fullName}
+          onComplete={(usernames) => {
+            setCollaboratorUsernames(usernames);
+            navigateToStep("collaborator-adding");
+          }}
+          onBack={() => {
+            navigateToStep("collaborator-data-source");
+          }}
+        />
+      </Box>
+    );
+  }
+
+  if (step === "collaborator-csv-input" && collaboratorTargetRepo) {
+    return (
+      <Box flexDirection="column">
+        <Text color="blue" bold>
+          Enter CSV File Path
+        </Text>
+        <Text dimColor>Adding collaborators to: {collaboratorTargetRepo.fullName}</Text>
+        <Text></Text>
+        <Box
+          borderStyle="single"
+          borderColor={error ? "red" : "blue"}
+          paddingX={1}
+        >
+          <Text>{collaboratorCsvInput}</Text>
+          <Text color="blue">█</Text>
+        </Box>
+        {error && (
+          <Box marginTop={1}>
+            <Text color="red">{error}</Text>
+          </Box>
+        )}
+        <Text></Text>
+        <Text dimColor>Enter path to CSV file, then press Enter. Press 'b' to go back.</Text>
+      </Box>
+    );
+  }
+
+  if (step === "collaborator-csv-column-select" && collaboratorCsvAnalysis && collaboratorTargetRepo) {
+    return (
+      <Box flexDirection="column">
+        <CollaboratorCsvColumnSelector
+          analysis={collaboratorCsvAnalysis}
+          targetRepo={collaboratorTargetRepo.fullName}
+          onSelect={(usernames) => {
+            setCollaboratorUsernames(usernames);
+            navigateToStep("collaborator-adding");
+          }}
+          onBack={() => {
+            navigateToStep("collaborator-csv-input");
+          }}
+        />
+      </Box>
+    );
+  }
+
+  if (step === "collaborator-notion-loading") {
+    return (
+      <Box flexDirection="column">
+        <Text color="blue" bold>
+          Loading Notion Data
+        </Text>
+        <Text></Text>
+        <Text color="cyan">Connecting to Notion...</Text>
+      </Box>
+    );
+  }
+
+  if (step === "collaborator-notion-page-select") {
+    return (
+      <Box flexDirection="column">
+        <Text color="blue" bold>
+          Select Database for GitHub Usernames
+        </Text>
+        <Text dimColor>Adding collaborators to: {collaboratorTargetRepo?.fullName}</Text>
+        <Text></Text>
+        <NotionPageSelector
+          onSelect={(pageId, pageTitle, type) => {
+            if (type === "database") {
+              setCollaboratorNotionDatabaseId(pageId);
+              setCollaboratorNotionDatabaseTitle(pageTitle);
+              setCollaboratorNotionContent(null); // Clear any previous content
+              navigateToStep("collaborator-notion-column");
+            } else {
+              setError("Please select a database, not a page.");
+            }
+          }}
+          onError={(err) => {
+            setError(err);
+          }}
+          onBack={() => {
+            navigateToStep("collaborator-data-source");
+          }}
+          cachedPages={cachedNotionPages}
+          cachedDatabases={cachedNotionDatabases}
+          onDataLoaded={(pages, databases) => {
+            setCachedNotionPages(pages);
+            setCachedNotionDatabases(databases);
+          }}
+        />
+      </Box>
+    );
+  }
+
+  if (step === "collaborator-notion-column" && collaboratorTargetRepo) {
+    if (!collaboratorNotionContent) {
+      return (
+        <Box flexDirection="column">
+          <Text color="blue" bold>
+            Loading Database Content
+          </Text>
+          <Text></Text>
+          <Text color="cyan">Fetching {collaboratorNotionDatabaseTitle}...</Text>
+        </Box>
+      );
+    }
+
+    return (
+      <Box flexDirection="column">
+        <CollaboratorNotionColumnSelector
+          notionContent={collaboratorNotionContent}
+          targetRepo={collaboratorTargetRepo.fullName}
+          onSelect={(usernames) => {
+            setCollaboratorUsernames(usernames);
+            navigateToStep("collaborator-adding");
+          }}
+          onBack={() => {
+            setCollaboratorNotionContent(null);
+            navigateToStep("collaborator-notion-page-select");
+          }}
+        />
+      </Box>
+    );
+  }
+
+  if (step === "collaborator-adding" && collaboratorTargetRepo && collaboratorUsernames.length > 0 && githubToken) {
+    return (
+      <Box flexDirection="column">
+        <CollaboratorAddProgress
+          targetRepo={collaboratorTargetRepo}
+          usernames={collaboratorUsernames}
+          githubToken={githubToken}
+          onComplete={(results) => {
+            setCollaboratorResults(results);
+            navigateToStep("collaborator-summary");
+          }}
+        />
+      </Box>
+    );
+  }
+
+  if (step === "collaborator-summary" && collaboratorTargetRepo && collaboratorResults) {
+    return (
+      <Box flexDirection="column">
+        <CollaboratorAddSummary
+          targetRepo={collaboratorTargetRepo}
+          results={collaboratorResults}
+          onAddMore={() => {
+            setCollaboratorUsernames([]);
+            setCollaboratorResults(null);
+            navigateToStep("collaborator-data-source");
+          }}
+          onNewRepo={() => {
+            setCollaboratorTargetRepo(null);
+            setCollaboratorUsernames([]);
+            setCollaboratorResults(null);
+            navigateToStep("collaborator-repo-search");
+          }}
+          onBackToMenu={() => {
+            setCollaboratorTargetRepo(null);
+            setCollaboratorUsernames([]);
+            setCollaboratorResults(null);
+            setCollaboratorDataSource(null);
+            navigateToStep("grading-mode-select");
           }}
         />
       </Box>
