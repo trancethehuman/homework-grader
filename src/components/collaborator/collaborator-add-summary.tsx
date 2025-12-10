@@ -115,7 +115,6 @@ export const CollaboratorAddSummary: React.FC<CollaboratorAddSummaryProps> = ({
         title=""
         options={options}
         onSelect={handleSelect}
-        showBackHint={false}
       />
     </Box>
   );

@@ -23,11 +23,11 @@ export abstract class BaseSecureStorage<T> {
   private getPlatformConfigDir(): string {
     const platform = process.platform;
     if (platform === 'win32') {
-      return join(process.env.APPDATA || homedir(), 'homework-grader');
+      return join(process.env.APPDATA || homedir(), 'cli-agents-fleet');
     } else if (platform === 'darwin') {
-      return join(homedir(), 'Library', 'Application Support', 'homework-grader');
+      return join(homedir(), 'Library', 'Application Support', 'cli-agents-fleet');
     } else {
-      return join(process.env.XDG_CONFIG_HOME || join(homedir(), '.config'), 'homework-grader');
+      return join(process.env.XDG_CONFIG_HOME || join(homedir(), '.config'), 'cli-agents-fleet');
     }
   }
 

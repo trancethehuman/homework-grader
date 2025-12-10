@@ -86,8 +86,8 @@ jobs:
           mkdir test-install
           cd test-install
           npm init -y
-          npm install -g ../homework-grader-*.tgz
-          
+          npm install -g ../cli-agents-fleet-*.tgz
+
           # Verify the command is available
-          which homework-grader
+          which cli-agents-fleet
           echo "Package installation test passed"

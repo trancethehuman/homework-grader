@@ -1,5 +1,4 @@
 import React from "react";
-import { Text } from "ink";
 
 export interface KeyHint {
   keys: string | readonly string[] | string[];
@@ -12,24 +11,8 @@ export interface HelpFooterProps {
   separator?: string;
 }
 
-export const HelpFooter: React.FC<HelpFooterProps> = ({
-  hints,
-  separator = ", ",
-}) => {
-  const visibleHints = hints.filter((hint) => hint.condition !== false);
-
-  if (visibleHints.length === 0) {
-    return null;
-  }
-
-  const formatHint = (hint: KeyHint): string => {
-    const keys = Array.isArray(hint.keys) ? hint.keys.join("/") : hint.keys;
-    return `${keys} ${hint.action}`;
-  };
-
-  return (
-    <Text dimColor>{visibleHints.map(formatHint).join(separator)}</Text>
-  );
+export const HelpFooter: React.FC<HelpFooterProps> = () => {
+  return null;
 };
 
 export const COMMON_HINTS = {

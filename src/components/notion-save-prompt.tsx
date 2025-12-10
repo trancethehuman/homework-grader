@@ -52,9 +52,6 @@ export const NotionSavePrompt: React.FC<NotionSavePromptProps> = ({
           </Text>
         </Box>
       </Box>
-
-      <Text></Text>
-      <Text dimColor>↑/↓: navigate | Enter: confirm | y/n: quick select</Text>
     </Box>
   );
 };

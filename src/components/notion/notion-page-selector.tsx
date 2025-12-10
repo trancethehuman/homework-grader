@@ -394,6 +394,13 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
         } else if (hasLoadMoreOption && selectedIndex === loadMoreIndex) {
           loadMore();
         }
+      } else if (input && input.length === 1 && !key.ctrl && !key.meta) {
+        // Auto-focus search and type when pressing letters (not shortcuts)
+        // Reserved shortcuts: b (back), s (search), g (grade), d (toggle databases)
+        if (!['b', 's', 'g', 'd'].includes(input.toLowerCase())) {
+          setFocusArea('search');
+          setSearchTerm(searchTerm + input);
+        }
       }
     }
   });

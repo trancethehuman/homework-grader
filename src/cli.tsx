@@ -230,7 +230,7 @@ async function main() {
         "\n❌ Interactive mode is not supported in this environment."
       );
       console.error("Please use command-line arguments instead:");
-      console.error("   homework-grader <csv-file>");
+      console.error("   cli-agents-fleet <csv-file>");
       updateChecker.showUpdateNotificationAtExit();
       process.exit(1);
     }
@@ -272,7 +272,7 @@ async function main() {
         "   This usually happens when running in an unsupported environment."
       );
       console.error("\n💡 Fallback options:");
-      console.error("   1. Use command-line mode: homework-grader <csv-file>");
+      console.error("   1. Use command-line mode: cli-agents-fleet <csv-file>");
       console.error("   2. Try running in a different terminal");
       console.error(
         "   3. Check if you're running inside an IDE or script environment"
@@ -280,7 +280,7 @@ async function main() {
       console.error(
         "\n📄 For CSV processing, create a CSV file with GitHub URLs and run:"
       );
-      console.error("   homework-grader your-file.csv");
+      console.error("   cli-agents-fleet your-file.csv");
       console.error(
         "\n🔗 For OAuth authentication, you can still authenticate manually by:"
       );

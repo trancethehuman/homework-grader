@@ -69,9 +69,6 @@ export const ParallelInstanceSelector: React.FC<ParallelInstanceSelectorProps> =
       <Text dimColor>Tip: 1-4 instances recommended for most machines</Text>
       <Text dimColor>     Higher counts may cause significant CPU/memory usage</Text>
       <Text dimColor>     No upper limit - choose based on your machine's capabilities</Text>
-      <Text></Text>
-      <Text dimColor>Press Enter to continue, 'b' to go back (when input is empty)</Text>
-      <Text dimColor>Press Ctrl+C to exit</Text>
     </Box>
   );
 };

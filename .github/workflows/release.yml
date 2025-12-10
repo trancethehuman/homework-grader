@@ -37,7 +37,7 @@ jobs:
           echo "Current version: $CURRENT_VERSION"
           
           # Check if this version exists on NPM
-          if npm view homework-grader@$CURRENT_VERSION version 2>/dev/null; then
+          if npm view cli-agents-fleet@$CURRENT_VERSION version 2>/dev/null; then
             echo "Version $CURRENT_VERSION already exists on NPM, incrementing patch version..."
             # Auto-increment patch version
             NEW_VERSION=$(node -e "
@@ -129,19 +129,19 @@ jobs:
             
             ### Installation
             ```bash
-            npm install -g homework-grader@${{ steps.version.outputs.version }}
+            npm install -g cli-agents-fleet@${{ steps.version.outputs.version }}
             # or
-            npx homework-grader@${{ steps.version.outputs.version }}
+            npx cli-agents-fleet@${{ steps.version.outputs.version }}
             ```
-            
+
             ### What's New
             - Latest changes from main branch
             - Built and tested on Node.js 22+
             - Automatically published on every push
-            
+
             ### Links
-            - 📦 [NPM Package](https://www.npmjs.com/package/homework-grader)
-            - 📚 [Documentation](https://github.com/trancethehuman/homework-grader#readme)
-            - 🐛 [Report Issues](https://github.com/trancethehuman/homework-grader/issues)
+            - 📦 [NPM Package](https://www.npmjs.com/package/cli-agents-fleet)
+            - 📚 [Documentation](https://github.com/trancethehuman/cli-agents-fleet#readme)
+            - 🐛 [Report Issues](https://github.com/trancethehuman/cli-agents-fleet/issues)
           draft: false
           prerelease: false

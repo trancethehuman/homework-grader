@@ -4,7 +4,7 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 /**
- * Update checker utility for homework-grader CLI
+ * Update checker utility for cli-agents-fleet CLI
  * Shows friendly notifications when new versions are available
  */
 export class UpdateChecker {
@@ -68,7 +68,7 @@ export class UpdateChecker {
       console.log(`   Latest:  ${this.notifier.update.latest}`);
       console.log('');
       console.log('   Run the following to update:');
-      console.log('   npm install -g homework-grader@latest');
+      console.log('   npm install -g cli-agents-fleet@latest');
       console.log('');
       
       // Optional: Show link to release notes

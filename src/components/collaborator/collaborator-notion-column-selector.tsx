@@ -302,8 +302,6 @@ export const CollaboratorNotionColumnSelector: React.FC<CollaboratorNotionColumn
         <Text dimColor>
           or GitHub profile/repo URLs (e.g., "https://github.com/octocat/repo")
         </Text>
-        <Text></Text>
-        <Text dimColor>Press 'b' to go back and choose a different source.</Text>
       </Box>
     );
   }

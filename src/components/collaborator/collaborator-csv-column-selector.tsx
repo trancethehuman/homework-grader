@@ -61,9 +61,7 @@ export const CollaboratorCsvColumnSelector: React.FC<CollaboratorCsvColumnSelect
       <Text color="green" bold>
         Select column containing GitHub usernames:
       </Text>
-      <Text dimColor>Use ↑/↓ arrows to navigate, Enter to select</Text>
       <Text></Text>
-
       {analysis.columns.map((column, index) => {
         const isSelected = index === selectedColumn;
 

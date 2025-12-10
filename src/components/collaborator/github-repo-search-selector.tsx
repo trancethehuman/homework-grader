@@ -6,12 +6,13 @@ import { HelpFooter, createHelpHints } from "../ui/HelpFooter.js";
 import { useDebounce } from "../../hooks/index.js";
 import { GitHubService, GitHubRepoResult } from "../../github/github-service.js";
 
-type FocusArea = "list" | "search" | "back";
+type FocusArea = "list" | "search" | "back" | "account";
 
 interface GitHubRepoSearchSelectorProps {
   githubToken: string;
   onSelect: (repo: { owner: string; repo: string; fullName: string }) => void;
   onBack?: () => void;
+  onLogout?: () => void;
   onError: (error: string) => void;
 }
 
@@ -19,6 +20,7 @@ export const GitHubRepoSearchSelector: React.FC<GitHubRepoSearchSelectorProps> =
   githubToken,
   onSelect,
   onBack,
+  onLogout,
   onError,
 }) => {
   const [repos, setRepos] = useState<GitHubRepoResult[]>([]);
@@ -36,6 +38,7 @@ export const GitHubRepoSearchSelector: React.FC<GitHubRepoSearchSelectorProps> =
 
   const isSearchFocused = focusArea === "search";
   const isBackFocused = focusArea === "back";
+  const isAccountFocused = focusArea === "account";
 
   const filteredRepos = repos.filter((repo) => repo.permissions.admin);
 
@@ -116,11 +119,47 @@ export const GitHubRepoSearchSelector: React.FC<GitHubRepoSearchSelectorProps> =
 
     if (focusArea === "back") {
       if (key.upArrow) {
-        setFocusArea("search");
+        if (filteredRepos.length > 0) {
+          setFocusArea("list");
+          const lastIndex = filteredRepos.length - 1;
+          setSelectedIndex(lastIndex);
+          const newScrollOffset = Math.max(0, lastIndex - viewportSize + 1);
+          setScrollOffset(newScrollOffset);
+        } else {
+          setFocusArea("search");
+        }
+        return;
+      }
+      if (key.downArrow) {
+        if (authenticatedUser) {
+          setFocusArea("account");
+        }
         return;
       }
       if (key.return) {
         onBack?.();
+        return;
+      }
+      return;
+    }
+
+    if (focusArea === "account") {
+      if (key.upArrow) {
+        if (onBack) {
+          setFocusArea("back");
+        } else if (filteredRepos.length > 0) {
+          setFocusArea("list");
+          const lastIndex = filteredRepos.length - 1;
+          setSelectedIndex(lastIndex);
+          const newScrollOffset = Math.max(0, lastIndex - viewportSize + 1);
+          setScrollOffset(newScrollOffset);
+        } else {
+          setFocusArea("search");
+        }
+        return;
+      }
+      if (key.return && onLogout) {
+        onLogout();
         return;
       }
       return;
@@ -183,7 +222,11 @@ export const GitHubRepoSearchSelector: React.FC<GitHubRepoSearchSelectorProps> =
         }
       } else if (key.downArrow) {
         if (selectedIndex >= filteredRepos.length - 1) {
-          setFocusArea("search");
+          if (onBack) {
+            setFocusArea("back");
+          } else {
+            setFocusArea("search");
+          }
         } else {
           const newIndex = selectedIndex + 1;
           setSelectedIndex(newIndex);
@@ -302,8 +345,18 @@ export const GitHubRepoSearchSelector: React.FC<GitHubRepoSearchSelectorProps> =
       />
 
       {authenticatedUser && (
-        <Box marginTop={1}>
-          <Text dimColor>Authenticated as: {authenticatedUser}</Text>
+        <Box marginTop={1} flexDirection="column">
+          <Box>
+            <Text color={isAccountFocused ? "blue" : "gray"} bold={isAccountFocused}>
+              {isAccountFocused ? "→ " : "  "}
+              Authenticated as: {authenticatedUser}
+            </Text>
+          </Box>
+          {isAccountFocused && onLogout && (
+            <Box marginLeft={4}>
+              <Text dimColor>Press Enter to switch account</Text>
+            </Box>
+          )}
         </Box>
       )}
     </Box>

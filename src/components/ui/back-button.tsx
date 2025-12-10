@@ -1,5 +1,4 @@
 import React from "react";
-import { Text, Box } from "ink";
 
 interface BackButtonProps {
   onBack: () => void;
@@ -7,20 +6,8 @@ interface BackButtonProps {
   isVisible?: boolean;
 }
 
-export const BackButton: React.FC<BackButtonProps> = ({
-  onBack,
-  label = "Back",
-  isVisible = true,
-}) => {
-  if (!isVisible) return null;
-
-  return (
-    <Box marginBottom={1}>
-      <Text dimColor>
-        Press 'b' or Escape to go back{label !== "Back" && ` to ${label}`}
-      </Text>
-    </Box>
-  );
+export const BackButton: React.FC<BackButtonProps> = () => {
+  return null;
 };
 
 export const useBackNavigation = (

@@ -33,11 +33,11 @@ export class PreferencesStorage {
     
     switch (process.platform) {
       case 'win32':
-        return path.join(process.env.APPDATA || homeDir, 'homework-grader');
+        return path.join(process.env.APPDATA || homeDir, 'cli-agents-fleet');
       case 'darwin':
-        return path.join(homeDir, 'Library', 'Application Support', 'homework-grader');
+        return path.join(homeDir, 'Library', 'Application Support', 'cli-agents-fleet');
       default:
-        return path.join(process.env.XDG_CONFIG_HOME || path.join(homeDir, '.config'), 'homework-grader');
+        return path.join(process.env.XDG_CONFIG_HOME || path.join(homeDir, '.config'), 'cli-agents-fleet');
     }
   }
 

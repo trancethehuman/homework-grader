@@ -148,8 +148,6 @@ export const StagehandTest: React.FC<StagehandTestProps> = ({ onBack }) => {
         <Text dimColor>• BROWSERBASE_PROJECT_ID</Text>
         <Text></Text>
         <Text dimColor>Get your credentials at: https://browserbase.com</Text>
-        <Text></Text>
-        <Text color="blue">Press 'b' or ESC to go back</Text>
       </Box>
     );
   }
@@ -276,10 +274,6 @@ export const StagehandTest: React.FC<StagehandTestProps> = ({ onBack }) => {
 
       <Text></Text>
       <Text color="green">✓ Browserbase configured</Text>
-      <Text></Text>
-      <Text color="blue">
-        Use ↑/↓ to select, Enter to run, 'b'/ESC to go back
-      </Text>
 
       {error && (
         <Box marginTop={1}>

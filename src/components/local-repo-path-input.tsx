@@ -67,8 +67,6 @@ export const LocalRepoPathInput: React.FC<LocalRepoPathInputProps> = ({
       <Text></Text>
       <Text dimColor>Tip: Press Enter without typing to use current directory</Text>
       <Text dimColor>     You can also use relative paths (e.g., ./my-repo or ../other-repo)</Text>
-      <Text dimColor>Press Enter to continue, 'b' to go back (when input is empty)</Text>
-      <Text dimColor>Press Ctrl+C to exit</Text>
     </Box>
   );
 };

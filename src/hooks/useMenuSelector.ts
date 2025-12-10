@@ -5,6 +5,7 @@ export interface MenuOption<T> {
   id: T;
   name: string;
   description: string;
+  category?: string;
   disabled?: boolean;
   comingSoon?: boolean;
 }

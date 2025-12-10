@@ -153,10 +153,6 @@ export const BrowserTesting: React.FC<BrowserTestingProps> = ({
         <Text dimColor>
           Get your credentials at: https://browserbase.com
         </Text>
-        <Text></Text>
-        <Text color="cyan">Press 's' to skip browser testing, 'b' to go back</Text>
-        <Text></Text>
-        <BackButton onBack={() => onBack?.()} isVisible={!!onBack} />
       </Box>
     );
   }

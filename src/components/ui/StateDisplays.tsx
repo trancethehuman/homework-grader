@@ -36,17 +36,15 @@ export interface ErrorStateProps {
   title?: string;
   message: string;
   suggestions?: string[];
-  showBackHint?: boolean;
 }
 
 /**
- * Displays an error state with optional suggestions and back hint.
+ * Displays an error state with optional suggestions.
  */
 export const ErrorState: React.FC<ErrorStateProps> = ({
   title = "Error",
   message,
   suggestions,
-  showBackHint = true,
 }) => {
   return (
     <Box flexDirection="column">
@@ -66,12 +64,6 @@ export const ErrorState: React.FC<ErrorStateProps> = ({
           ))}
         </>
       )}
-      {showBackHint && (
-        <>
-          <Text></Text>
-          <Text dimColor>Press 'b' to go back</Text>
-        </>
-      )}
     </Box>
   );
 };
@@ -82,7 +74,6 @@ export const ErrorState: React.FC<ErrorStateProps> = ({
 export interface EmptyStateProps {
   message: string;
   hint?: string;
-  showBackHint?: boolean;
 }
 
 /**
@@ -91,7 +82,6 @@ export interface EmptyStateProps {
 export const EmptyState: React.FC<EmptyStateProps> = ({
   message,
   hint,
-  showBackHint = true,
 }) => {
   return (
     <Box flexDirection="column">
@@ -100,12 +90,6 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
         <>
           <Text></Text>
           <Text dimColor>{hint}</Text>
-        </>
-      )}
-      {showBackHint && (
-        <>
-          <Text></Text>
-          <Text dimColor>Press 'b' to go back</Text>
         </>
       )}
     </Box>

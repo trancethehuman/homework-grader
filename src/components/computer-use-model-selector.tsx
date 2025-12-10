@@ -32,9 +32,7 @@ export const ComputerUseModelSelector: React.FC<ComputerUseModelSelectorProps> =
       </Text>
       <Text></Text>
       <Text>Browser testing requires a Computer Use compatible AI model.</Text>
-      <Text dimColor>Use ↑/↓ arrows to navigate, Enter to select</Text>
       <Text></Text>
-
       {COMPUTER_USE_MODELS.map((model, index) => {
         const isSelected = index === selectedIndex;
         return (
@@ -53,8 +51,6 @@ export const ComputerUseModelSelector: React.FC<ComputerUseModelSelectorProps> =
         );
       })}
 
-      <Text></Text>
-      <Text dimColor>Press 'b' or Escape to go back, Ctrl+C to exit</Text>
     </Box>
   );
 };

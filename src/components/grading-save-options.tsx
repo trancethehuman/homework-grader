@@ -182,7 +182,7 @@ export const GradingSaveOptions: React.FC<GradingSaveOptionsProps> = ({
         ✅ Grading completed for {gradingResults.length} repositories!
       </Text>
       <Text color="gray" dimColor>
-        📊 Usage logged to ~/.homework-grader/usage-log.json
+        📊 Usage logged to ~/.cli-agents-fleet/usage-log.json
       </Text>
       <Text></Text>
       <Text>How would you like to save the results?</Text>

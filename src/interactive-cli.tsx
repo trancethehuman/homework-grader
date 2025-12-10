@@ -1128,7 +1128,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
       } else if (inputChar === "o" && !input) {
         // Open browser to GitHub token page
         open(
-          "https://github.com/settings/tokens/new?description=homework-grader&scopes=public_repo"
+          "https://github.com/settings/tokens/new?description=cli-agents-fleet&scopes=public_repo"
         );
         setInput("");
       } else if (inputChar === "c" && !input) {
@@ -1499,7 +1499,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         setInput((prev) => prev.slice(0, -1));
       } else if (inputChar === "o" && !input) {
         open(
-          "https://github.com/settings/tokens/new?description=homework-grader&scopes=repo"
+          "https://github.com/settings/tokens/new?description=cli-agents-fleet&scopes=repo"
         );
       } else if (inputChar === "b" && !input) {
         navigateToStep("grading-mode-select");
@@ -1968,8 +1968,6 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           Context window limits: Gemini (128K), GPT-4 (2M), Claude (200K tokens)
         </Text>
         <Text></Text>
-        <Text color="cyan">Use ↑/↓ arrows to navigate, Enter to select:</Text>
-        <Text></Text>
         <Text
           color={selectedChunkingOption === 0 ? "green" : "white"}
           bold={selectedChunkingOption === 0}
@@ -1995,8 +1993,6 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         <Text dimColor> • Large repos will be marked as skipped</Text>
         <Text></Text>
         <Text dimColor>This preference will be saved for future sessions</Text>
-        <Text></Text>
-        <Text dimColor>Press 'b' or Escape to go back</Text>
       </Box>
     );
   }
@@ -2198,16 +2194,10 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           Press 'c' to copy the authorization URL to clipboard
         </Text>
         <Text color="green">Press 'r' to retry after authorization</Text>
-        <Text color="red">Press 'b' to go back to data source selection</Text>
         <Text></Text>
         <Text dimColor>Authorization URL:</Text>
         <Text dimColor wrap="wrap">
           {oauthUrl}
-        </Text>
-        <Text></Text>
-        <Text dimColor>
-          Commands: 'o' = open browser | 'c' = copy URL | 'r' = retry | 'b' =
-          back | Ctrl+C = exit
         </Text>
       </Box>
     );
@@ -2262,9 +2252,6 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         <Text color="green" bold>
           Select property containing GitHub URLs:
         </Text>
-        <Text dimColor>Use ↑/↓ arrows to navigate, Enter to select</Text>
-        <Text></Text>
-
         {notionProperties.map((property, index) => {
           const isSelected = index === selectedNotionProperty;
           return (
@@ -2336,9 +2323,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         <Text color="green" bold>
           Select GitHub URL column:
         </Text>
-        <Text dimColor>Use ↑/↓ arrows to navigate, Enter to select</Text>
         <Text></Text>
-
         {analysis.columns.map((column, index) => {
           const isSelected = index === selectedColumn;
           const isSuggested =
@@ -2683,16 +2668,6 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
             Back to Filter
           </Text>
         </Box>
-        <Text></Text>
-        <Text color="gray" dimColor>
-          [Use arrow keys to navigate, Enter to select]
-        </Text>
-        <Text></Text>
-        <BackButton
-          onBack={() => navigateToStep("notion-page-selector")}
-          label="Page Selector"
-          isVisible={true}
-        />
       </Box>
     );
   }
@@ -2937,9 +2912,6 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         </Text>
 
         <Text></Text>
-        <Text color="gray" dimColor>
-          [Use arrow keys to navigate, press Enter to select]
-        </Text>
       </Box>
     );
   }
@@ -2955,8 +2927,6 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           Found {notionGitHubUrls.length} GitHub repositories. What would you
           like to do?
         </Text>
-        <Text></Text>
-        <Text color="cyan">Use ↑/↓ arrows to navigate, Enter to select:</Text>
         <Text></Text>
         <Text
           color={selectedProcessingOption === 0 ? "blue" : "white"}
@@ -2993,8 +2963,6 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           • Clone and grade code THEN test deployed applications
         </Text>
         <Text dimColor> • Comprehensive analysis with complete results</Text>
-        <Text></Text>
-        <Text color="cyan">Use ↑/↓ arrows to navigate, Enter to select</Text>
       </Box>
     );
   }
@@ -3165,10 +3133,6 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
             <Text color="red">{error}</Text>
           </Box>
         )}
-        <Text></Text>
-        <Text dimColor>
-          Press 'o' to open GitHub token page, Enter to submit, 'b' to go back
-        </Text>
         {githubToken && (
           <Box marginTop={1}>
             <Text dimColor>
@@ -3191,6 +3155,10 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           }}
           onBack={() => {
             navigateToStep("grading-mode-select");
+          }}
+          onLogout={() => {
+            setGithubToken(undefined);
+            navigateToStep("collaborator-github-auth");
           }}
           onError={(err) => {
             setError(err);
@@ -3263,8 +3231,6 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
             <Text color="red">{error}</Text>
           </Box>
         )}
-        <Text></Text>
-        <Text dimColor>Enter path to CSV file, then press Enter. Press 'b' to go back.</Text>
       </Box>
     );
   }

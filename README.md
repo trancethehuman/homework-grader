@@ -1,11 +1,11 @@
-# Homework Grader
+# CLI Agents Fleet
 
-[![CI](https://github.com/trancethehuman/homework-grader/actions/workflows/ci.yml/badge.svg)](https://github.com/trancethehuman/homework-grader/actions/workflows/ci.yml)
-[![Release](https://github.com/trancethehuman/homework-grader/actions/workflows/release.yml/badge.svg)](https://github.com/trancethehuman/homework-grader/actions/workflows/release.yml)
-[![npm version](https://badge.fury.io/js/homework-grader.svg)](https://badge.fury.io/js/homework-grader)
+[![CI](https://github.com/trancethehuman/cli-agents-fleet/actions/workflows/ci.yml/badge.svg)](https://github.com/trancethehuman/cli-agents-fleet/actions/workflows/ci.yml)
+[![Release](https://github.com/trancethehuman/cli-agents-fleet/actions/workflows/release.yml/badge.svg)](https://github.com/trancethehuman/cli-agents-fleet/actions/workflows/release.yml)
+[![npm version](https://badge.fury.io/js/cli-agents-fleet.svg)](https://badge.fury.io/js/cli-agents-fleet)
 [![Node.js Version](https://img.shields.io/badge/node-%3E%3D22.0.0-brightgreen.svg)](https://nodejs.org/)
 
-A high-performance TypeScript CLI for processing homework submissions from CSV files and Notion databases with ultra-fast GitHub repository analysis.
+A powerful CLI for running AI agents at scale across your data - analyze repositories, manage GitHub collaborators, and perform bulk research from Notion, CSV, or manual input.
 
 ## Installation
 
@@ -13,27 +13,27 @@ A high-performance TypeScript CLI for processing homework submissions from CSV f
 
 ```bash
 # From NPM (public)
-npm install -g homework-grader
+npm install -g cli-agents-fleet
 
 # From GitHub Packages (alternative)
-npm install -g @trancethehuman/homework-grader
+npm install -g @trancethehuman/cli-agents-fleet
 ```
 
 ### Using npx (No Installation Required)
 
 ```bash
 # From NPM (public)
-npx homework-grader
+npx cli-agents-fleet
 
 # From GitHub Packages (alternative)
-npx @trancethehuman/homework-grader
+npx @trancethehuman/cli-agents-fleet
 ```
 
 ### Local Development
 
 ```bash
-git clone https://github.com/trancethehuman/homework-grader.git
-cd homework-grader
+git clone https://github.com/trancethehuman/cli-agents-fleet.git
+cd cli-agents-fleet
 pnpm install
 pnpm build
 pnpm start
@@ -44,7 +44,7 @@ pnpm start
 After installation, simply run:
 
 ```bash
-homework-grader
+cli-agents-fleet
 ```
 
 The CLI will guide you through:
@@ -71,7 +71,7 @@ Example notification:
    Latest:  1.1.0
 
    Run the following to update:
-   npm install -g homework-grader@latest
+   npm install -g cli-agents-fleet@latest
 ```
 
 ## Features
@@ -137,10 +137,10 @@ If you encounter permission errors during global installation:
 
 ```bash
 # On macOS/Linux - use sudo if needed
-sudo npm install -g homework-grader
+sudo npm install -g cli-agents-fleet
 
 # Or use npx instead (no installation required)
-npx homework-grader
+npx cli-agents-fleet
 ```
 
 ### Node.js Version
@@ -164,9 +164,9 @@ node --version  # Should be >= 22.0.0
 ### Common Issues
 
 1. **"Command not found"** - The global installation may have failed or your PATH is incorrect
-   - Try: `npx homework-grader` instead
+   - Try: `npx cli-agents-fleet` instead
 2. **"Module not found"** - Dependencies may be missing
-   - Try: Reinstalling with `npm install -g homework-grader --force`
+   - Try: Reinstalling with `npm install -g cli-agents-fleet --force`
 3. **Notion OAuth fails** - The proxy service may be cold starting
    - Try: Wait a moment and retry the authentication
 
@@ -177,7 +177,7 @@ If you prefer to disable update checking:
 ```bash
 # Set environment variable to disable update checks
 export NO_UPDATE_NOTIFIER=true
-homework-grader
+cli-agents-fleet
 ```
 
 ## Development & Contributing
@@ -190,8 +190,8 @@ This package uses **fully automated publishing** - no manual steps required!
 
 1. ✅ **Builds and tests** the package
 2. ✅ **Auto-increments version** if needed (patch version bump)
-3. ✅ **Publishes to NPM** as `homework-grader`
-4. ✅ **Publishes to GitHub Packages** as `@trancethehuman/homework-grader`
+3. ✅ **Publishes to NPM** as `cli-agents-fleet`
+4. ✅ **Publishes to GitHub Packages** as `@trancethehuman/cli-agents-fleet`
 5. ✅ **Creates GitHub Release** with changelog
 6. ✅ **Creates git tag** for the version
 
@@ -223,7 +223,7 @@ For automated publishing, add `NPM_TOKEN` to repository secrets:
 1. **Get NPM Token**:
 
    - Go to [npmjs.com](https://www.npmjs.com) → Profile → Access Tokens
-   - Generate "Automation" token for `homework-grader`
+   - Generate "Automation" token for `cli-agents-fleet`
    - Copy the token (starts with `npm_...`)
 
 2. **Add to GitHub**:

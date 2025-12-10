@@ -74,7 +74,6 @@ export const NotionDatabaseSelector: React.FC<NotionDatabaseSelectorProps> = ({
     return (
       <ErrorState
         message={error}
-        showBackHint={!!onBack}
       />
     );
   }
@@ -84,7 +83,6 @@ export const NotionDatabaseSelector: React.FC<NotionDatabaseSelectorProps> = ({
       <EmptyState
         message="No Notion databases found."
         hint="Please create a database in Notion first."
-        showBackHint={!!onBack}
       />
     );
   }
@@ -109,11 +107,12 @@ export const NotionDatabaseSelector: React.FC<NotionDatabaseSelectorProps> = ({
         ))}
       </Box>
 
-      <Text></Text>
       {databases.length > 10 && (
-        <Text dimColor>Showing 10 of {databases.length} databases</Text>
+        <>
+          <Text></Text>
+          <Text dimColor>Showing 10 of {databases.length} databases</Text>
+        </>
       )}
-      <Text dimColor>↑/↓: navigate | Enter: select{onBack ? " | b: back" : ""}</Text>
     </Box>
   );
 };

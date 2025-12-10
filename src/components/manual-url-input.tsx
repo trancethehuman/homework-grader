@@ -85,10 +85,6 @@ export const ManualUrlInput: React.FC<ManualUrlInputProps> = ({
         </>
       )}
 
-      <Text></Text>
-      <Text dimColor>Press Enter to continue</Text>
-      <Text dimColor>Press 'b' or Escape (when input is empty) to go back</Text>
-      <Text dimColor>Press Ctrl+C to exit</Text>
     </Box>
   );
 };

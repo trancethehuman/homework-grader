@@ -22,7 +22,7 @@ export class NotionMCPClient {
   constructor() {
     this.client = new Client(
       {
-        name: "homework-grader",
+        name: "cli-agents-fleet",
         version: "1.0.0",
       },
       {

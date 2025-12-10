@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a homework grading system repository with TypeScript URL loading functionality for processing homework submissions from CSV files and GitHub repositories. The project is licensed under GNU License.
+This is CLI Agents Fleet - a powerful platform for running AI agents at scale across your data. Features include repository analysis and grading, GitHub collaborator management, and bulk research capabilities from Notion, CSV, or manual input. The project is licensed under GNU License.
 
 **Notion Integration**: For Notion-specific documentation including OAuth, API details, data source querying, and filter formats, see `/src/lib/notion/CLAUDE.md`.
 
@@ -54,15 +54,15 @@ The application can be installed and used via npm/npx:
 
 ```bash
 # One-time execution (no installation required)
-npx homework-grader
+npx cli-agents-fleet
 
 # Global installation for repeated use
-npm install -g homework-grader
-homework-grader
+npm install -g cli-agents-fleet
+cli-agents-fleet
 
 # Local installation in a project
-npm install homework-grader
-npx homework-grader
+npm install cli-agents-fleet
+npx cli-agents-fleet
 ```
 
 #### Development Workflow

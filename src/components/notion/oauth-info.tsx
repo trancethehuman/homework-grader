@@ -50,7 +50,6 @@ export const NotionOAuthInfo: React.FC<NotionOAuthInfoProps> = ({
         Press Enter to open the Notion authorization page
       </Text>
       <Text color="yellow">Press 'c' to clear saved Notion access</Text>
-      <Text color="red">Press 'b' to go back</Text>
     </Box>
   );
 };

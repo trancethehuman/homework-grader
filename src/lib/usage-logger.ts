@@ -20,7 +20,7 @@ export class UsageLogger {
   private logFile: string;
 
   constructor() {
-    this.logDir = join(homedir(), ".homework-grader");
+    this.logDir = join(homedir(), ".cli-agents-fleet");
     this.logFile = join(this.logDir, "usage-log.json");
   }
 

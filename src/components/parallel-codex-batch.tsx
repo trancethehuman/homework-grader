@@ -801,12 +801,6 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
               Processed: {gradingProgress.completed}/{gradingProgress.total}{" "}
               repos
             </Text>
-            {!isAborting && (
-              <Text dimColor>
-                ↑/↓: navigate | s: skip selected | x: stop selected | a: abort
-                all
-              </Text>
-            )}
           </>
         )}
 

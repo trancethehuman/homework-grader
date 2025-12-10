@@ -283,7 +283,6 @@ export const CodexStarting: React.FC<CodexStartingProps> = ({
             "Check that Codex is properly installed",
             "Verify you have the necessary permissions",
           ]}
-          showBackHint={false}
         />
       )}
 
