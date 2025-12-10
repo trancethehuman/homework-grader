@@ -16,13 +16,13 @@ export const useBackNavigation = (
   disableCondition?: () => boolean
 ) => {
   return {
-    handleBackInput: (input: string, key: any) => {
+    handleBackInput: (_input: string, key: any) => {
       if (!enabled) return false;
       
       // Check if back navigation should be disabled (e.g., when in input field)
       if (disableCondition && disableCondition()) return false;
       
-      if (input === 'b' || key.escape) {
+      if (key.escape) {
         onBack();
         return true;
       }

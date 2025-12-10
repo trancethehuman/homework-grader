@@ -73,9 +73,6 @@ const ProfileFooter: React.FC<ProfileFooterProps> = ({ isFocused }) => {
   return (
     <Box>
       <Text color={isFocused ? "blue" : "gray"} bold={isFocused}>
-        {isFocused ? "→ " : "  "}
-      </Text>
-      <Text color={isFocused ? "blue" : "gray"} bold={isFocused}>
         Switch profile
       </Text>
     </Box>

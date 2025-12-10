@@ -43,7 +43,7 @@ export const CollaboratorCsvColumnSelector: React.FC<CollaboratorCsvColumnSelect
       if (usernames.length > 0) {
         onSelect(usernames);
       }
-    } else if (input === "b" || key.escape) {
+    } else if (key.escape) {
       onBack();
     }
   });
@@ -69,12 +69,11 @@ export const CollaboratorCsvColumnSelector: React.FC<CollaboratorCsvColumnSelect
           <Box key={index} flexDirection="column" marginBottom={0}>
             <Box>
               <Text color={isSelected ? "blue" : "white"} bold={isSelected}>
-                {isSelected ? "→ " : "  "}
                 {index + 1}. {column.name}
               </Text>
             </Box>
             {column.sampleValues.length > 0 && (
-              <Box marginLeft={4}>
+              <Box marginLeft={2}>
                 <Text dimColor>
                   Sample: {column.sampleValues.slice(0, 5).join(", ")}
                   {column.sampleValues.length > 5 && "..."}

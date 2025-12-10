@@ -86,9 +86,6 @@ export function MenuSelector<T>({
     return (
       <Box key={String(option.id)} flexDirection="column" marginBottom={1}>
         <Box>
-          <Text color={isDisabled ? "gray" : isSelected ? highlightColor : "white"}>
-            {isSelected ? "→ " : "  "}
-          </Text>
           <Text
             color={isDisabled ? "gray" : isSelected ? highlightColor : "white"}
             bold={isSelected}
@@ -97,7 +94,7 @@ export function MenuSelector<T>({
             {option.comingSoon && " (coming soon)"}
           </Text>
         </Box>
-        <Box marginLeft={4}>
+        <Box marginLeft={2}>
           <Text dimColor={!isDisabled} color={isDisabled ? "gray" : undefined}>
             {option.description}
           </Text>

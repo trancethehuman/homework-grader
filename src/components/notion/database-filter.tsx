@@ -161,7 +161,7 @@ export const DatabaseFilter: React.FC<DatabaseFilterProps> = ({
             }
           }
         }
-      } else if (input === 'b' || key.escape) {
+      } else if (key.escape) {
         onBack();
       }
     } else if (step === 'values') {
@@ -196,7 +196,7 @@ export const DatabaseFilter: React.FC<DatabaseFilterProps> = ({
             value: Array.from(selectedValues),
           });
         }
-      } else if (key.escape || input === 'b') {
+      } else if (key.escape) {
         setStep('select');
         setSelectedValues(new Set());
       }
@@ -264,7 +264,7 @@ export const DatabaseFilter: React.FC<DatabaseFilterProps> = ({
           hints={[
             { keys: "↑/↓", action: "navigate" },
             { keys: "Enter", action: "toggle/apply" },
-            { keys: "'b'", action: "back" },
+            { keys: "Escape", action: "back" },
           ]}
         />
       </Box>
@@ -358,7 +358,7 @@ export const DatabaseFilter: React.FC<DatabaseFilterProps> = ({
           { keys: "↑/↓", action: "select property" },
           { keys: "←/→", action: "change filter" },
           { keys: "Enter", action: "apply" },
-          { keys: "'b'", action: "back" },
+          { keys: "Escape", action: "back" },
         ]}
       />
     </Box>

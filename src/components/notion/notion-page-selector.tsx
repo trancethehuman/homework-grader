@@ -109,6 +109,18 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
         enabled: !!onBack,
         onActivate: onBack,
       },
+      {
+        id: "reauth",
+        type: "button",
+        enabled: !!onAuthenticationRequired,
+        onActivate: () => {
+          if (onAuthenticationRequired) {
+            const tokenStorage = new NotionTokenStorage();
+            tokenStorage.clearToken();
+            onAuthenticationRequired();
+          }
+        },
+      },
     ],
     initialFocus: "search",
     disabled: isLoading || !!error || isStartingGrading,
@@ -147,6 +159,7 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
 
   const isSearchFocused = focusedRegion === "search";
   const isBackFocused = focusedRegion === "back";
+  const isReauthFocused = focusedRegion === "reauth";
 
   useEffect(() => {
     const loadNotionData = async () => {
@@ -382,6 +395,16 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
         const type = "properties" in item ? "database" : "page";
         onSelect(item.id, item.title, type);
       }
+
+      // Horizontal navigation between footer buttons
+      if (key.leftArrow && focusedRegion === "reauth" && onBack) {
+        focusRegion("back");
+        return;
+      }
+      if (key.rightArrow && focusedRegion === "back" && onAuthenticationRequired) {
+        focusRegion("reauth");
+        return;
+      }
     },
     { isActive: !isLoading && !error && !isStartingGrading }
   );
@@ -496,7 +519,6 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
             return (
               <Box key={item.id}>
                 <Text color={isSelected ? "blue" : "white"} bold={isSelected}>
-                  {isSelected ? "→ " : "  "}
                   {item.title}
                 </Text>
                 <Text dimColor> ({itemType})</Text>
@@ -517,7 +539,6 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
                     color={isLoadMoreSelected ? "blue" : "gray"}
                     bold={isLoadMoreSelected}
                   >
-                    {isLoadMoreSelected ? "→ " : "  "}
                     {isLoadingMore ? "Loading..." : "Load more..."}
                   </Text>
                 </Box>
@@ -537,13 +558,24 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
         isFocused={isSearchFocused}
         onChange={(value) => inputSetValue("search", value)}
       />
-      {onBack && (
-        <Box>
-          <Text color={isBackFocused ? "blue" : "gray"} bold={isBackFocused}>
-            {isBackFocused ? "→ " : "  "}← back
-          </Text>
-        </Box>
-      )}
+      <Box justifyContent="space-between">
+        {onBack ? (
+          <Box>
+            <Text color={isBackFocused ? "blue" : "gray"} bold={isBackFocused}>
+              back
+            </Text>
+          </Box>
+        ) : (
+          <Box />
+        )}
+        {onAuthenticationRequired && (
+          <Box>
+            <Text color={isReauthFocused ? "blue" : "gray"} bold={isReauthFocused}>
+              + Add more pages
+            </Text>
+          </Box>
+        )}
+      </Box>
     </Box>
   );
 };

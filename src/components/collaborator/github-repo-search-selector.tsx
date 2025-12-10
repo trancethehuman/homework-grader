@@ -62,7 +62,7 @@ export const GitHubRepoSearchSelector: React.FC<GitHubRepoSearchSelectorProps> =
       {
         id: "search",
         type: "input",
-        reservedKeys: ["b", "s"],
+        reservedKeys: ["s"],
       },
       {
         id: "back",
@@ -146,11 +146,6 @@ export const GitHubRepoSearchSelector: React.FC<GitHubRepoSearchSelectorProps> =
     (input, key) => {
       if (isLoading) return;
 
-      // Global shortcut: 'b' to go back (except when typing in search)
-      if (input === "b" && onBack && focusedRegion !== "search") {
-        onBack();
-        return;
-      }
 
       // Global shortcut: 's' to focus search
       if (input === "s" && focusedRegion !== "search") {
@@ -222,7 +217,6 @@ export const GitHubRepoSearchSelector: React.FC<GitHubRepoSearchSelectorProps> =
               <Box key={repo.fullName} flexDirection="column" marginBottom={0}>
                 <Box>
                   <Text color={isSelected ? "blue" : "white"} bold={isSelected}>
-                    {isSelected ? "→ " : "  "}
                     {repo.fullName}
                   </Text>
                   <Text color={repo.private ? "yellow" : "green"}>
@@ -231,7 +225,7 @@ export const GitHubRepoSearchSelector: React.FC<GitHubRepoSearchSelectorProps> =
                   </Text>
                 </Box>
                 {repo.description && (
-                  <Box marginLeft={4}>
+                  <Box marginLeft={2}>
                     <Text dimColor>
                       {repo.description.length > 60
                         ? repo.description.slice(0, 60) + "..."
@@ -258,7 +252,7 @@ export const GitHubRepoSearchSelector: React.FC<GitHubRepoSearchSelectorProps> =
       {onBack && (
         <Box>
           <Text color={isBackFocused ? "blue" : "gray"} bold={isBackFocused}>
-            {isBackFocused ? "→ " : "  "}← back
+            back
           </Text>
         </Box>
       )}
@@ -272,12 +266,11 @@ export const GitHubRepoSearchSelector: React.FC<GitHubRepoSearchSelectorProps> =
         <Box marginTop={1} flexDirection="column">
           <Box>
             <Text color={isAccountFocused ? "blue" : "gray"} bold={isAccountFocused}>
-              {isAccountFocused ? "→ " : "  "}
               Authenticated as: {authenticatedUser}
             </Text>
           </Box>
           {isAccountFocused && onLogout && (
-            <Box marginLeft={4}>
+            <Box marginLeft={2}>
               <Text dimColor>Press Enter to switch account</Text>
             </Box>
           )}

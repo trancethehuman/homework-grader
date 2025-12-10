@@ -8,16 +8,19 @@ import { LoadingState, ErrorState, EmptyState } from "./ui/StateDisplays.js";
 interface NotionDatabaseSelectorProps {
   onSelect: (databaseId: string, databaseTitle: string) => void;
   onBack?: () => void;
+  onAuthenticationRequired?: () => void;
 }
 
 export const NotionDatabaseSelector: React.FC<NotionDatabaseSelectorProps> = ({
   onSelect,
   onBack,
+  onAuthenticationRequired,
 }) => {
   const [databases, setDatabases] = useState<NotionDatabase[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [focusedButton, setFocusedButton] = useState<"list" | "back" | "reauth">("list");
 
   useEffect(() => {
     const loadDatabases = async () => {
@@ -51,18 +54,56 @@ export const NotionDatabaseSelector: React.FC<NotionDatabaseSelectorProps> = ({
     loadDatabases();
   }, []);
 
+  const handleReauth = () => {
+    if (onAuthenticationRequired) {
+      const tokenStorage = new NotionTokenStorage();
+      tokenStorage.clearToken();
+      onAuthenticationRequired();
+    }
+  };
+
   useInput((input, key) => {
     if (isLoading) return;
 
-    if (key.upArrow) {
-      setSelectedIndex((prev) => Math.max(0, prev - 1));
-    } else if (key.downArrow) {
-      setSelectedIndex((prev) => Math.min(databases.length - 1, prev + 1));
-    } else if (key.return && databases.length > 0) {
-      const selected = databases[selectedIndex];
-      onSelect(selected.id, selected.title);
-    } else if ((input === "b" || key.escape) && onBack) {
-      onBack();
+    if (focusedButton === "list") {
+      if (key.upArrow) {
+        setSelectedIndex((prev) => Math.max(0, prev - 1));
+      } else if (key.downArrow) {
+        if (selectedIndex < databases.length - 1) {
+          setSelectedIndex((prev) => prev + 1);
+        } else {
+          if (onBack) {
+            setFocusedButton("back");
+          } else if (onAuthenticationRequired) {
+            setFocusedButton("reauth");
+          }
+        }
+      } else if (key.return && databases.length > 0) {
+        const selected = databases[selectedIndex];
+        onSelect(selected.id, selected.title);
+      } else if ((input === "b" || key.escape) && onBack) {
+        onBack();
+      }
+    } else if (focusedButton === "back") {
+      if (key.upArrow) {
+        setFocusedButton("list");
+      } else if (key.rightArrow && onAuthenticationRequired) {
+        setFocusedButton("reauth");
+      } else if (key.return && onBack) {
+        onBack();
+      } else if (input === "b" || key.escape) {
+        onBack?.();
+      }
+    } else if (focusedButton === "reauth") {
+      if (key.upArrow) {
+        setFocusedButton("list");
+      } else if (key.leftArrow && onBack) {
+        setFocusedButton("back");
+      } else if (key.return) {
+        handleReauth();
+      } else if ((input === "b" || key.escape) && onBack) {
+        onBack();
+      }
     }
   });
 
@@ -87,6 +128,10 @@ export const NotionDatabaseSelector: React.FC<NotionDatabaseSelectorProps> = ({
     );
   }
 
+  const isListFocused = focusedButton === "list";
+  const isBackFocused = focusedButton === "back";
+  const isReauthFocused = focusedButton === "reauth";
+
   return (
     <Box flexDirection="column">
       <Text color="blue" bold>
@@ -99,8 +144,7 @@ export const NotionDatabaseSelector: React.FC<NotionDatabaseSelectorProps> = ({
       <Box flexDirection="column">
         {databases.slice(0, 10).map((db, index) => (
           <Box key={db.id}>
-            <Text color={index === selectedIndex ? "cyan" : "white"}>
-              {index === selectedIndex ? "▸ " : "  "}
+            <Text color={isListFocused && index === selectedIndex ? "cyan" : "white"} bold={isListFocused && index === selectedIndex}>
               {db.title}
             </Text>
           </Box>
@@ -113,6 +157,26 @@ export const NotionDatabaseSelector: React.FC<NotionDatabaseSelectorProps> = ({
           <Text dimColor>Showing 10 of {databases.length} databases</Text>
         </>
       )}
+
+      <Text></Text>
+      <Box justifyContent="space-between">
+        {onBack ? (
+          <Box>
+            <Text color={isBackFocused ? "blue" : "gray"} bold={isBackFocused}>
+              back
+            </Text>
+          </Box>
+        ) : (
+          <Box />
+        )}
+        {onAuthenticationRequired && (
+          <Box>
+            <Text color={isReauthFocused ? "blue" : "gray"} bold={isReauthFocused}>
+              + Add more pages
+            </Text>
+          </Box>
+        )}
+      </Box>
     </Box>
   );
 };

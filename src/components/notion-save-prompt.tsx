@@ -40,14 +40,12 @@ export const NotionSavePrompt: React.FC<NotionSavePromptProps> = ({
 
       <Box flexDirection="column">
         <Box>
-          <Text color={selectedOption === "yes" ? "cyan" : "gray"}>
-            {selectedOption === "yes" ? "▸ " : "  "}
+          <Text color={selectedOption === "yes" ? "cyan" : "gray"} bold={selectedOption === "yes"}>
             Yes, save to Notion
           </Text>
         </Box>
         <Box>
-          <Text color={selectedOption === "no" ? "cyan" : "gray"}>
-            {selectedOption === "no" ? "▸ " : "  "}
+          <Text color={selectedOption === "no" ? "cyan" : "gray"} bold={selectedOption === "no"}>
             No, skip saving
           </Text>
         </Box>

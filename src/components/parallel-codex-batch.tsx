@@ -680,13 +680,11 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
         {visibleRepos.map((repo, viewportIdx) => {
           const idx = scrollOffset + viewportIdx;
           const isSelected = idx === selectedRowIndex && !isAborting;
-          const showActions = phase === "grading" && isSelected;
           return (
             <Box key={idx} flexDirection="column">
               <Box>
-                <Box width={3}>
+                <Box width={2}>
                   <Text color={getStatusColor(repo.status, repo.isTimeout)}>
-                    {showActions ? "→" : " "}
                     {getStatusIcon(repo.status)}
                   </Text>
                 </Box>

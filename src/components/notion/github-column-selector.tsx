@@ -374,7 +374,7 @@ export const GitHubColumnSelector: React.FC<GitHubColumnSelectorProps> = ({
         hints={[
           { keys: "Enter", action: "select column" },
           { keys: "'q'", action: "quick start" },
-          { keys: "'b'", action: "back", condition: !!onBack },
+          { keys: "Escape", action: "back", condition: !!onBack },
           { keys: "Ctrl+C", action: "exit" },
         ]}
       />

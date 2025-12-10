@@ -14,13 +14,13 @@ export const ListRow: React.FC<ListRowProps> = ({
   isSelected,
   highlightColor = "blue",
   children,
-  indicator = "→",
-  showIndicator = true,
+  indicator = "",
+  showIndicator = false,
   marginBottom = 0,
 }) => {
   return (
     <Box marginBottom={marginBottom}>
-      {showIndicator && (
+      {showIndicator && indicator && (
         <Text color={isSelected ? highlightColor : undefined}>
           {isSelected ? `${indicator} ` : "  "}
         </Text>

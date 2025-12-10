@@ -58,7 +58,7 @@ export const ProviderSelector: React.FC<ProviderSelectorProps> = ({
       onSelect(selectedProvider);
     } else if (input === "t" && onTestMode) {
       onTestMode();
-    } else if ((input === "b" || key.escape) && onBack) {
+    } else if (key.escape && onBack) {
       onBack();
     }
   });
@@ -98,7 +98,7 @@ export const ProviderSelector: React.FC<ProviderSelectorProps> = ({
           { keys: "↑/↓", action: "navigate" },
           { keys: "Enter", action: "select" },
           { keys: "'t'", action: "test mode", condition: !!onTestMode },
-          { keys: "'b'", action: "back", condition: !!onBack },
+          { keys: "Escape", action: "back", condition: !!onBack },
           { keys: "Ctrl+C", action: "exit" },
         ]}
       />

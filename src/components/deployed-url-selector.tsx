@@ -380,7 +380,7 @@ export const DeployedUrlSelector: React.FC<DeployedUrlSelectorProps> = ({
         hints={[
           { keys: "Enter", action: "select column" },
           { keys: "'q'", action: "quick start" },
-          { keys: "'b'", action: "back", condition: !!onBack },
+          { keys: "Escape", action: "back", condition: !!onBack },
           { keys: "Ctrl+C", action: "exit" },
         ]}
       />

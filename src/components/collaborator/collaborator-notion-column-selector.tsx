@@ -268,7 +268,7 @@ export const CollaboratorNotionColumnSelector: React.FC<CollaboratorNotionColumn
       if (usernames.length > 0) {
         onSelect(usernames);
       }
-    } else if (input === "b" || key.escape) {
+    } else if (key.escape) {
       onBack();
     }
   });
@@ -325,7 +325,6 @@ export const CollaboratorNotionColumnSelector: React.FC<CollaboratorNotionColumn
           <Box key={candidate.propertyName} flexDirection="column" marginBottom={1}>
             <Box>
               <Text color={isSelected ? "blue" : "white"} bold={isSelected}>
-                {isSelected ? "→ " : "  "}
                 {candidate.propertyName}
               </Text>
               <Text dimColor> ({candidate.propertyType})</Text>
@@ -335,7 +334,7 @@ export const CollaboratorNotionColumnSelector: React.FC<CollaboratorNotionColumn
                 <Text color="cyan"> [from URLs]</Text>
               )}
             </Box>
-            <Box marginLeft={4}>
+            <Box marginLeft={2}>
               <Text dimColor>
                 {candidate.totalUsernames} username{candidate.totalUsernames > 1 ? "s" : ""} found
               </Text>

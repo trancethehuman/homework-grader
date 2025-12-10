@@ -2446,8 +2446,10 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
             }
           }}
           onAuthenticationRequired={() => {
-            // Clear error and trigger automatic OAuth re-authentication
+            // Clear error, cached data, and trigger automatic OAuth re-authentication
             setError(null);
+            setCachedNotionPages([]);
+            setCachedNotionDatabases([]);
             console.log(
               "🔄 Authentication required, triggering automatic OAuth flow..."
             );

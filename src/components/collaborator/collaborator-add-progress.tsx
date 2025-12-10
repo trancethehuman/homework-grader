@@ -218,7 +218,6 @@ export const CollaboratorAddProgress: React.FC<CollaboratorAddProgressProps> = (
         return (
           <Box key={user.username}>
             <Text color={isSelected ? "blue" : getStatusColor(user.status)} bold={isSelected}>
-              {isSelected ? "→ " : "  "}
               {getStatusIcon(user.status)} {user.username}
             </Text>
             {user.status === "adding" && (

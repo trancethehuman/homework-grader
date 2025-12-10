@@ -483,7 +483,7 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
             return (
               <Box key={item.id}>
                 <Text color={isSelected ? "blue" : "white"} bold={isSelected}>
-                  {isSelected ? "→ " : "  "}{item.content}
+                  {item.content}
                 </Text>
                 {isSelected && canGrade && (
                   <Text color="green"> [g to grade]</Text>
@@ -508,7 +508,7 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
       {onBack && (
         <Box>
           <Text color={isBackFocused ? "blue" : "gray"} bold={isBackFocused}>
-            {isBackFocused ? "→ " : "  "}← back
+            back
           </Text>
         </Box>
       )}

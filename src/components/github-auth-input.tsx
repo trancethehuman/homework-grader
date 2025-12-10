@@ -222,7 +222,6 @@ export const GitHubAuthInput: React.FC<GitHubAuthInputProps> = ({
           color={isOpenBrowserFocused ? "blue" : "gray"}
           bold={isOpenBrowserFocused}
         >
-          {isOpenBrowserFocused ? "→ " : "  "}
           Open GitHub token page
         </Text>
       </Box>
@@ -233,8 +232,7 @@ export const GitHubAuthInput: React.FC<GitHubAuthInputProps> = ({
         <Box>
           {onBack && (
             <Text color={isBackFocused ? "blue" : "gray"} bold={isBackFocused}>
-              {isBackFocused ? "→ " : "  "}
-              ← back
+              back
             </Text>
           )}
         </Box>

@@ -35,10 +35,7 @@ const BackFooter: React.FC<BackFooterProps> = ({ isFocused }) => {
   return (
     <Box>
       <Text color={isFocused ? "blue" : "gray"} bold={isFocused}>
-        {isFocused ? "→ " : "  "}
-      </Text>
-      <Text color={isFocused ? "blue" : "gray"} bold={isFocused}>
-        ← Back
+        back
       </Text>
     </Box>
   );

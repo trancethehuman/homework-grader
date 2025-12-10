@@ -18,8 +18,8 @@ export const HelpFooter: React.FC<HelpFooterProps> = () => {
 export const COMMON_HINTS = {
   navigate: { keys: "↑/↓", action: "navigate" },
   select: { keys: "Enter", action: "select" },
-  back: { keys: "'b'", action: "back" },
-  backEsc: { keys: ["'b'", "Escape"], action: "go back" },
+  back: { keys: "Escape", action: "back" },
+  backEsc: { keys: "Escape", action: "go back" },
   exit: { keys: "Ctrl+C", action: "exit" },
   search: { keys: "'s'", action: "search" },
   pages: { keys: "←/→", action: "pages" },
