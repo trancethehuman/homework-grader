@@ -68,7 +68,9 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
   const [isSearching, setIsSearching] = useState(false);
   const [isUrlFetching, setIsUrlFetching] = useState(false);
   const [urlFetchError, setUrlFetchError] = useState<string | null>(null);
-  const [urlFetchedItem, setUrlFetchedItem] = useState<NotionPage | NotionDatabase | null>(null);
+  const [urlFetchedItem, setUrlFetchedItem] = useState<
+    NotionPage | NotionDatabase | null
+  >(null);
   const notionServiceRef = useRef<NotionService | null>(null);
 
   const viewportSize = 8;
@@ -445,7 +447,11 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
       }
 
       // Handle 'c' key to select for collaborator (only for databases when in list)
-      if (input === "c" && onSelectForCollaborator && focusedRegion === "list") {
+      if (
+        input === "c" &&
+        onSelectForCollaborator &&
+        focusedRegion === "list"
+      ) {
         const currentItem = allItems[selectedIndex];
         if (currentItem && "properties" in currentItem) {
           onSelectForCollaborator(currentItem.id, currentItem.title);
@@ -471,7 +477,11 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
         focusRegion("back");
         return;
       }
-      if (key.rightArrow && focusedRegion === "back" && onAuthenticationRequired) {
+      if (
+        key.rightArrow &&
+        focusedRegion === "back" &&
+        onAuthenticationRequired
+      ) {
         focusRegion("reauth");
         return;
       }
@@ -603,7 +613,8 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
             const isDatabase = "properties" in item;
             const itemType = isDatabase ? "Database" : "Page";
             const canGrade = isDatabase && onStartGrading;
-            const canSelectForCollaborator = isDatabase && onSelectForCollaborator;
+            const canSelectForCollaborator =
+              isDatabase && onSelectForCollaborator;
 
             return (
               <Box key={item.id}>
@@ -662,8 +673,11 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
         )}
         {onAuthenticationRequired && (
           <Box>
-            <Text color={isReauthFocused ? "blue" : "gray"} bold={isReauthFocused}>
-              + Add more pages
+            <Text
+              color={isReauthFocused ? "blue" : "gray"}
+              bold={isReauthFocused}
+            >
+              Re-authorize Notion
             </Text>
           </Box>
         )}

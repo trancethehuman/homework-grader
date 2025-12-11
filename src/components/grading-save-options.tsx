@@ -6,7 +6,7 @@ import { NotionService } from "../lib/notion/notion-service.js";
 import { NotionOAuthClient } from "../lib/notion/oauth-client.js";
 import { HelpFooter } from "./ui/HelpFooter.js";
 
-export type SaveOption = "file" | "original-database" | "new-database" | "skip";
+export type SaveOption = "file" | "original-database" | "new-database" | "github-issue" | "skip";
 
 interface GradingSaveOptionsProps {
   gradingResults: GradingResult[];
@@ -31,6 +31,8 @@ export const GradingSaveOptions: React.FC<GradingSaveOptionsProps> = ({
     missingProperties: string[];
   } | null>(null);
 
+  const hasGitHubUrls = gradingResults.some((r) => r.githubUrl);
+
   const availableOptions: Array<{
     key: SaveOption;
     label: string;
@@ -43,7 +45,14 @@ export const GradingSaveOptions: React.FC<GradingSaveOptionsProps> = ({
     },
   ];
 
-  // Add database options if we have a Notion integration
+  if (hasGitHubUrls) {
+    availableOptions.push({
+      key: "github-issue",
+      label: "Create GitHub Issues with feedback",
+      description: "Post grading feedback as GitHub Issues on graded repositories",
+    });
+  }
+
   if (originalDatabaseId) {
     availableOptions.push({
       key: "original-database",

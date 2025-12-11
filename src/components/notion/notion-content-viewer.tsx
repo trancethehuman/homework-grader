@@ -152,13 +152,18 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
       return navigableItems;
     }
     return navigableItems.filter((item) =>
-      (item.title || item.content).toLowerCase().includes(searchTerm.toLowerCase())
+      (item.title || item.content)
+        .toLowerCase()
+        .includes(searchTerm.toLowerCase())
     );
   }, [navigableItems, searchTerm]);
 
   const allItems = filteredItems;
   const visibleStartIndex = scrollOffset;
-  const visibleEndIndex = Math.min(scrollOffset + viewportSize, allItems.length);
+  const visibleEndIndex = Math.min(
+    scrollOffset + viewportSize,
+    allItems.length
+  );
   const displayItems = allItems.slice(visibleStartIndex, visibleEndIndex);
 
   const isSearchFocused = focusedRegion === "search";
@@ -225,18 +230,26 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
 
         if (err instanceof Error) {
           if (err.message.includes("Token is invalid or expired")) {
-            errorMessage = "Token is invalid or expired. Please re-authenticate with Notion.";
+            errorMessage =
+              "Token is invalid or expired. Please re-authenticate with Notion.";
           } else if (err.message.includes("refresh")) {
-            errorMessage = "Failed to refresh authentication. Please try again.";
+            errorMessage =
+              "Failed to refresh authentication. Please try again.";
             shouldRetry = true;
-          } else if (err.message.includes("network") || err.message.includes("fetch")) {
-            errorMessage = "Network error. Please check your connection and try again.";
+          } else if (
+            err.message.includes("network") ||
+            err.message.includes("fetch")
+          ) {
+            errorMessage =
+              "Network error. Please check your connection and try again.";
             shouldRetry = true;
           } else if (err.message.includes("rate limit")) {
-            errorMessage = "Rate limited by Notion. Please wait a moment and try again.";
+            errorMessage =
+              "Rate limited by Notion. Please wait a moment and try again.";
             shouldRetry = true;
           } else if (err.message.includes("permission")) {
-            errorMessage = "Permission denied. Please ensure the integration has access to this content.";
+            errorMessage =
+              "Permission denied. Please ensure the integration has access to this content.";
           } else {
             errorMessage = err.message;
           }
@@ -305,7 +318,9 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
                 const blockTitle =
                   block.child_database?.title || block.child_page?.title;
                 const itemTitle = selectedItem.content.replace(/^(|) /, "");
-                return blockTitle === itemTitle && block.type === "child_database";
+                return (
+                  blockTitle === itemTitle && block.type === "child_database"
+                );
               });
 
               if (matchingBlock) {
@@ -347,7 +362,9 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
                 const blockTitle =
                   block.child_database?.title || block.child_page?.title;
                 const itemTitle = selectedItem.content.replace(/^(|) /, "");
-                return blockTitle === itemTitle && block.type === "child_database";
+                return (
+                  blockTitle === itemTitle && block.type === "child_database"
+                );
               });
 
               if (matchingBlock) {
@@ -374,7 +391,11 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
         focusRegion("back");
         return;
       }
-      if (key.rightArrow && focusedRegion === "back" && onAuthenticationRequired) {
+      if (
+        key.rightArrow &&
+        focusedRegion === "back" &&
+        onAuthenticationRequired
+      ) {
         focusRegion("reauth");
         return;
       }
@@ -384,9 +405,10 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
 
   if (isLoading) {
     const displayType = contentType === "database" ? "Database" : "Page";
-    const loadingMessage = loadingPhase === "proxy"
-      ? "Connecting to server (may take up to 60s on cold start)"
-      : loadingPhase === "auth"
+    const loadingMessage =
+      loadingPhase === "proxy"
+        ? "Connecting to server (may take up to 60s on cold start)"
+        : loadingPhase === "auth"
         ? "Authenticating with Notion"
         : "Fetching content";
     return (
@@ -397,14 +419,15 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
           </Text>
           <Text color="yellow"> Loading{loadingDots}</Text>
         </Box>
-        <Text dimColor>
-          {displayType}
-        </Text>
+        <Text dimColor>{displayType}</Text>
         <Text></Text>
 
         <BackButton onBack={() => onBack?.()} isVisible={!!onBack} />
 
-        <Text dimColor>{loadingMessage}{loadingDots}</Text>
+        <Text dimColor>
+          {loadingMessage}
+          {loadingDots}
+        </Text>
       </Box>
     );
   }
@@ -469,7 +492,10 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
         <Box justifyContent="space-between">
           {onBack ? (
             <Box>
-              <Text color={isBackFocused ? "blue" : "gray"} bold={isBackFocused}>
+              <Text
+                color={isBackFocused ? "blue" : "gray"}
+                bold={isBackFocused}
+              >
                 back
               </Text>
             </Box>
@@ -478,8 +504,11 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
           )}
           {onAuthenticationRequired && (
             <Box>
-              <Text color={isReauthFocused ? "blue" : "gray"} bold={isReauthFocused}>
-                + Add more pages
+              <Text
+                color={isReauthFocused ? "blue" : "gray"}
+                bold={isReauthFocused}
+              >
+                Re-authorize Notion
               </Text>
             </Box>
           )}
@@ -505,21 +534,22 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
         </Box>
       ) : (
         <>
-          {showScrollIndicatorTop && (
-            <Text dimColor>  ↑ more above</Text>
-          )}
+          {showScrollIndicatorTop && <Text dimColor> ↑ more above</Text>}
 
           {displayItems.map((item, displayIndex) => {
             const actualIndex = visibleStartIndex + displayIndex;
-            const isSelected = focusedRegion === "list" && selectedIndex === actualIndex;
+            const isSelected =
+              focusedRegion === "list" && selectedIndex === actualIndex;
             const canGrade =
               onStartGrading &&
               contentType !== "database" &&
-              (item.type === "child_database" || item.type === "database_entry");
+              (item.type === "child_database" ||
+                item.type === "database_entry");
             const canSelectForCollaborator =
               onSelectForCollaborator &&
               contentType !== "database" &&
-              (item.type === "child_database" || item.type === "database_entry");
+              (item.type === "child_database" ||
+                item.type === "database_entry");
 
             return (
               <Box key={item.id}>
@@ -536,9 +566,7 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
             );
           })}
 
-          {showScrollIndicatorBottom && (
-            <Text dimColor>  ↓ more below</Text>
-          )}
+          {showScrollIndicatorBottom && <Text dimColor> ↓ more below</Text>}
         </>
       )}
 
@@ -561,8 +589,11 @@ export const NotionContentViewer: React.FC<NotionContentViewerProps> = ({
         )}
         {onAuthenticationRequired && (
           <Box>
-            <Text color={isReauthFocused ? "blue" : "gray"} bold={isReauthFocused}>
-              + Add more pages
+            <Text
+              color={isReauthFocused ? "blue" : "gray"}
+              bold={isReauthFocused}
+            >
+              Re-authorize Notion
             </Text>
           </Box>
         )}

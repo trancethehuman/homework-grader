@@ -76,6 +76,11 @@ import {
   GradingSaveOptions,
   SaveOption,
 } from "./components/grading-save-options.js";
+import { GitHubIssueTitleInput } from "./components/github-issue-title-input.js";
+import {
+  GitHubIssueCreationProgress,
+  IssueCreationResults,
+} from "./components/github-issue-creation-progress.js";
 import { GradingResult, saveBrowserTestResults } from "./lib/utils/file-saver.js";
 import { GradingDatabaseService } from "./lib/notion/grading-database-service.js";
 import { DeployedUrlSelector } from "./components/deployed-url-selector.js";
@@ -164,6 +169,9 @@ type Step =
   | "deployed-url-select"
   | "browser-testing"
   | "grading-save-options"
+  | "github-issue-title-input"
+  | "github-issue-creation"
+  | "github-issue-complete"
   | "notion-conflict-check"
   | "notion-saving"
   | "notion-save-complete"
@@ -297,6 +305,8 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
     failed: number;
     errors: string[];
   } | null>(null);
+  const [githubIssueTitle, setGithubIssueTitle] = useState("");
+  const [issueCreationResult, setIssueCreationResult] = useState<IssueCreationResults | null>(null);
   const [selectedNavOption, setSelectedNavOption] = useState(0);
   // Navigation stack to track Notion hierarchy for proper back navigation
   const [notionNavigationStack, setNotionNavigationStack] = useState<
@@ -1475,13 +1485,22 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         setSelectedNavOption(selectedNavOption + 1);
       } else if (key.return) {
         if (selectedNavOption === 0) {
-          // Back to Save Options
           navigateToStep("grading-save-options");
         } else if (selectedNavOption === 1) {
-          // Choose Different Database
           navigateToStep("notion-page-selector");
         } else if (selectedNavOption === 2) {
-          // Exit
+          navigateToStep("complete");
+        }
+      }
+    } else if (step === "github-issue-complete") {
+      if (key.upArrow && selectedNavOption > 0) {
+        setSelectedNavOption(selectedNavOption - 1);
+      } else if (key.downArrow && selectedNavOption < 1) {
+        setSelectedNavOption(selectedNavOption + 1);
+      } else if (key.return) {
+        if (selectedNavOption === 0) {
+          navigateToStep("grading-save-options");
+        } else if (selectedNavOption === 1) {
           navigateToStep("complete");
         }
       }
@@ -1530,8 +1549,9 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
   ) => {
     try {
       if (option === "file" || option === "skip") {
-        // Files are already saved, just complete
         navigateToStep("complete");
+      } else if (option === "github-issue") {
+        navigateToStep("github-issue-title-input");
       } else if (option === "original-database" || option === "new-database") {
         if (!databaseId) {
           setError("Database ID is required for Notion saving");
@@ -2828,6 +2848,71 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         onOptionSelected={handleSaveOptionSelected}
         onError={setError}
       />
+    );
+  }
+
+  if (step === "github-issue-title-input") {
+    const repoCount = gradingResults.filter((r) => r.githubUrl && !r.error).length;
+    return (
+      <GitHubIssueTitleInput
+        repoCount={repoCount}
+        onSubmit={(title) => {
+          setGithubIssueTitle(title);
+          navigateToStep("github-issue-creation");
+        }}
+        onBack={() => navigateToStep("grading-save-options")}
+      />
+    );
+  }
+
+  if (step === "github-issue-creation") {
+    return (
+      <GitHubIssueCreationProgress
+        gradingResults={gradingResults}
+        issueTitle={githubIssueTitle}
+        githubToken={githubToken || ""}
+        onComplete={(results) => {
+          setIssueCreationResult(results);
+          navigateToStep("github-issue-complete");
+        }}
+      />
+    );
+  }
+
+  if (step === "github-issue-complete") {
+    const created = issueCreationResult?.created.length || 0;
+    const skipped = issueCreationResult?.skipped.length || 0;
+    const failed = issueCreationResult?.failed.length || 0;
+
+    return (
+      <Box flexDirection="column" marginY={1}>
+        <Text color="green" bold>
+          GitHub Issues Created!
+        </Text>
+        <Text></Text>
+        <Text>
+          <Text color="green">{created} created</Text>
+          {skipped > 0 && <Text color="yellow">, {skipped} skipped (no access)</Text>}
+          {failed > 0 && <Text color="red">, {failed} failed</Text>}
+        </Text>
+        <Text></Text>
+        {issueCreationResult?.created.slice(0, 5).map((item) => (
+          <Text key={item.repoName} dimColor>
+            {item.repoName}: {item.issueUrl}
+          </Text>
+        ))}
+        {(issueCreationResult?.created.length || 0) > 5 && (
+          <Text dimColor>...and {(issueCreationResult?.created.length || 0) - 5} more</Text>
+        )}
+        <Text></Text>
+        <Text color={selectedNavOption === 0 ? "cyan" : "white"} bold={selectedNavOption === 0}>
+          Back to Save Options
+        </Text>
+        <Text color={selectedNavOption === 1 ? "cyan" : "white"} bold={selectedNavOption === 1}>
+          Exit
+        </Text>
+        <Text></Text>
+      </Box>
     );
   }
 

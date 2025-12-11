@@ -27,7 +27,7 @@ export class CodexService {
   async startGrading(
     prompt: string,
     eventHandler?: CodexEventHandler,
-    useStructuredOutput: boolean = true
+    useStructuredOutput: boolean = false
   ): Promise<CodexGradingResult> {
     try {
       this.thread = this.codex.startThread({

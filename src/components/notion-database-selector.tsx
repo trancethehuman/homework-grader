@@ -20,7 +20,9 @@ export const NotionDatabaseSelector: React.FC<NotionDatabaseSelectorProps> = ({
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [focusedButton, setFocusedButton] = useState<"list" | "back" | "reauth">("list");
+  const [focusedButton, setFocusedButton] = useState<
+    "list" | "back" | "reauth"
+  >("list");
 
   useEffect(() => {
     const loadDatabases = async () => {
@@ -45,7 +47,10 @@ export const NotionDatabaseSelector: React.FC<NotionDatabaseSelectorProps> = ({
         setError(null);
         setIsLoading(false);
       } catch (err: unknown) {
-        const errorMessage = err instanceof Error ? err.message : "Failed to load Notion databases";
+        const errorMessage =
+          err instanceof Error
+            ? err.message
+            : "Failed to load Notion databases";
         setError(errorMessage);
         setIsLoading(false);
       }
@@ -112,11 +117,7 @@ export const NotionDatabaseSelector: React.FC<NotionDatabaseSelectorProps> = ({
   }
 
   if (error) {
-    return (
-      <ErrorState
-        message={error}
-      />
-    );
+    return <ErrorState message={error} />;
   }
 
   if (databases.length === 0) {
@@ -144,7 +145,12 @@ export const NotionDatabaseSelector: React.FC<NotionDatabaseSelectorProps> = ({
       <Box flexDirection="column">
         {databases.slice(0, 10).map((db, index) => (
           <Box key={db.id}>
-            <Text color={isListFocused && index === selectedIndex ? "cyan" : "white"} bold={isListFocused && index === selectedIndex}>
+            <Text
+              color={
+                isListFocused && index === selectedIndex ? "cyan" : "white"
+              }
+              bold={isListFocused && index === selectedIndex}
+            >
               {db.title}
             </Text>
           </Box>
@@ -171,8 +177,11 @@ export const NotionDatabaseSelector: React.FC<NotionDatabaseSelectorProps> = ({
         )}
         {onAuthenticationRequired && (
           <Box>
-            <Text color={isReauthFocused ? "blue" : "gray"} bold={isReauthFocused}>
-              + Add more pages
+            <Text
+              color={isReauthFocused ? "blue" : "gray"}
+              bold={isReauthFocused}
+            >
+              Re-authorize Notion
             </Text>
           </Box>
         )}

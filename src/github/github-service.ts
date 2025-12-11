@@ -55,6 +55,13 @@ export interface AddCollaboratorResult {
   status?: "invited" | "already_collaborator";
 }
 
+export interface CreateIssueResult {
+  success: boolean;
+  issueNumber?: number;
+  issueUrl?: string;
+  error?: string;
+}
+
 export class GitHubService {
   private octokit: Octokit;
   private ignoredExtensions: Set<string>;
@@ -609,5 +616,79 @@ export class GitHubService {
     }
 
     return results;
+  }
+
+  async checkWriteAccess(owner: string, repo: string): Promise<boolean> {
+    try {
+      const response = await this.executeWithRateLimit(() =>
+        this.octokit.rest.repos.get({ owner, repo })
+      );
+      return response.data.permissions?.push || false;
+    } catch (error: any) {
+      if (error.status === 404 || error.status === 403) {
+        return false;
+      }
+      throw error;
+    }
+  }
+
+  async createIssue(
+    owner: string,
+    repo: string,
+    title: string,
+    body: string
+  ): Promise<CreateIssueResult> {
+    try {
+      await this.collaboratorRateLimiter.executeWithRetry(
+        async () => {
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+          return { data: null, status: 200, headers: {}, url: "" };
+        },
+        { maxRetries: 1 },
+        true
+      );
+
+      const response = await this.collaboratorRateLimiter.executeWithRetry(
+        () =>
+          this.octokit.rest.issues.create({
+            owner,
+            repo,
+            title,
+            body,
+          }),
+        { maxRetries: 5 },
+        true
+      );
+
+      return {
+        success: true,
+        issueNumber: response.data.number,
+        issueUrl: response.data.html_url,
+      };
+    } catch (error: any) {
+      let errorMessage = error.message || "Unknown error";
+
+      if (error.status === 404) {
+        errorMessage = "Repository not found or not accessible";
+      } else if (error.status === 403) {
+        if (
+          error.message?.toLowerCase().includes("rate limit") ||
+          error.message?.toLowerCase().includes("secondary")
+        ) {
+          errorMessage = "Rate limit exceeded - please try again later";
+        } else {
+          errorMessage = "Permission denied - you need write access to create issues";
+        }
+      } else if (error.status === 410) {
+        errorMessage = "Issues are disabled for this repository";
+      } else if (error.status === 422) {
+        errorMessage = "Validation failed - invalid title or body";
+      }
+
+      return {
+        success: false,
+        error: errorMessage,
+      };
+    }
   }
 }
