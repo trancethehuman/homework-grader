@@ -174,31 +174,31 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
 
   useEffect(() => {
     const loadNotionData = async () => {
-      try {
-        setIsLoading(true);
-        setLoadingPhase("warming-up");
+      const usingCache =
+        (cachedPages && cachedPages.length > 0) ||
+        (cachedDatabases && cachedDatabases.length > 0);
 
-        if (
-          (cachedPages && cachedPages.length > 0) ||
-          (cachedDatabases && cachedDatabases.length > 0)
-        ) {
+      try {
+        if (usingCache) {
           setPages(cachedPages || []);
           setDatabases(cachedDatabases || []);
           setError(null);
           setIsLoading(false);
-          return;
-        }
+        } else {
+          setIsLoading(true);
+          setLoadingPhase("warming-up");
 
-        try {
-          await fetch(`${DEFAULT_PROXY_URL}/health`, {
-            method: "GET",
-            signal: AbortSignal.timeout(5000),
-          });
-        } catch {
-          // Ignore warmup errors
-        }
+          try {
+            await fetch(`${DEFAULT_PROXY_URL}/health`, {
+              method: "GET",
+              signal: AbortSignal.timeout(5000),
+            });
+          } catch {
+            // Ignore warmup errors
+          }
 
-        setLoadingPhase("authenticating");
+          setLoadingPhase("authenticating");
+        }
 
         const oauth = new NotionOAuthClient();
 
@@ -225,24 +225,30 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
           }
         );
 
-        setLoadingPhase("fetching");
-
         const notionService = new NotionService(token.access_token);
         notionServiceRef.current = notionService;
 
-        const initialResult = await ApiTimeoutHandler.withTimeout(
-          () => notionService.getInitialItems(10),
-          { timeoutMs: 15000, retries: 1, operation: "Initial Notion Data" }
-        );
+        if (!usingCache) {
+          setLoadingPhase("fetching");
 
-        setPages(initialResult.pages);
-        setDatabases(initialResult.databases);
-        setNextCursor(initialResult.nextCursor);
-        setHasMoreItems(initialResult.hasMore);
-        setError(null);
+          const initialResult = await ApiTimeoutHandler.withTimeout(
+            () => notionService.getInitialItems(10),
+            { timeoutMs: 15000, retries: 1, operation: "Initial Notion Data" }
+          );
 
-        onDataLoaded?.(initialResult.pages, initialResult.databases);
+          setPages(initialResult.pages);
+          setDatabases(initialResult.databases);
+          setNextCursor(initialResult.nextCursor);
+          setHasMoreItems(initialResult.hasMore);
+          setError(null);
+
+          onDataLoaded?.(initialResult.pages, initialResult.databases);
+        }
       } catch (err) {
+        if (usingCache) {
+          return;
+        }
+
         let errorMessage = "Failed to load Notion data";
         let shouldRetriggerAuth = false;
 
@@ -290,12 +296,14 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
 
         onError(errorMessage);
       } finally {
-        setIsLoading(false);
+        if (!usingCache) {
+          setIsLoading(false);
+        }
       }
     };
 
     loadNotionData();
-  }, [onError, cachedPages, cachedDatabases, onDataLoaded]);
+  }, [onError, cachedPages, cachedDatabases, onDataLoaded, onAuthenticationRequired]);
 
   // Reset list selection when search changes or databases toggle
   useEffect(() => {

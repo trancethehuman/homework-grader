@@ -9,7 +9,7 @@ import {
   ParallelTestResults,
   ThreadItem,
 } from "../lib/codex/codex-types.js";
-import { getDefaultGradingPrompt } from "../consts/grading-prompts.js";
+import { GradingPrompt, getDefaultGradingPrompt } from "../consts/grading-prompts.js";
 import { NotionSavePrompt } from "./notion-save-prompt.js";
 import { NotionDatabaseSelector } from "./notion-database-selector.js";
 import { GradingDatabaseService } from "../lib/notion/grading-database-service.js";
@@ -18,7 +18,8 @@ import type { GradingResult } from "../lib/utils/file-saver.js";
 interface ParallelCodexBatchProps {
   urls: string[];
   instanceCount: number;
-  urlsWithPageIds?: Array<{ url: string; pageId: string }> | null; // For Notion workflows - match URLs to existing rows
+  urlsWithPageIds?: Array<{ url: string; pageId: string }> | null;
+  selectedPrompt?: GradingPrompt;
   onComplete?: (results: ParallelTestResults) => void;
   onBack?: () => void;
 }
@@ -81,6 +82,7 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
   urls,
   instanceCount,
   urlsWithPageIds,
+  selectedPrompt,
   onComplete,
   onBack,
 }) => {
@@ -112,6 +114,8 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
   const [cancellingRepos, setCancellingRepos] = useState<
     Map<string, "skip" | "stop">
   >(new Map());
+  const [selectedButton, setSelectedButton] = useState<"skip" | "stop" | null>(null);
+  const [footerFocused, setFooterFocused] = useState(false);
   const serviceRef = useRef<ParallelCodexService | null>(null);
   const [notionSaveStatus, setNotionSaveStatus] = useState<{
     saving: boolean;
@@ -132,82 +136,107 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
     return () => clearInterval(interval);
   }, []);
 
+  const isRowActive = (repo: RepoStatus) =>
+    !["completed", "error", "cancelling"].includes(repo.status);
+
+  const handleSkip = () => {
+    const selectedRepo = repoStatuses[selectedRowIndex];
+    if (selectedRepo && isRowActive(selectedRepo) && serviceRef.current) {
+      setRepoStatuses((prev) =>
+        prev.map((repo) =>
+          repo.owner === selectedRepo.owner && repo.repo === selectedRepo.repo
+            ? { ...repo, status: "cancelling", currentActivity: "Skipping..." }
+            : repo
+        )
+      );
+      setCancellingRepos((prev) =>
+        new Map(prev).set(`${selectedRepo.owner}/${selectedRepo.repo}`, "skip")
+      );
+      serviceRef.current.skipRepo(selectedRepo.owner, selectedRepo.repo);
+    }
+  };
+
+  const handleStop = () => {
+    const selectedRepo = repoStatuses[selectedRowIndex];
+    if (selectedRepo && isRowActive(selectedRepo) && serviceRef.current) {
+      setRepoStatuses((prev) =>
+        prev.map((repo) =>
+          repo.owner === selectedRepo.owner && repo.repo === selectedRepo.repo
+            ? { ...repo, status: "cancelling", currentActivity: "Stopping..." }
+            : repo
+        )
+      );
+      setCancellingRepos((prev) =>
+        new Map(prev).set(`${selectedRepo.owner}/${selectedRepo.repo}`, "stop")
+      );
+      serviceRef.current.stopRepo(selectedRepo.owner, selectedRepo.repo);
+    }
+  };
+
+  const handleStopAll = () => {
+    if (serviceRef.current) {
+      setIsAborting(true);
+      serviceRef.current.abort();
+    }
+  };
+
   useInput((input, key) => {
     if (phase !== "grading" || isAborting) {
       return;
     }
 
+    const selectedRepo = repoStatuses[selectedRowIndex];
+    const rowHasButtons = selectedRepo && isRowActive(selectedRepo);
+
     if (key.upArrow) {
-      setSelectedRowIndex((prev) => {
-        const newIndex = Math.max(0, prev - 1);
-        // Auto-scroll up if selection goes above viewport
-        if (newIndex < scrollOffset) {
-          setScrollOffset(newIndex);
-        }
-        return newIndex;
-      });
+      if (footerFocused) {
+        setFooterFocused(false);
+        setSelectedButton(null);
+      } else {
+        setSelectedRowIndex((prev) => {
+          const newIndex = Math.max(0, prev - 1);
+          if (newIndex < scrollOffset) {
+            setScrollOffset(newIndex);
+          }
+          return newIndex;
+        });
+        setSelectedButton(null);
+      }
     } else if (key.downArrow) {
-      setSelectedRowIndex((prev) => {
-        const newIndex = Math.min(repoStatuses.length - 1, prev + 1);
-        // Auto-scroll down if selection goes below viewport
-        if (newIndex >= scrollOffset + VIEWPORT_SIZE) {
-          setScrollOffset(newIndex - VIEWPORT_SIZE + 1);
-        }
-        return newIndex;
-      });
-    } else if (input === "s" && serviceRef.current) {
-      const selectedRepo = repoStatuses[selectedRowIndex];
-      if (
-        selectedRepo &&
-        !["completed", "error", "cancelling"].includes(selectedRepo.status)
-      ) {
-        setRepoStatuses((prev) =>
-          prev.map((repo) =>
-            repo.owner === selectedRepo.owner && repo.repo === selectedRepo.repo
-              ? {
-                  ...repo,
-                  status: "cancelling",
-                  currentActivity: " Skipping...",
-                }
-              : repo
-          )
-        );
-        setCancellingRepos((prev) =>
-          new Map(prev).set(
-            `${selectedRepo.owner}/${selectedRepo.repo}`,
-            "skip"
-          )
-        );
-        serviceRef.current.skipRepo(selectedRepo.owner, selectedRepo.repo);
+      if (!footerFocused && selectedRowIndex >= repoStatuses.length - 1) {
+        setFooterFocused(true);
+        setSelectedButton(null);
+      } else if (!footerFocused) {
+        setSelectedRowIndex((prev) => {
+          const newIndex = Math.min(repoStatuses.length - 1, prev + 1);
+          if (newIndex >= scrollOffset + VIEWPORT_SIZE) {
+            setScrollOffset(newIndex - VIEWPORT_SIZE + 1);
+          }
+          return newIndex;
+        });
+        setSelectedButton(null);
       }
-    } else if (input === "x" && serviceRef.current) {
-      const selectedRepo = repoStatuses[selectedRowIndex];
-      if (
-        selectedRepo &&
-        !["completed", "error", "cancelling"].includes(selectedRepo.status)
-      ) {
-        setRepoStatuses((prev) =>
-          prev.map((repo) =>
-            repo.owner === selectedRepo.owner && repo.repo === selectedRepo.repo
-              ? {
-                  ...repo,
-                  status: "cancelling",
-                  currentActivity: "🛑 Stopping...",
-                }
-              : repo
-          )
-        );
-        setCancellingRepos((prev) =>
-          new Map(prev).set(
-            `${selectedRepo.owner}/${selectedRepo.repo}`,
-            "stop"
-          )
-        );
-        serviceRef.current.stopRepo(selectedRepo.owner, selectedRepo.repo);
+    } else if (key.leftArrow) {
+      if (!footerFocused && rowHasButtons) {
+        setSelectedButton((prev) => (prev === "stop" ? "skip" : prev === "skip" ? null : null));
       }
-    } else if (input === "a" && serviceRef.current) {
-      setIsAborting(true);
-      serviceRef.current.abort();
+    } else if (key.rightArrow) {
+      if (!footerFocused && rowHasButtons) {
+        setSelectedButton((prev) => (prev === null ? "skip" : prev === "skip" ? "stop" : "stop"));
+      }
+    } else if (key.return) {
+      if (footerFocused) {
+        handleStopAll();
+      } else if (selectedButton === "skip") {
+        handleSkip();
+        setSelectedButton(null);
+      } else if (selectedButton === "stop") {
+        handleStop();
+        setSelectedButton(null);
+      }
+    } else if (key.escape) {
+      setSelectedButton(null);
+      setFooterFocused(false);
     }
   });
 
@@ -271,10 +300,10 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
           total: cloneResults.successful.length,
         });
 
-        const defaultPrompt = getDefaultGradingPrompt();
+        const promptToUse = selectedPrompt || getDefaultGradingPrompt();
 
         const batchResults = await service.runParallelGrading(
-          defaultPrompt.value,
+          promptToUse.value,
           (repoInfo) => {
             setRepoStatuses((prev) =>
               prev.map((repo) =>
@@ -574,6 +603,11 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
     return `${(ms / 1000).toFixed(1)}s`;
   };
 
+  const truncateText = (text: string, maxLength: number): string => {
+    if (text.length <= maxLength) return text;
+    return text.substring(0, maxLength - 1) + "…";
+  };
+
   // Calculate viewport bounds
   const visibleRepos = repoStatuses.slice(
     scrollOffset,
@@ -692,8 +726,9 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
                   <Text
                     color={getStatusColor(repo.status, repo.isTimeout)}
                     bold={isSelected}
+                    wrap="truncate"
                   >
-                    {repo.owner}/{repo.repo}
+                    {truncateText(`${repo.owner}/${repo.repo}`, 28)}
                   </Text>
                 </Box>
                 <Box width={12}>
@@ -712,54 +747,70 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
                   {repo.currentActivity &&
                     !repo.error &&
                     repo.status !== "completed" && (
-                      <Text dimColor>{repo.currentActivity}</Text>
+                      <Text dimColor wrap="truncate">
+                        {truncateText(repo.currentActivity, 30)}
+                      </Text>
                     )}
                   {repo.status === "cloned" && !repo.currentActivity && (
-                    <Text color="green" dimColor>
+                    <Text color="green" dimColor wrap="truncate">
                       Ready for grading
                     </Text>
                   )}
                   {repo.status === "error" && repo.error && (
-                    <Text color={repo.isTimeout ? "yellow" : "red"} dimColor>
+                    <Text
+                      color={repo.isTimeout ? "yellow" : "red"}
+                      dimColor
+                      wrap="truncate"
+                    >
                       {repo.isTimeout
                         ? " Timeout (10 min): "
                         : repo.failureType === "clone"
                         ? "Clone failed: "
                         : "Grading failed: "}
                       {isSelected
-                        ? repo.error
-                        : repo.error.length > 50
-                        ? `${repo.error.substring(0, 50)}...`
-                        : repo.error}
+                        ? truncateText(repo.error, 40)
+                        : truncateText(repo.error, 30)}
                     </Text>
                   )}
                 </Box>
+                {isSelected && isRowActive(repo) && (
+                  <Box marginLeft={1}>
+                    <Text
+                      color={selectedButton === "skip" ? "black" : "gray"}
+                      backgroundColor={selectedButton === "skip" ? "yellow" : undefined}
+                    >
+                      {" "}Skip{" "}
+                    </Text>
+                    <Text> </Text>
+                    <Text
+                      color={selectedButton === "stop" ? "black" : "gray"}
+                      backgroundColor={selectedButton === "stop" ? "red" : undefined}
+                    >
+                      {" "}Stop{" "}
+                    </Text>
+                  </Box>
+                )}
               </Box>
 
               {repo.streamingMessage && repo.status === "streaming" && (
                 <Box marginLeft={3}>
-                  <Text color="cyan" dimColor>
-                    💬{" "}
+                  <Text color="cyan" dimColor wrap="truncate">
                     {isSelected
-                      ? repo.streamingMessage
-                      : repo.streamingMessage.substring(0, 80)}
-                    {!isSelected && repo.streamingMessage.length > 80
-                      ? "..."
-                      : ""}
+                      ? truncateText(repo.streamingMessage, 70)
+                      : truncateText(repo.streamingMessage, 60)}
                   </Text>
                 </Box>
               )}
 
               {repo.status === "completed" && repo.feedback && (
                 <Box marginLeft={3} flexDirection="column">
-                  <Text dimColor>
+                  <Text dimColor wrap="truncate">
                     {isSelected
-                      ? repo.feedback
-                      : repo.feedback.substring(0, 100)}
-                    {!isSelected && repo.feedback.length > 100 ? "..." : ""}
+                      ? truncateText(repo.feedback, 70)
+                      : truncateText(repo.feedback, 60)}
                   </Text>
                   {repo.tokensUsed && (
-                    <Text dimColor>
+                    <Text dimColor wrap="truncate">
                       Tokens: {repo.tokensUsed.input.toLocaleString()} in,{" "}
                       {repo.tokensUsed.output.toLocaleString()} out
                     </Text>
@@ -911,7 +962,20 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
         )}
 
         <Text></Text>
-        <Text dimColor>Press Ctrl+C to exit</Text>
+        {phase === "grading" && !isAborting && (
+          <Box justifyContent="space-between">
+            <Text dimColor>↑/↓ navigate  →/← select button  Enter activate</Text>
+            <Text
+              color={footerFocused ? "black" : "gray"}
+              backgroundColor={footerFocused ? "red" : undefined}
+            >
+              {" "}Stop All{" "}
+            </Text>
+          </Box>
+        )}
+        {(phase !== "grading" || isAborting) && (
+          <Text dimColor>Press Ctrl+C to exit</Text>
+        )}
       </Box>
     </Box>
   );

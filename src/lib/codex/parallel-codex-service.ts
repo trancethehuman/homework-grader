@@ -112,7 +112,7 @@ export class ParallelCodexService {
     onRepoStart?: (repoInfo: { owner: string; repo: string }) => void,
     onRepoComplete?: (result: ParallelGradingResult) => void,
     onRepoEvent?: (repoInfo: { owner: string; repo: string }, event: RepoEventData) => void,
-    useStructuredOutput: boolean = true
+    useStructuredOutput: boolean = false
   ): Promise<ParallelTestResults> {
     const totalStartTime = Date.now();
 

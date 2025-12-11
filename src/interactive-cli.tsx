@@ -131,6 +131,7 @@ type Step =
   | "profile-select"
   | "grading-mode-select"
   | "parallel-instance-select"
+  | "batch-codex-prompt-select"
   | "parallel-codex-test"
   | "local-tool-select"
   | "local-repo-path-input"
@@ -231,6 +232,8 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
   const [selectedCodexPrompt, setSelectedCodexPrompt] = useState<GradingPrompt>(
     getDefaultGradingPrompt()
   );
+  const [selectedBatchCodexPrompt, setSelectedBatchCodexPrompt] =
+    useState<GradingPrompt>(getDefaultGradingPrompt());
   const [notionClient] = useState(new NotionMCPClient());
   const [notionOAuthClient] = useState(new NotionOAuthClient());
   const [notionDatabase, setNotionDatabase] = useState<NotionDatabase | null>(
@@ -1668,10 +1671,26 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         <ParallelInstanceSelector
           onSubmit={(count) => {
             setParallelInstanceCount(count);
-            navigateToStep("parallel-codex-test");
+            navigateToStep("batch-codex-prompt-select");
           }}
           onBack={() => {
             navigateToStep("grading-method-select");
+          }}
+        />
+      </Box>
+    );
+  }
+
+  if (step === "batch-codex-prompt-select") {
+    return (
+      <Box flexDirection="column">
+        <PromptSelector
+          onSelect={(prompt) => {
+            setSelectedBatchCodexPrompt(prompt);
+            navigateToStep("parallel-codex-test");
+          }}
+          onBack={() => {
+            navigateToStep("parallel-instance-select");
           }}
         />
       </Box>
@@ -1694,9 +1713,10 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           urls={urlsToProcess}
           instanceCount={parallelInstanceCount}
           urlsWithPageIds={urlsWithPageIds}
+          selectedPrompt={selectedBatchCodexPrompt}
           onComplete={(results) => {}}
           onBack={() => {
-            navigateToStep("parallel-instance-select");
+            navigateToStep("batch-codex-prompt-select");
           }}
         />
       </Box>

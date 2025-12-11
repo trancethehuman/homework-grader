@@ -1,4 +1,4 @@
-export const FEEDBACK_STRUCTURE = `**2. DEVELOPER_FEEDBACK (Max 1000 characters):**
+export const FEEDBACK_STRUCTURE = `**2. Developer Feedback (Max 1000 characters):**
 Write exactly 3 short paragraphs in a conversational, email-like tone. Be matter-of-fact but not formal:
 
 **Paragraph 1 - Good technical decisions (1 sentence max):**
