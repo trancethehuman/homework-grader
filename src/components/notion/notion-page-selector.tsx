@@ -580,7 +580,7 @@ export const NotionPageSelector: React.FC<NotionPageSelectorProps> = ({
         </Box>
       )}
 
-      {searchTerm && filteredItems.length === 0 && (
+      {searchTerm && filteredItems.length === 0 && !isSearching && !isUrlFetching && (
         <Box marginBottom={1}>
           <Text color="yellow">No results found for "{searchTerm}"</Text>
         </Box>
