@@ -10,7 +10,9 @@ import {
   ThreadItem,
 } from "../lib/codex/codex-types.js";
 import { GradingPrompt, getDefaultGradingPrompt } from "../consts/grading-prompts.js";
-import { NotionSavePrompt } from "./notion-save-prompt.js";
+import { GradingSaveOptions, SaveOption } from "./grading-save-options.js";
+import { GitHubIssueTitleInput } from "./github-issue-title-input.js";
+import { GitHubIssueCreationProgress, IssueCreationResults } from "./github-issue-creation-progress.js";
 import { NotionDatabaseSelector } from "./notion-database-selector.js";
 import { GradingDatabaseService } from "../lib/notion/grading-database-service.js";
 import type { GradingResult } from "../lib/utils/file-saver.js";
@@ -20,6 +22,7 @@ interface ParallelCodexBatchProps {
   instanceCount: number;
   urlsWithPageIds?: Array<{ url: string; pageId: string }> | null;
   selectedPrompt?: GradingPrompt;
+  githubToken?: string;
   onComplete?: (results: ParallelTestResults) => void;
   onBack?: () => void;
 }
@@ -28,7 +31,10 @@ type Phase =
   | "cloning"
   | "grading"
   | "completed"
-  | "notion-prompt"
+  | "save-options"
+  | "github-issue-title-input"
+  | "github-issue-creation"
+  | "github-issue-complete"
   | "notion-db-select"
   | "notion-saving";
 
@@ -83,6 +89,7 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
   instanceCount,
   urlsWithPageIds,
   selectedPrompt,
+  githubToken,
   onComplete,
   onBack,
 }) => {
@@ -123,6 +130,9 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
     failed: number;
     errors: string[];
   }>({ saving: false, success: 0, failed: 0, errors: [] });
+  const [githubIssueTitle, setGithubIssueTitle] = useState("");
+  const [issueCreationResult, setIssueCreationResult] = useState<IssueCreationResults | null>(null);
+  const [gradingResultsForSave, setGradingResultsForSave] = useState<GradingResult[]>([]);
 
   const VIEWPORT_SIZE = 7;
 
@@ -418,9 +428,44 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
 
         setResults(batchResults);
 
-        // Show Notion save prompt if there are successful gradings
+        // Show save options if there are successful gradings
         if (batchResults.successCount > 0) {
-          setPhase("notion-prompt");
+          // Create URL-to-pageId lookup map for grading results
+          const urlToPageId = new Map<string, string>();
+          if (urlsWithPageIds) {
+            for (const item of urlsWithPageIds) {
+              const normalizedUrl = item.url
+                .replace(/\.git$/, "")
+                .replace(/\/$/, "");
+              urlToPageId.set(normalizedUrl, item.pageId);
+            }
+          }
+
+          // Convert Codex results to GradingResult format for save options
+          const computedGradingResults: GradingResult[] = batchResults.results
+            .filter((r) => r.success && r.structuredData)
+            .map((r) => {
+              const gradingData = {
+                repo_explained: r.structuredData!.repo_explained,
+                developer_feedback: r.structuredData!.developer_feedback,
+              };
+
+              const normalizedRepoUrl = r.repoInfo.url
+                .replace(/\.git$/, "")
+                .replace(/\/$/, "");
+              const pageId = urlToPageId.get(normalizedRepoUrl);
+
+              return {
+                repositoryName: `${r.repoInfo.owner}/${r.repoInfo.repo}`,
+                githubUrl: r.repoInfo.url,
+                gradingData,
+                usage: r.tokensUsed,
+                pageId,
+              };
+            });
+
+          setGradingResultsForSave(computedGradingResults);
+          setPhase("save-options");
         } else {
           setPhase("completed");
           if (onComplete) {
@@ -449,14 +494,18 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
     runBatch();
   }, [urls, instanceCount]);
 
-  // Handle Notion save decision
-  const handleNotionSaveDecision = (saveToNotion: boolean) => {
-    if (saveToNotion) {
-      setPhase("notion-db-select");
-    } else {
+  // Handle save option selection
+  const handleSaveOptionSelected = (option: SaveOption, databaseId?: string) => {
+    if (option === "file" || option === "skip") {
       setPhase("completed");
       if (onComplete && results) {
         onComplete(results);
+      }
+    } else if (option === "github-issue") {
+      setPhase("github-issue-title-input");
+    } else if (option === "original-database" || option === "new-database") {
+      if (databaseId) {
+        setPhase("notion-db-select");
       }
     }
   };
@@ -466,48 +515,12 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
     databaseId: string,
     databaseTitle: string
   ) => {
-    if (!results) return;
+    if (!results || gradingResultsForSave.length === 0) return;
 
     setPhase("notion-saving");
 
     try {
-      // Create URL-to-pageId lookup map
-      const urlToPageId = new Map<string, string>();
-      if (urlsWithPageIds) {
-        for (const item of urlsWithPageIds) {
-          // Normalize URLs for matching (remove trailing slashes, .git suffix)
-          const normalizedUrl = item.url
-            .replace(/\.git$/, "")
-            .replace(/\/$/, "");
-          urlToPageId.set(normalizedUrl, item.pageId);
-        }
-      }
-
-      // Convert Codex results to GradingResult format
-      const gradingResults: GradingResult[] = results.results
-        .filter((r) => r.success && r.structuredData)
-        .map((r) => {
-          const gradingData = {
-            repo_explained: r.structuredData!.repo_explained,
-            developer_feedback: r.structuredData!.developer_feedback,
-          };
-
-          // Match this repository's URL to a Notion page ID
-          const normalizedRepoUrl = r.repoInfo.url
-            .replace(/\.git$/, "")
-            .replace(/\/$/, "");
-          const pageId = urlToPageId.get(normalizedRepoUrl);
-
-          return {
-            repositoryName: `${r.repoInfo.owner}/${r.repoInfo.repo}`,
-            githubUrl: r.repoInfo.url,
-            gradingData,
-            usage: r.tokensUsed,
-            pageId, // Set pageId if found, undefined otherwise
-          };
-        });
-
-      // Save to Notion
+      // Save to Notion using pre-computed grading results
       const gradingService = new GradingDatabaseService();
 
       // Ensure database has required columns
@@ -518,7 +531,7 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
       // Save results
       const saveResult = await gradingService.saveGradingResults(
         databaseId,
-        gradingResults,
+        gradingResultsForSave,
         "GitHub URL",
         undefined,
         "code"
@@ -616,13 +629,76 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
   const hasMoreAbove = scrollOffset > 0;
   const hasMoreBelow = scrollOffset + VIEWPORT_SIZE < repoStatuses.length;
 
-  // Render Notion save prompt
-  if (phase === "notion-prompt" && results) {
+  // Render save options
+  if (phase === "save-options" && results) {
     return (
-      <NotionSavePrompt
-        successCount={results.successCount}
-        onDecision={handleNotionSaveDecision}
+      <GradingSaveOptions
+        gradingResults={gradingResultsForSave}
+        onOptionSelected={handleSaveOptionSelected}
+        onError={(error) => console.error("Save error:", error)}
       />
+    );
+  }
+
+  // Render GitHub issue title input
+  if (phase === "github-issue-title-input") {
+    const repoCount = gradingResultsForSave.filter((r) => r.githubUrl && !r.error).length;
+    return (
+      <GitHubIssueTitleInput
+        repoCount={repoCount}
+        onSubmit={(title) => {
+          setGithubIssueTitle(title);
+          setPhase("github-issue-creation");
+        }}
+        onBack={() => setPhase("save-options")}
+      />
+    );
+  }
+
+  // Render GitHub issue creation progress
+  if (phase === "github-issue-creation") {
+    return (
+      <GitHubIssueCreationProgress
+        gradingResults={gradingResultsForSave}
+        issueTitle={githubIssueTitle}
+        githubToken={githubToken || ""}
+        onComplete={(creationResults) => {
+          setIssueCreationResult(creationResults);
+          setPhase("github-issue-complete");
+        }}
+      />
+    );
+  }
+
+  // Render GitHub issue completion
+  if (phase === "github-issue-complete") {
+    const created = issueCreationResult?.created.length || 0;
+    const skipped = issueCreationResult?.skipped.length || 0;
+    const failed = issueCreationResult?.failed.length || 0;
+
+    return (
+      <Box flexDirection="column" marginY={1}>
+        <Text color="green" bold>
+          GitHub Issues Created!
+        </Text>
+        <Text></Text>
+        <Text>
+          <Text color="green">{created} created</Text>
+          {skipped > 0 && <Text color="yellow">, {skipped} skipped (no access)</Text>}
+          {failed > 0 && <Text color="red">, {failed} failed</Text>}
+        </Text>
+        <Text></Text>
+        {issueCreationResult?.created.slice(0, 5).map((item) => (
+          <Text key={item.repoName} dimColor>
+            {item.repoName}: {item.issueUrl}
+          </Text>
+        ))}
+        {(issueCreationResult?.created.length || 0) > 5 && (
+          <Text dimColor>...and {(issueCreationResult?.created.length || 0) - 5} more</Text>
+        )}
+        <Text></Text>
+        <Text dimColor>Press Ctrl+C to exit, or go back to save options</Text>
+      </Box>
     );
   }
 
@@ -631,7 +707,7 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
     return (
       <NotionDatabaseSelector
         onSelect={handleDatabaseSelected}
-        onBack={() => setPhase("notion-prompt")}
+        onBack={() => setPhase("save-options")}
       />
     );
   }

@@ -404,14 +404,15 @@ export function useFocusNavigation(
       }
 
       if (currentRegion.type !== "input") {
-        if (input && input.length === 1 && !key.ctrl && !key.meta && !key.escape) {
+        if (input && input.length >= 1 && !key.ctrl && !key.meta && !key.escape) {
           const inputRegion = currentRegions.find(
             (r) => r.type === "input" && r.enabled !== false
           ) as InputRegionConfig | undefined;
 
           if (inputRegion) {
             const reservedKeys = inputRegion.reservedKeys ?? [];
-            if (!reservedKeys.includes(input.toLowerCase())) {
+            const firstChar = input.charAt(0).toLowerCase();
+            if (!reservedKeys.includes(firstChar)) {
               focusRegion(inputRegion.id);
               inputAppendChar(inputRegion.id, input);
               return;

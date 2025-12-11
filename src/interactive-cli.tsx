@@ -1714,6 +1714,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
           instanceCount={parallelInstanceCount}
           urlsWithPageIds={urlsWithPageIds}
           selectedPrompt={selectedBatchCodexPrompt}
+          githubToken={githubToken}
           onComplete={(results) => {}}
           onBack={() => {
             navigateToStep("batch-codex-prompt-select");
