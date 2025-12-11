@@ -1,6 +1,6 @@
-import React, { useState } from "react";
-import { Text, Box, useInput } from "ink";
+import React from "react";
 import { MenuSelector, MenuOption } from "./ui/MenuSelector.js";
+import { HelpFooter, createHelpHints } from "./ui/HelpFooter.js";
 
 export type DataSource = "csv" | "notion" | "manual";
 
@@ -27,58 +27,18 @@ const options: MenuOption<DataSource>[] = [
   },
 ];
 
-interface BackFooterProps {
-  isFocused: boolean;
-}
-
-const BackFooter: React.FC<BackFooterProps> = ({ isFocused }) => {
-  return (
-    <Box>
-      <Text color={isFocused ? "blue" : "gray"} bold={isFocused}>
-        back
-      </Text>
-    </Box>
-  );
-};
-
 export const DataSourceSelector: React.FC<DataSourceSelectorProps> = ({
   onSelect,
   onBack,
 }) => {
-  const [isFooterFocused, setIsFooterFocused] = useState(false);
-
-  useInput((_input, key) => {
-    if (isFooterFocused) {
-      if (key.upArrow) {
-        setIsFooterFocused(false);
-      } else if (key.return && onBack) {
-        onBack();
-      }
-    }
-  });
-
-  const handleSelect = (source: DataSource) => {
-    if (!isFooterFocused) {
-      onSelect(source);
-    }
-  };
-
-  const handleNavigateEnd = () => {
-    if (onBack) {
-      setIsFooterFocused(true);
-    }
-  };
-
   return (
     <MenuSelector
       title="Select Data Source"
       subtitle="Choose where to load GitHub URLs from:"
       options={options}
-      onSelect={handleSelect}
+      onSelect={onSelect}
       onBack={onBack}
-      footer={onBack ? <BackFooter isFocused={isFooterFocused} /> : undefined}
-      onNavigateEnd={handleNavigateEnd}
-      disableHighlight={isFooterFocused}
+      footer={<HelpFooter hints={onBack ? createHelpHints("navigate", "select", "backEsc") : createHelpHints("navigate", "select")} />}
     />
   );
 };

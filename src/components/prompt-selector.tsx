@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Text, Box, useInput } from "ink";
 import { GradingPrompt, getGradingPrompts } from "../consts/grading-prompts.js";
+import { HelpFooter } from "./ui/HelpFooter.js";
 
 interface PromptSelectorProps {
   onSelect: (prompt: GradingPrompt) => void;
@@ -200,7 +201,11 @@ export const PromptSelector: React.FC<PromptSelectorProps> = ({
         </Box>
       </Box>
       <Text></Text>
-      <Text dimColor>p to preview | Enter to select | Esc to go back</Text>
+      <HelpFooter hints={[
+        { keys: "p", action: "preview" },
+        { keys: "Enter", action: "select" },
+        { keys: "Esc", action: "back" },
+      ]} />
     </Box>
   );
 };

@@ -1,5 +1,6 @@
 import React from "react";
 import { MenuSelector, MenuOption } from "./ui/MenuSelector.js";
+import { HelpFooter, createHelpHints } from "./ui/HelpFooter.js";
 
 export type GradingMethod = "codex-local" | "claude-agent" | "sandbox-llm";
 
@@ -37,6 +38,7 @@ export const GradingMethodSelector: React.FC<GradingMethodSelectorProps> = ({
       options={options}
       onSelect={onSelect}
       onBack={onBack}
+      footer={<HelpFooter hints={createHelpHints("navigate", "select", "backEsc")} />}
     />
   );
 };

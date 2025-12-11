@@ -117,6 +117,7 @@ import { GitHubAuthInput } from "./components/github-auth-input.js";
 import type { CollaboratorDataSource } from "./components/collaborator/collaborator-data-source-selector.js";
 import { RateLimitCountdown } from "./components/ui/RateLimitCountdown.js";
 import { GitHubIssueRateLimitCheck } from "./components/github-issue-rate-limit-check.js";
+import { HelpFooter } from "./components/ui/HelpFooter.js";
 
 export type { CSVColumn, CSVAnalysis } from "./lib/utils/csv-utils.js";
 
@@ -176,6 +177,7 @@ type Step =
   | "deployed-url-select"
   | "browser-testing"
   | "grading-save-options"
+  | "github-issue-auth"
   | "github-issue-title-input"
   | "github-issue-rate-limit-check"
   | "github-issue-rate-limit-wait"
@@ -1507,15 +1509,31 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         }
       }
     } else if (step === "github-issue-complete") {
+      const hasAuthFailures = issueCreationResult?.failed.some(
+        (f) => f.error?.toLowerCase().includes("authentication") || f.error?.toLowerCase().includes("401")
+      );
+      const maxOption = hasAuthFailures ? 2 : 1;
+
       if (key.upArrow && selectedNavOption > 0) {
         setSelectedNavOption(selectedNavOption - 1);
-      } else if (key.downArrow && selectedNavOption < 1) {
+      } else if (key.downArrow && selectedNavOption < maxOption) {
         setSelectedNavOption(selectedNavOption + 1);
       } else if (key.return) {
-        if (selectedNavOption === 0) {
-          navigateToStep("grading-save-options");
-        } else if (selectedNavOption === 1) {
-          navigateToStep("complete");
+        if (hasAuthFailures) {
+          if (selectedNavOption === 0) {
+            setSelectedNavOption(0);
+            navigateToStep("github-issue-auth");
+          } else if (selectedNavOption === 1) {
+            navigateToStep("grading-save-options");
+          } else if (selectedNavOption === 2) {
+            navigateToStep("complete");
+          }
+        } else {
+          if (selectedNavOption === 0) {
+            navigateToStep("grading-save-options");
+          } else if (selectedNavOption === 1) {
+            navigateToStep("complete");
+          }
         }
       }
     } else if (step === "collaborator-csv-input") {
@@ -1565,7 +1583,17 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
       if (option === "file" || option === "skip") {
         navigateToStep("complete");
       } else if (option === "github-issue") {
-        navigateToStep("github-issue-title-input");
+        if (!githubToken) {
+          navigateToStep("github-issue-auth");
+        } else {
+          const githubService = new GitHubService(githubToken);
+          const validation = await githubService.validateToken();
+          if (validation.valid) {
+            navigateToStep("github-issue-title-input");
+          } else {
+            navigateToStep("github-issue-auth");
+          }
+        }
       } else if (option === "original-database" || option === "new-database") {
         if (!databaseId) {
           setError("Database ID is required for Notion saving");
@@ -2911,6 +2939,23 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
     );
   }
 
+  if (step === "github-issue-auth") {
+    return (
+      <Box flexDirection="column">
+        <GitHubAuthInput
+          title="GitHub Authentication Required"
+          description="To create GitHub Issues with your grading feedback, you need to authenticate with GitHub."
+          existingToken={githubToken}
+          onAuthenticated={(token) => {
+            setGithubToken(token);
+            navigateToStep("github-issue-title-input");
+          }}
+          onBack={() => navigateToStep("grading-save-options")}
+        />
+      </Box>
+    );
+  }
+
   if (step === "github-issue-title-input") {
     const repoCount = gradingResults.filter((r) => r.githubUrl && !r.error).length;
     return (
@@ -2979,16 +3024,19 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
     const created = issueCreationResult?.created.length || 0;
     const skipped = issueCreationResult?.skipped.length || 0;
     const failed = issueCreationResult?.failed.length || 0;
+    const hasAuthFailures = issueCreationResult?.failed.some(
+      (f) => f.error?.toLowerCase().includes("authentication") || f.error?.toLowerCase().includes("401")
+    );
 
     return (
       <Box flexDirection="column" marginY={1}>
-        <Text color="green" bold>
-          GitHub Issues Created!
+        <Text color={created > 0 ? "green" : "yellow"} bold>
+          GitHub Issues {created > 0 ? "Created" : "Failed"}
         </Text>
         <Text></Text>
         <Text>
           <Text color="green">{created} created</Text>
-          {skipped > 0 && <Text color="yellow">, {skipped} skipped (no access)</Text>}
+          {skipped > 0 && <Text color="yellow">, {skipped} skipped</Text>}
           {failed > 0 && <Text color="red">, {failed} failed</Text>}
         </Text>
         <Text></Text>
@@ -3000,14 +3048,33 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         {(issueCreationResult?.created.length || 0) > 5 && (
           <Text dimColor>...and {(issueCreationResult?.created.length || 0) - 5} more</Text>
         )}
+        {failed > 0 && (
+          <Box flexDirection="column" marginTop={1}>
+            <Text color="red">Failed:</Text>
+            {issueCreationResult?.failed.slice(0, 3).map((item) => (
+              <Text key={item.repoName} dimColor color="red">
+                {"  "}{item.repoName}: {item.error}
+              </Text>
+            ))}
+            {(issueCreationResult?.failed.length || 0) > 3 && (
+              <Text dimColor color="red">{"  "}...and {(issueCreationResult?.failed.length || 0) - 3} more</Text>
+            )}
+          </Box>
+        )}
         <Text></Text>
-        <Text color={selectedNavOption === 0 ? "cyan" : "white"} bold={selectedNavOption === 0}>
+        {hasAuthFailures && (
+          <Text color={selectedNavOption === 0 ? "cyan" : "white"} bold={selectedNavOption === 0}>
+            Re-authenticate and retry
+          </Text>
+        )}
+        <Text color={selectedNavOption === (hasAuthFailures ? 1 : 0) ? "cyan" : "white"} bold={selectedNavOption === (hasAuthFailures ? 1 : 0)}>
           Back to Save Options
         </Text>
-        <Text color={selectedNavOption === 1 ? "cyan" : "white"} bold={selectedNavOption === 1}>
+        <Text color={selectedNavOption === (hasAuthFailures ? 2 : 1) ? "cyan" : "white"} bold={selectedNavOption === (hasAuthFailures ? 2 : 1)}>
           Exit
         </Text>
         <Text></Text>
+        <HelpFooter hints={[{ keys: "↑/↓", action: "navigate" }, { keys: "Enter", action: "select" }]} />
       </Box>
     );
   }

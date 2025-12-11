@@ -1,5 +1,6 @@
 import React from "react";
 import { MenuSelector, MenuOption } from "./ui/MenuSelector.js";
+import { HelpFooter, createHelpHints } from "./ui/HelpFooter.js";
 import { getModelsForAgent, type AgentType, type AgentModelInfo } from "../lib/agents/index.js";
 
 interface AgentModelSelectorProps {
@@ -30,6 +31,7 @@ export const AgentModelSelector: React.FC<AgentModelSelectorProps> = ({
       options={options}
       onSelect={onSelect}
       onBack={onBack}
+      footer={<HelpFooter hints={createHelpHints("navigate", "select", "backEsc")} />}
     />
   );
 };

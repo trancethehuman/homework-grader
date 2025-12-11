@@ -1,6 +1,7 @@
 import React from "react";
 import { Text, Box } from "ink";
 import { useTextInput } from "../hooks/useTextInput.js";
+import { HelpFooter, createHelpHints } from "./ui/HelpFooter.js";
 
 interface ParallelInstanceSelectorProps {
   onSubmit: (count: number) => void;
@@ -69,6 +70,8 @@ export const ParallelInstanceSelector: React.FC<ParallelInstanceSelectorProps> =
       <Text dimColor>Tip: 1-4 instances recommended for most machines</Text>
       <Text dimColor>     Higher counts may cause significant CPU/memory usage</Text>
       <Text dimColor>     No upper limit - choose based on your machine's capabilities</Text>
+      <Text></Text>
+      <HelpFooter hints={createHelpHints("select", "backEsc")} />
     </Box>
   );
 };

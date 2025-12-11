@@ -5,6 +5,7 @@ This file provides guidance to Claude Code when working with code in this reposi
 ## Project Overview
 
 CLI Agents Fleet - a platform for running AI agents at scale. See domain-specific docs:
+- **GitHub**: `/src/lib/github/CLAUDE.md`
 - **Notion**: `/src/lib/notion/CLAUDE.md`
 - **Codex**: `/src/lib/codex/CLAUDE.md`
 

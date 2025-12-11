@@ -91,29 +91,81 @@ const getActivityMessage = (item: ThreadItem): string => {
   }
 };
 
-const getToolStartMessage = (toolName: string): string => {
+const extractToolDetail = (toolName: string, toolInput: unknown): string => {
+  if (!toolInput || typeof toolInput !== "object") {
+    return "";
+  }
+  const input = toolInput as Record<string, unknown>;
+
+  switch (toolName) {
+    case "Read": {
+      const filePath = input.file_path as string | undefined;
+      if (filePath) {
+        const parts = filePath.split("/");
+        return parts.slice(-2).join("/");
+      }
+      return "";
+    }
+    case "Bash": {
+      const command = input.command as string | undefined;
+      if (command) {
+        const firstLine = command.split("\n")[0];
+        return firstLine.length > 40 ? firstLine.slice(0, 37) + "..." : firstLine;
+      }
+      return "";
+    }
+    case "Grep": {
+      const pattern = input.pattern as string | undefined;
+      return pattern ? `"${pattern}"` : "";
+    }
+    case "Glob": {
+      const pattern = input.pattern as string | undefined;
+      return pattern || "";
+    }
+    case "Edit":
+    case "Write": {
+      const filePath = input.file_path as string | undefined;
+      if (filePath) {
+        const parts = filePath.split("/");
+        return parts.slice(-2).join("/");
+      }
+      return "";
+    }
+    case "Task": {
+      const description = input.description as string | undefined;
+      return description || "";
+    }
+    default:
+      return "";
+  }
+};
+
+const getToolStartMessage = (toolName: string, toolInput?: unknown): string => {
+  const detail = extractToolDetail(toolName, toolInput);
+  const detailSuffix = detail ? ` ${detail}` : "";
+
   switch (toolName) {
     case "Read":
-      return "Reading files...";
+      return `Read${detailSuffix}`;
     case "Bash":
-      return "Running command...";
+      return `Run${detailSuffix}`;
     case "Grep":
-      return "Searching code...";
+      return `Search${detailSuffix}`;
     case "Glob":
-      return "Finding files...";
+      return `Find${detailSuffix}`;
     case "Edit":
     case "Write":
-      return "Modifying files...";
+      return `Edit${detailSuffix}`;
     case "Task":
-      return "Running subtask...";
+      return `Task${detailSuffix}`;
     case "WebFetch":
-      return "Fetching web content...";
+      return "Fetching web...";
     case "WebSearch":
-      return "Searching web...";
+      return "Web search...";
     case "TodoWrite":
       return "Updating tasks...";
     default:
-      return `Using ${toolName}...`;
+      return `${toolName}...`;
   }
 };
 
@@ -440,7 +492,7 @@ export const ParallelGradingBatch: React.FC<ParallelGradingBatchProps> = ({
                     case "tool_start": {
                       const toolData = event.data as { toolName: string; toolInput: unknown } | undefined;
                       if (toolData) {
-                        const activityMessage = getToolStartMessage(toolData.toolName);
+                        const activityMessage = getToolStartMessage(toolData.toolName, toolData.toolInput);
                         return {
                           ...repo,
                           status: "analyzing",
@@ -946,6 +998,12 @@ export const ParallelGradingBatch: React.FC<ParallelGradingBatchProps> = ({
                         : truncateText(repo.error, 30)}
                     </Text>
                   )}
+                  {repo.status === "completed" && repo.feedback && !isSelected && (
+                    <Text color="green" dimColor>[feedback]</Text>
+                  )}
+                  {repo.streamingMessage && repo.status === "streaming" && !isSelected && (
+                    <Text color="cyan" dimColor>[...]</Text>
+                  )}
                 </Box>
                 {isSelected && isRowActive(repo) && (
                   <Box marginLeft={1}>
@@ -959,22 +1017,18 @@ export const ParallelGradingBatch: React.FC<ParallelGradingBatchProps> = ({
                 )}
               </Box>
 
-              {repo.streamingMessage && repo.status === "streaming" && (
+              {isSelected && repo.streamingMessage && repo.status === "streaming" && (
                 <Box marginLeft={3}>
                   <Text color="cyan" dimColor wrap="truncate">
-                    {isSelected
-                      ? truncateText(repo.streamingMessage, 70)
-                      : truncateText(repo.streamingMessage, 60)}
+                    {truncateText(repo.streamingMessage, 70)}
                   </Text>
                 </Box>
               )}
 
-              {repo.status === "completed" && repo.feedback && (
+              {isSelected && repo.status === "completed" && repo.feedback && (
                 <Box marginLeft={3} flexDirection="column">
                   <Text dimColor wrap="truncate">
-                    {isSelected
-                      ? truncateText(repo.feedback, 70)
-                      : truncateText(repo.feedback, 60)}
+                    {truncateText(repo.feedback, 70)}
                   </Text>
                   {repo.tokensUsed && (
                     <Text dimColor wrap="truncate">

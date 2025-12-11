@@ -12,7 +12,7 @@ export interface IssueCreationResults {
   failed: Array<{ repoName: string; error: string }>;
 }
 
-type RepoStatus = "pending" | "checking" | "creating" | "created" | "skipped" | "failed";
+type RepoStatus = "pending" | "creating" | "created" | "failed";
 
 interface RepoProgress {
   repoName: string;
@@ -67,7 +67,7 @@ export const GitHubIssueCreationProgress: React.FC<GitHubIssueCreationProgressPr
   const viewportSize = 10;
 
   const completedCount = repoProgress.filter(
-    (r) => r.status === "created" || r.status === "skipped" || r.status === "failed"
+    (r) => r.status === "created" || r.status === "failed"
   ).length;
 
   const visibleStartIndex = scrollOffset;
@@ -99,25 +99,6 @@ export const GitHubIssueCreationProgress: React.FC<GitHubIssueCreationProgressPr
             return updated;
           });
           results.failed.push({ repoName: result.repositoryName, error: "Invalid GitHub URL" });
-          continue;
-        }
-
-        setRepoProgress((prev) => {
-          const updated = [...prev];
-          updated[i] = { ...updated[i], status: "checking" };
-          return updated;
-        });
-
-        const hasAccess = await service.checkWriteAccess(repoInfo.owner, repoInfo.repo);
-
-        if (!hasAccess) {
-          setRepoProgress((prev) => {
-            const updated = [...prev];
-            updated[i] = { ...updated[i], status: "skipped", error: "No write access" };
-            return updated;
-          });
-          results.skipped.push({ repoName: result.repositoryName, reason: "No write access" });
-          setCurrentIndex(i + 1);
           continue;
         }
 
@@ -167,7 +148,7 @@ export const GitHubIssueCreationProgress: React.FC<GitHubIssueCreationProgressPr
       setRepoProgress((prev) => {
         const updated = [...prev];
         if (updated.length > 0) {
-          updated[0].status = "checking";
+          updated[0].status = "creating";
         }
         return updated;
       });
@@ -202,13 +183,10 @@ export const GitHubIssueCreationProgress: React.FC<GitHubIssueCreationProgressPr
     switch (status) {
       case "pending":
         return "○";
-      case "checking":
       case "creating":
         return "◐";
       case "created":
         return "✓";
-      case "skipped":
-        return "⊘";
       case "failed":
         return "✗";
       default:
@@ -220,13 +198,10 @@ export const GitHubIssueCreationProgress: React.FC<GitHubIssueCreationProgressPr
     switch (status) {
       case "pending":
         return "gray";
-      case "checking":
       case "creating":
         return "cyan";
       case "created":
         return "green";
-      case "skipped":
-        return "yellow";
       case "failed":
         return "red";
       default:
@@ -238,7 +213,6 @@ export const GitHubIssueCreationProgress: React.FC<GitHubIssueCreationProgressPr
   const showScrollIndicatorBottom = visibleEndIndex < repoProgress.length;
 
   const createdCount = repoProgress.filter((r) => r.status === "created").length;
-  const skippedCount = repoProgress.filter((r) => r.status === "skipped").length;
   const failedCount = repoProgress.filter((r) => r.status === "failed").length;
 
   return (
@@ -265,7 +239,6 @@ export const GitHubIssueCreationProgress: React.FC<GitHubIssueCreationProgressPr
             <Text color="green">Complete!</Text>
             <Text>
               <Text color="green">{createdCount} created</Text>
-              {skippedCount > 0 && <Text color="yellow">, {skippedCount} skipped</Text>}
               {failedCount > 0 && <Text color="red">, {failedCount} failed</Text>}
             </Text>
           </Box>
@@ -284,19 +257,19 @@ export const GitHubIssueCreationProgress: React.FC<GitHubIssueCreationProgressPr
               <Text color={isSelected ? "blue" : getStatusColor(repo.status)} bold={isSelected}>
                 {getStatusIcon(repo.status)} {repo.repoName}
               </Text>
-              {(repo.status === "checking" || repo.status === "creating") && (
+              {repo.status === "creating" && (
                 <Text color="cyan">
                   {" "}
                   <Spinner type="dots" />
-                  {repo.status === "checking" ? " checking access" : " creating issue"}
+                  {" creating issue"}
                 </Text>
               )}
             </Box>
             {isSelected && repo.status === "created" && repo.issueUrl && (
               <Text dimColor>   {repo.issueUrl}</Text>
             )}
-            {isSelected && (repo.status === "skipped" || repo.status === "failed") && repo.error && (
-              <Text color={repo.status === "skipped" ? "yellow" : "red"} dimColor>
+            {isSelected && repo.status === "failed" && repo.error && (
+              <Text color="red" dimColor>
                 {"   "}
                 {repo.error}
               </Text>
