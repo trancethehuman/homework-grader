@@ -3,7 +3,6 @@ import type { Thread } from "@openai/codex-sdk";
 import {
   CodexConfig,
   CodexGradingResult,
-  CodexEventHandler,
   ThreadEvent,
   AgentMessageItem,
 } from "./codex-types.js";
@@ -13,22 +12,27 @@ import {
   isStructuredOutput,
   type CodexGradingStructuredOutput,
 } from "./structured-output-schema.js";
+import type { IGradingAgentService, AgentEventHandler, GradingResult } from "../agents/types.js";
 
-export class CodexService {
+export class CodexService implements IGradingAgentService {
   private codex: Codex;
   private thread: Thread | null = null;
   private config: CodexConfig;
 
   constructor(config: CodexConfig) {
     this.config = config;
-    this.codex = new Codex(config.codexOptions);
+    const codexOptions = {
+      ...config.codexOptions,
+      model: config.model,
+    };
+    this.codex = new Codex(codexOptions);
   }
 
   async startGrading(
     prompt: string,
-    eventHandler?: CodexEventHandler,
+    eventHandler?: AgentEventHandler,
     useStructuredOutput: boolean = false
-  ): Promise<CodexGradingResult> {
+  ): Promise<GradingResult> {
     try {
       this.thread = this.codex.startThread({
         workingDirectory: this.config.repoPath,
@@ -97,21 +101,25 @@ export class CodexService {
     }
   }
 
-  private handleEvent(event: ThreadEvent, eventHandler?: CodexEventHandler) {
+  private handleEvent(event: ThreadEvent, eventHandler?: AgentEventHandler) {
     switch (event.type) {
       case "item.updated":
-        if (eventHandler?.onItemUpdated) {
-          eventHandler.onItemUpdated(event.item);
+        if (eventHandler?.onMessage && event.item?.type === "agent_message") {
+          eventHandler.onMessage((event.item as AgentMessageItem).text);
         }
         break;
       case "item.completed":
-        if (eventHandler?.onItemCompleted) {
-          eventHandler.onItemCompleted(event.item);
+        if (eventHandler?.onMessage && event.item?.type === "agent_message") {
+          eventHandler.onMessage((event.item as AgentMessageItem).text);
         }
         break;
       case "turn.completed":
         if (eventHandler?.onTurnCompleted) {
-          eventHandler.onTurnCompleted(event.usage);
+          eventHandler.onTurnCompleted({
+            input: event.usage.input_tokens,
+            cached: event.usage.cached_input_tokens,
+            output: event.usage.output_tokens,
+          });
         }
         break;
     }
@@ -134,6 +142,10 @@ export class CodexService {
 
   getThreadId(): string | null {
     return this.thread?.id ?? null;
+  }
+
+  getSessionId(): string | null {
+    return this.getThreadId();
   }
 
   async resumeThread(threadId: string, prompt: string): Promise<CodexGradingResult> {

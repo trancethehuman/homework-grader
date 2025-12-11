@@ -23,6 +23,77 @@ export interface GradingResult {
   error?: string; // Error message if grading failed
 }
 
+export interface ParallelGradingResultInput {
+  success: boolean;
+  feedback?: string;
+  structuredData?: {
+    repo_explained: string;
+    developer_feedback: string;
+  };
+  error?: string;
+  tokensUsed?: {
+    input: number;
+    cached: number;
+    output: number;
+    total: number;
+  };
+  repoInfo: {
+    url: string;
+    owner: string;
+    repo: string;
+  };
+}
+
+/**
+ * Converts a parallel grading result to a GradingResult format.
+ * Handles missing structuredData gracefully by using feedback as fallback.
+ */
+export function convertToGradingResult(
+  result: ParallelGradingResultInput,
+  pageId?: string
+): GradingResult {
+  const gradingData = result.structuredData
+    ? {
+        repo_explained: result.structuredData.repo_explained,
+        developer_feedback: result.structuredData.developer_feedback,
+      }
+    : {
+        repo_explained: "",
+        developer_feedback: result.feedback || "",
+      };
+
+  return {
+    repositoryName: `${result.repoInfo.owner}/${result.repoInfo.repo}`,
+    githubUrl: result.repoInfo.url,
+    gradingData,
+    usage: result.tokensUsed,
+    pageId,
+    error: result.error,
+  };
+}
+
+/**
+ * Converts an array of parallel grading results to GradingResult format.
+ * Only includes successful results.
+ */
+export function convertParallelResultsToGradingResults(
+  results: ParallelGradingResultInput[],
+  urlToPageIdMap?: Map<string, string>
+): GradingResult[] {
+  return results
+    .filter((r) => r.success)
+    .map((r) => {
+      let pageId: string | undefined;
+      if (urlToPageIdMap) {
+        const normalizedUrl = r.repoInfo.url
+          .replace(/\.git$/, "")
+          .replace(/\/$/, "");
+        pageId = urlToPageIdMap.get(normalizedUrl);
+      }
+      return convertToGradingResult(r, pageId);
+    });
+}
+
 /**
  * Saves repository content and scores to the test-results directory
  */

@@ -62,6 +62,7 @@
     "@ai-sdk/google": "^2.0.0",
     "@ai-sdk/openai": "^2.0.0",
     "@ai-sdk/react": "^2.0.0",
+    "@anthropic-ai/claude-agent-sdk": "^0.1.62",
     "@browserbasehq/stagehand": "^2.4.3",
     "@e2b/code-interpreter": "^1.5.1",
     "@modelcontextprotocol/sdk": "^1.15.1",

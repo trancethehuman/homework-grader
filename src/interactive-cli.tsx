@@ -30,7 +30,7 @@ import {
 } from "./components/local-tool-selector.js";
 import { LocalRepoPathInput } from "./components/local-repo-path-input.js";
 import { CodexStarting } from "./components/codex-starting.js";
-import { ParallelCodexBatch } from "./components/parallel-codex-batch.js";
+import { ParallelGradingBatch } from "./components/parallel-grading-batch.js";
 import { ParallelInstanceSelector } from "./components/parallel-instance-selector.js";
 import {
   WorkflowModeSelector,
@@ -48,6 +48,9 @@ import {
   GradingMethodSelector,
   GradingMethod,
 } from "./components/grading-method-selector.js";
+import { AgentModelSelector } from "./components/agent-model-selector.js";
+import type { AgentType } from "./lib/agents/index.js";
+import { getDefaultModelForAgent } from "./lib/agents/index.js";
 import { ManualUrlInput } from "./components/manual-url-input.js";
 import {
   NotionMCPClient,
@@ -112,6 +115,8 @@ import {
 } from "./components/collaborator/index.js";
 import { GitHubAuthInput } from "./components/github-auth-input.js";
 import type { CollaboratorDataSource } from "./components/collaborator/collaborator-data-source-selector.js";
+import { RateLimitCountdown } from "./components/ui/RateLimitCountdown.js";
+import { GitHubIssueRateLimitCheck } from "./components/github-issue-rate-limit-check.js";
 
 export type { CSVColumn, CSVAnalysis } from "./lib/utils/csv-utils.js";
 
@@ -148,6 +153,7 @@ type Step =
   | "browser-test-mode"
   | "data-source-select"
   | "grading-method-select"
+  | "agent-model-select"
   | "manual-url-input"
   | "notion-auth"
   | "notion-auth-loading"
@@ -171,6 +177,8 @@ type Step =
   | "browser-testing"
   | "grading-save-options"
   | "github-issue-title-input"
+  | "github-issue-rate-limit-check"
+  | "github-issue-rate-limit-wait"
   | "github-issue-creation"
   | "github-issue-complete"
   | "notion-conflict-check"
@@ -192,6 +200,7 @@ type Step =
   | "collaborator-notion-content-view"
   | "collaborator-notion-column"
   | "collaborator-confirm"
+  | "collaborator-rate-limit-wait"
   | "collaborator-adding"
   | "collaborator-summary";
 
@@ -226,6 +235,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
     useState<DataSource | null>(null);
   const [selectedGradingMethod, setSelectedGradingMethod] =
     useState<GradingMethod | null>(null);
+  const [selectedAgentModel, setSelectedAgentModel] = useState<string>("");
   const [manualUrls, setManualUrls] = useState<string[]>([]);
   const [selectedGradingPrompt, setSelectedGradingPrompt] =
     useState<GradingPrompt>(getDefaultGradingPrompt());
@@ -336,6 +346,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
   const [collaboratorNotionNavigationStack, setCollaboratorNotionNavigationStack] = useState<
     Array<{ pageId: string; pageTitle: string; contentType: string }>
   >([]);
+  const [rateLimitResetAt, setRateLimitResetAt] = useState<Date | null>(null);
 
   const { exit } = useApp();
 
@@ -1674,7 +1685,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
             navigateToStep("batch-codex-prompt-select");
           }}
           onBack={() => {
-            navigateToStep("grading-method-select");
+            navigateToStep("agent-model-select");
           }}
         />
       </Box>
@@ -1707,14 +1718,18 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
     const urlsWithPageIds =
       selectedDataSource === "notion" ? notionGitHubUrls : null;
 
+    const agentType = selectedGradingMethod === "claude-agent" ? "claude-agent" : "codex";
+
     return (
       <Box flexDirection="column">
-        <ParallelCodexBatch
+        <ParallelGradingBatch
           urls={urlsToProcess}
           instanceCount={parallelInstanceCount}
           urlsWithPageIds={urlsWithPageIds}
           selectedPrompt={selectedBatchCodexPrompt}
           githubToken={githubToken}
+          agentType={agentType}
+          model={selectedAgentModel}
           onComplete={(results) => {}}
           onBack={() => {
             navigateToStep("batch-codex-prompt-select");
@@ -2132,8 +2147,8 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
             setSelectedGradingMethod(method);
             if (method === "sandbox-llm") {
               navigateToStep("github-token");
-            } else if (method === "codex-local") {
-              navigateToStep("parallel-instance-select");
+            } else if (method === "codex-local" || method === "claude-agent") {
+              navigateToStep("agent-model-select");
             }
           }}
           onBack={() => {
@@ -2147,6 +2162,30 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
             } else {
               navigateToStep("data-source-select");
             }
+          }}
+        />
+        {error && (
+          <>
+            <Text></Text>
+            <Text color="yellow">{error}</Text>
+          </>
+        )}
+      </Box>
+    );
+  }
+
+  if (step === "agent-model-select") {
+    const agentType: AgentType = selectedGradingMethod === "claude-agent" ? "claude-agent" : "codex";
+    return (
+      <Box flexDirection="column">
+        <AgentModelSelector
+          agentType={agentType}
+          onSelect={(modelId) => {
+            setSelectedAgentModel(modelId);
+            navigateToStep("parallel-instance-select");
+          }}
+          onBack={() => {
+            navigateToStep("grading-method-select");
           }}
         />
         {error && (
@@ -2702,7 +2741,7 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
             color={selectedNavOption === 0 ? "cyan" : "white"}
             bold={selectedNavOption === 0}
           >
-            Continue to Column Selection
+            Continue to Grading
           </Text>
         </Box>
         <Box>
@@ -2879,10 +2918,46 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
         repoCount={repoCount}
         onSubmit={(title) => {
           setGithubIssueTitle(title);
-          navigateToStep("github-issue-creation");
+          navigateToStep("github-issue-rate-limit-check");
         }}
         onBack={() => navigateToStep("grading-save-options")}
       />
+    );
+  }
+
+  if (step === "github-issue-rate-limit-check" && githubToken) {
+    const repoCount = gradingResults.filter((r) => r.githubUrl && !r.error).length;
+    return (
+      <GitHubIssueRateLimitCheck
+        repoCount={repoCount}
+        githubToken={githubToken}
+        onProceed={() => navigateToStep("github-issue-creation")}
+        onAutoWait={(resetAt) => {
+          setRateLimitResetAt(resetAt);
+          navigateToStep("github-issue-rate-limit-wait");
+        }}
+        onBack={() => navigateToStep("github-issue-title-input")}
+      />
+    );
+  }
+
+  if (step === "github-issue-rate-limit-wait" && rateLimitResetAt) {
+    const repoCount = gradingResults.filter((r) => r.githubUrl && !r.error).length;
+    return (
+      <Box flexDirection="column">
+        <RateLimitCountdown
+          resetAt={rateLimitResetAt}
+          operationDescription={`Creating ${repoCount} GitHub issues`}
+          onResetComplete={() => {
+            setRateLimitResetAt(null);
+            navigateToStep("github-issue-creation");
+          }}
+          onCancel={() => {
+            setRateLimitResetAt(null);
+            navigateToStep("github-issue-rate-limit-check");
+          }}
+        />
+      </Box>
     );
   }
 
@@ -3473,16 +3548,21 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
     );
   }
 
-  if (step === "collaborator-confirm" && collaboratorTargetRepo && collaboratorUsernames.length > 0) {
+  if (step === "collaborator-confirm" && collaboratorTargetRepo && collaboratorUsernames.length > 0 && githubToken) {
     return (
       <Box flexDirection="column">
         <CollaboratorConfirm
           targetRepo={collaboratorTargetRepo.fullName}
           usernames={collaboratorUsernames}
+          githubToken={githubToken}
           onConfirm={() => {
             const uniqueUsernames = [...new Set(collaboratorUsernames.map((u) => u.trim().toLowerCase()))];
             setCollaboratorUsernames(uniqueUsernames);
             navigateToStep("collaborator-adding");
+          }}
+          onAutoWait={(resetAt) => {
+            setRateLimitResetAt(resetAt);
+            navigateToStep("collaborator-rate-limit-wait");
           }}
           onBack={() => {
             setCollaboratorUsernames([]);
@@ -3495,6 +3575,27 @@ export const InteractiveCSV: React.FC<InteractiveCSVProps> = ({
             } else {
               navigateToStep("collaborator-data-source");
             }
+          }}
+        />
+      </Box>
+    );
+  }
+
+  if (step === "collaborator-rate-limit-wait" && rateLimitResetAt && collaboratorUsernames.length > 0) {
+    return (
+      <Box flexDirection="column">
+        <RateLimitCountdown
+          resetAt={rateLimitResetAt}
+          operationDescription={`Adding ${collaboratorUsernames.length} collaborators`}
+          onResetComplete={() => {
+            setRateLimitResetAt(null);
+            const uniqueUsernames = [...new Set(collaboratorUsernames.map((u) => u.trim().toLowerCase()))];
+            setCollaboratorUsernames(uniqueUsernames);
+            navigateToStep("collaborator-adding");
+          }}
+          onCancel={() => {
+            setRateLimitResetAt(null);
+            navigateToStep("collaborator-confirm");
           }}
         />
       </Box>

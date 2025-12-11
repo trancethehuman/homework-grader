@@ -3,27 +3,28 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 import { v4 as uuidv4 } from "uuid";
-import { CodexService } from "./codex-service.js";
-import {
-  ClonedTestRepo,
+import { ClaudeAgentService } from "./claude-agent-service.js";
+import type {
+  IParallelGradingAgentService,
+  ClonedRepo,
   CloneFailure,
   CloneResults,
   ParallelGradingResult,
-  ParallelTestResults,
-} from "./codex-types.js";
+  ParallelGradingResults,
+  RepoEventData,
+} from "../agents/types.js";
 import { GitHubUrlParser } from "../github/github-url-parser.js";
-import { RepoEventData } from "../agents/types.js";
 
-export class ParallelCodexService {
+export class ParallelClaudeAgentService implements IParallelGradingAgentService {
   private tempDir: string | null = null;
-  private clonedRepos: ClonedTestRepo[] = [];
+  private clonedRepos: ClonedRepo[] = [];
   private cloneFailures: CloneFailure[] = [];
   private urls: string[];
-  private model?: string;
+  private model: string;
   private abortController = new AbortController();
   private repoAbortControllers = new Map<string, AbortController>();
 
-  constructor(urls: string[], model?: string) {
+  constructor(urls: string[], model: string) {
     if (!urls || urls.length === 0) {
       throw new Error("At least one repository URL is required");
     }
@@ -39,13 +40,13 @@ export class ParallelCodexService {
     onProgress?: (message: string, repoIndex: number, total: number) => void
   ): Promise<CloneResults> {
     const tempDirBase = os.tmpdir();
-    this.tempDir = path.join(tempDirBase, `codex-parallel-batch-${uuidv4()}`);
+    this.tempDir = path.join(tempDirBase, `claude-parallel-batch-${uuidv4()}`);
 
     if (!fs.existsSync(this.tempDir)) {
       fs.mkdirSync(this.tempDir, { recursive: true });
     }
 
-    const clonedRepos: ClonedTestRepo[] = [];
+    const clonedRepos: ClonedRepo[] = [];
     const failures: CloneFailure[] = [];
 
     for (let i = 0; i < this.urls.length; i++) {
@@ -55,18 +56,14 @@ export class ParallelCodexService {
         const { owner, repo } = this.parseGitHubUrl(url);
 
         if (onProgress) {
-          onProgress(
-            `Cloning ${owner}/${repo}...`,
-            i + 1,
-            this.urls.length
-          );
+          onProgress(`Cloning ${owner}/${repo}...`, i + 1, this.urls.length);
         }
 
         const localPath = path.join(this.tempDir, `${owner}-${repo}`);
 
         execSync(`git clone --depth 1 ${url} ${localPath}`, {
           stdio: "pipe",
-          timeout: 600000, // 10 minutes timeout for cloning
+          timeout: 600000,
         });
 
         clonedRepos.push({
@@ -107,13 +104,18 @@ export class ParallelCodexService {
     prompt: string,
     onRepoStart?: (repoInfo: { owner: string; repo: string }) => void,
     onRepoComplete?: (result: ParallelGradingResult) => void,
-    onRepoEvent?: (repoInfo: { owner: string; repo: string }, event: RepoEventData) => void,
-    useStructuredOutput: boolean = false
-  ): Promise<ParallelTestResults> {
+    onRepoEvent?: (
+      repoInfo: { owner: string; repo: string },
+      event: RepoEventData
+    ) => void,
+    useStructuredOutput: boolean = true
+  ): Promise<ParallelGradingResults> {
     const totalStartTime = Date.now();
 
     if (this.clonedRepos.length === 0) {
-      console.warn("  No repositories successfully cloned. Skipping grading phase.");
+      console.warn(
+        "  No repositories successfully cloned. Skipping grading phase."
+      );
       return {
         results: [],
         cloneFailures: this.cloneFailures,
@@ -128,7 +130,10 @@ export class ParallelCodexService {
       const repoAbortController = new AbortController();
       this.repoAbortControllers.set(repoKey, repoAbortController);
 
-      if (this.abortController.signal.aborted || repoAbortController.signal.aborted) {
+      if (
+        this.abortController.signal.aborted ||
+        repoAbortController.signal.aborted
+      ) {
         const errorMessage = this.abortController.signal.aborted
           ? "Aborted by user"
           : "Skipped by user";
@@ -151,39 +156,58 @@ export class ParallelCodexService {
       const repoStartTime = Date.now();
 
       const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('Processing timeout (10 minutes)')), 600000)
+        setTimeout(
+          () => reject(new Error("Processing timeout (10 minutes)")),
+          600000
+        )
       );
 
       try {
         if (onRepoEvent) {
           onRepoEvent(
             { owner: repo.owner, repo: repo.repo },
-            { type: 'initializing' }
+            { type: "initializing" }
           );
         }
 
-        const codexService = new CodexService({
+        const claudeService = new ClaudeAgentService({
           repoPath: repo.localPath,
           model: this.model,
           skipGitRepoCheck: false,
         });
 
-        const gradingPromise = codexService.startGrading(
+        const gradingPromise = claudeService.startGrading(
           prompt,
           {
-            onMessage: (message: string) => {
+            onToolStart: (toolName, toolInput) => {
               if (onRepoEvent) {
                 onRepoEvent(
                   { owner: repo.owner, repo: repo.repo },
-                  { type: 'item_updated', data: { type: 'agent_message', text: message } }
+                  { type: "tool_start", data: { toolName, toolInput } }
                 );
               }
             },
-            onTurnCompleted: (usage: { input: number; cached: number; output: number }) => {
+            onToolComplete: (toolName, toolOutput) => {
               if (onRepoEvent) {
                 onRepoEvent(
                   { owner: repo.owner, repo: repo.repo },
-                  { type: 'turn_completed', data: usage }
+                  { type: "tool_complete", data: { toolName, toolOutput } }
+                );
+              }
+            },
+            onStreamingMessage: (message) => {
+              if (onRepoEvent) {
+                onRepoEvent(
+                  { owner: repo.owner, repo: repo.repo },
+                  { type: "message", data: message }
+                );
+              }
+            },
+            onTurnCompleted: (usage) => {
+              if (onRepoEvent) {
+                onRepoEvent(
+                  { owner: repo.owner, repo: repo.repo },
+                  { type: "turn_completed", data: usage }
                 );
               }
             },
@@ -215,7 +239,10 @@ export class ParallelCodexService {
             console.log(`  Cleaned up ${repo.owner}/${repo.repo}`);
           }
         } catch (cleanupError) {
-          console.warn(`  Failed to cleanup ${repo.owner}/${repo.repo}:`, cleanupError);
+          console.warn(
+            `  Failed to cleanup ${repo.owner}/${repo.repo}:`,
+            cleanupError
+          );
         }
 
         return gradingResult;
@@ -226,7 +253,7 @@ export class ParallelCodexService {
         if (onRepoEvent) {
           onRepoEvent(
             { owner: repo.owner, repo: repo.repo },
-            { type: 'error', data: errorMessage }
+            { type: "error", data: errorMessage }
           );
         }
 
@@ -253,7 +280,10 @@ export class ParallelCodexService {
             console.log(`  Cleaned up ${repo.owner}/${repo.repo} (after error)`);
           }
         } catch (cleanupError) {
-          console.warn(`  Failed to cleanup ${repo.owner}/${repo.repo}:`, cleanupError);
+          console.warn(
+            `  Failed to cleanup ${repo.owner}/${repo.repo}:`,
+            cleanupError
+          );
         }
 
         return gradingResult;

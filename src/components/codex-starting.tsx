@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Text, Box } from "ink";
 import { CodexService } from "../lib/codex/codex-service.js";
-import type { ThreadItem } from "../lib/codex/codex-types.js";
 import type { GradingPrompt } from "../consts/grading-prompts.js";
 import { useSpinner } from "../hooks/useSpinner.js";
 import { ErrorState } from "./ui/StateDisplays.js";
@@ -9,6 +8,7 @@ import { ErrorState } from "./ui/StateDisplays.js";
 interface CodexStartingProps {
   repoPath: string;
   selectedPrompt: GradingPrompt;
+  model?: string;
 }
 
 type Status = "initializing" | "running" | "completed" | "error";
@@ -23,6 +23,7 @@ interface ChronologicalItem {
 export const CodexStarting: React.FC<CodexStartingProps> = ({
   repoPath,
   selectedPrompt,
+  model,
 }) => {
   const [status, setStatus] = useState<Status>("initializing");
   const [currentUpdate, setCurrentUpdate] = useState<string>("");
@@ -45,77 +46,35 @@ export const CodexStarting: React.FC<CodexStartingProps> = ({
 
         const codexService = new CodexService({
           repoPath,
+          model,
           skipGitRepoCheck: false,
         });
 
         const result = await codexService.startGrading(selectedPrompt.value, {
-          onItemUpdated: (item: ThreadItem) => {
-            if (item.type === "agent_message") {
-              setStreamingAgentMessage(item.text);
-              const lines = item.text.split("\n").filter(Boolean);
-              setCurrentUpdate(`Streaming... (${lines.length} lines)`);
-            }
+          onMessage: (message: string) => {
+            setStreamingAgentMessage(message);
+            const lines = message.split("\n").filter(Boolean);
+            setCurrentUpdate(`Streaming... (${lines.length} lines)`);
           },
-          onItemCompleted: (item: ThreadItem) => {
-            const timestamp = Date.now();
-            const id = `${item.type}-${timestamp}-${Math.random()}`;
-
-            if (item.type === "agent_message") {
-              setStreamingAgentMessage("");
+          onTurnCompleted: (usage) => {
+            setStreamingAgentMessage("");
+            if (streamingAgentMessage) {
+              const timestamp = Date.now();
+              const id = `agent_message-${timestamp}-${Math.random()}`;
               setItems((prev) => [
                 ...prev,
                 {
                   id,
                   type: "agent_message",
                   timestamp,
-                  data: { text: item.text },
-                },
-              ]);
-            } else if (item.type === "reasoning") {
-              setItems((prev) => [
-                ...prev,
-                { id, type: "reasoning", timestamp, data: { text: item.text } },
-              ]);
-            } else if (item.type === "command_execution") {
-              setItems((prev) => [
-                ...prev,
-                {
-                  id,
-                  type: "command",
-                  timestamp,
-                  data: { command: item.command, status: item.status },
-                },
-              ]);
-            } else if (item.type === "file_change") {
-              const changes = item.changes || [];
-              changes.forEach((change: { kind: string; path: string }, index: number) => {
-                setItems((prev) => [
-                  ...prev,
-                  {
-                    id: `${id}-${index}`,
-                    type: "file_change",
-                    timestamp: timestamp + index,
-                    data: { kind: change.kind, path: change.path },
-                  },
-                ]);
-              });
-            } else if (item.type === "todo_list") {
-              setItems((prev) => [
-                ...prev,
-                {
-                  id,
-                  type: "todo_list",
-                  timestamp,
-                  data: { items: item.items || [] },
+                  data: { text: streamingAgentMessage },
                 },
               ]);
             }
-          },
-          onTurnCompleted: (usage) => {
             setTokensUsed({
-              input: usage.input_tokens,
-              cached: usage.cached_input_tokens,
-              output: usage.output_tokens,
+              input: usage.input,
+              cached: usage.cached,
+              output: usage.output,
             });
             setStatus("completed");
           },
@@ -137,7 +96,7 @@ export const CodexStarting: React.FC<CodexStartingProps> = ({
     };
 
     startCodex();
-  }, [repoPath, selectedPrompt]);
+  }, [repoPath, selectedPrompt, model]);
 
   const renderItem = (item: ChronologicalItem) => {
     switch (item.type) {

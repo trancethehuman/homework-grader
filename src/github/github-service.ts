@@ -5,6 +5,10 @@ import { AIProvider } from "../consts/ai-providers.js";
 import { RateLimiter } from "../lib/utils/rate-limiter.js";
 import { GitHubUrlParser, GitHubRepoInfo } from "../lib/github/github-url-parser.js";
 import { GitHubRateLimiter } from "../lib/github/github-rate-limiter.js";
+import {
+  checkBulkOperationQuota,
+  RateLimitCheckResult,
+} from "../lib/github/rate-limit-checker.js";
 
 interface FileContent {
   path: string;
@@ -191,6 +195,16 @@ export class GitHubService {
     } catch (error: any) {
       throw new Error(`Failed to get rate limit: ${error.message}`);
     }
+  }
+
+  /**
+   * Checks if there is sufficient rate limit quota for a bulk operation
+   */
+  async checkRateLimitForBulkOperation(
+    operationCount: number
+  ): Promise<RateLimitCheckResult> {
+    const rateLimit = await this.getRateLimit();
+    return checkBulkOperationQuota(rateLimit, operationCount);
   }
 
   /**

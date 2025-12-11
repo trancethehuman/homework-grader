@@ -1,14 +1,18 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Text, Box, useInput } from "ink";
-import {
-  ParallelCodexService,
-  RepoEventData,
-} from "../lib/codex/parallel-codex-service.js";
+import { ParallelCodexService } from "../lib/codex/parallel-codex-service.js";
+import { ParallelClaudeAgentService } from "../lib/claude/parallel-claude-agent-service.js";
 import {
   ParallelGradingResult,
   ParallelTestResults,
   ThreadItem,
 } from "../lib/codex/codex-types.js";
+import type {
+  IParallelGradingAgentService,
+  ParallelGradingResults,
+  RepoEventData,
+  AgentType,
+} from "../lib/agents/types.js";
 import { GradingPrompt, getDefaultGradingPrompt } from "../consts/grading-prompts.js";
 import { GradingSaveOptions, SaveOption } from "./grading-save-options.js";
 import { GitHubIssueTitleInput } from "./github-issue-title-input.js";
@@ -16,13 +20,16 @@ import { GitHubIssueCreationProgress, IssueCreationResults } from "./github-issu
 import { NotionDatabaseSelector } from "./notion-database-selector.js";
 import { GradingDatabaseService } from "../lib/notion/grading-database-service.js";
 import type { GradingResult } from "../lib/utils/file-saver.js";
+import { convertParallelResultsToGradingResults } from "../lib/utils/file-saver.js";
 
-interface ParallelCodexBatchProps {
+interface ParallelGradingBatchProps {
   urls: string[];
   instanceCount: number;
   urlsWithPageIds?: Array<{ url: string; pageId: string }> | null;
   selectedPrompt?: GradingPrompt;
   githubToken?: string;
+  agentType?: AgentType;
+  model?: string;
   onComplete?: (results: ParallelTestResults) => void;
   onBack?: () => void;
 }
@@ -70,26 +77,54 @@ interface RepoStatus {
 const getActivityMessage = (item: ThreadItem): string => {
   switch (item.type) {
     case "reasoning":
-      return "💭 Analyzing code...";
+      return "Analyzing code...";
     case "command_execution":
-      return `$ Running: ${(item as any).command || "command"}`;
+      return `Running: ${(item as any).command || "command"}`;
     case "file_change":
-      return " Reading files...";
+      return "Reading files...";
     case "agent_message":
-      return "💬 Generating feedback...";
+      return "Generating feedback...";
     case "todo_list":
-      return "📋 Planning tasks...";
+      return "Planning tasks...";
     default:
-      return " Processing...";
+      return "Processing...";
   }
 };
 
-export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
+const getToolStartMessage = (toolName: string): string => {
+  switch (toolName) {
+    case "Read":
+      return "Reading files...";
+    case "Bash":
+      return "Running command...";
+    case "Grep":
+      return "Searching code...";
+    case "Glob":
+      return "Finding files...";
+    case "Edit":
+    case "Write":
+      return "Modifying files...";
+    case "Task":
+      return "Running subtask...";
+    case "WebFetch":
+      return "Fetching web content...";
+    case "WebSearch":
+      return "Searching web...";
+    case "TodoWrite":
+      return "Updating tasks...";
+    default:
+      return `Using ${toolName}...`;
+  }
+};
+
+export const ParallelGradingBatch: React.FC<ParallelGradingBatchProps> = ({
   urls,
   instanceCount,
   urlsWithPageIds,
   selectedPrompt,
   githubToken,
+  agentType = "codex",
+  model = "o3",
   onComplete,
   onBack,
 }) => {
@@ -118,12 +153,12 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
   const [isAborting, setIsAborting] = useState(false);
   const [selectedRowIndex, setSelectedRowIndex] = useState(0);
   const [scrollOffset, setScrollOffset] = useState(0);
-  const [cancellingRepos, setCancellingRepos] = useState<
-    Map<string, "skip" | "stop">
-  >(new Map());
-  const [selectedButton, setSelectedButton] = useState<"skip" | "stop" | null>(null);
+  const [cancellingRepos, setCancellingRepos] = useState<Map<string, true>>(
+    new Map()
+  );
+  const [selectedButton, setSelectedButton] = useState<"stop" | null>(null);
   const [footerFocused, setFooterFocused] = useState(false);
-  const serviceRef = useRef<ParallelCodexService | null>(null);
+  const serviceRef = useRef<IParallelGradingAgentService | null>(null);
   const [notionSaveStatus, setNotionSaveStatus] = useState<{
     saving: boolean;
     success: number;
@@ -133,6 +168,7 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
   const [githubIssueTitle, setGithubIssueTitle] = useState("");
   const [issueCreationResult, setIssueCreationResult] = useState<IssueCreationResults | null>(null);
   const [gradingResultsForSave, setGradingResultsForSave] = useState<GradingResult[]>([]);
+  const [completedNavOption, setCompletedNavOption] = useState<0 | 1>(0);
 
   const VIEWPORT_SIZE = 7;
 
@@ -149,23 +185,6 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
   const isRowActive = (repo: RepoStatus) =>
     !["completed", "error", "cancelling"].includes(repo.status);
 
-  const handleSkip = () => {
-    const selectedRepo = repoStatuses[selectedRowIndex];
-    if (selectedRepo && isRowActive(selectedRepo) && serviceRef.current) {
-      setRepoStatuses((prev) =>
-        prev.map((repo) =>
-          repo.owner === selectedRepo.owner && repo.repo === selectedRepo.repo
-            ? { ...repo, status: "cancelling", currentActivity: "Skipping..." }
-            : repo
-        )
-      );
-      setCancellingRepos((prev) =>
-        new Map(prev).set(`${selectedRepo.owner}/${selectedRepo.repo}`, "skip")
-      );
-      serviceRef.current.skipRepo(selectedRepo.owner, selectedRepo.repo);
-    }
-  };
-
   const handleStop = () => {
     const selectedRepo = repoStatuses[selectedRowIndex];
     if (selectedRepo && isRowActive(selectedRepo) && serviceRef.current) {
@@ -177,7 +196,7 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
         )
       );
       setCancellingRepos((prev) =>
-        new Map(prev).set(`${selectedRepo.owner}/${selectedRepo.repo}`, "stop")
+        new Map(prev).set(`${selectedRepo.owner}/${selectedRepo.repo}`, true)
       );
       serviceRef.current.stopRepo(selectedRepo.owner, selectedRepo.repo);
     }
@@ -191,6 +210,24 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
   };
 
   useInput((input, key) => {
+    // Handle completed and github-issue-complete phases
+    if (phase === "completed" || phase === "github-issue-complete") {
+      if (key.upArrow || key.downArrow) {
+        setCompletedNavOption((prev) => (prev === 0 ? 1 : 0));
+      } else if (key.return) {
+        if (completedNavOption === 0) {
+          // Grade more - go back to prompt selection
+          if (onBack) {
+            onBack();
+          }
+        } else {
+          // Exit - call process.exit or let parent handle
+          process.exit(0);
+        }
+      }
+      return;
+    }
+
     if (phase !== "grading" || isAborting) {
       return;
     }
@@ -228,18 +265,15 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
       }
     } else if (key.leftArrow) {
       if (!footerFocused && rowHasButtons) {
-        setSelectedButton((prev) => (prev === "stop" ? "skip" : prev === "skip" ? null : null));
+        setSelectedButton(null);
       }
     } else if (key.rightArrow) {
       if (!footerFocused && rowHasButtons) {
-        setSelectedButton((prev) => (prev === null ? "skip" : prev === "skip" ? "stop" : "stop"));
+        setSelectedButton("stop");
       }
     } else if (key.return) {
       if (footerFocused) {
         handleStopAll();
-      } else if (selectedButton === "skip") {
-        handleSkip();
-        setSelectedButton(null);
       } else if (selectedButton === "stop") {
         handleStop();
         setSelectedButton(null);
@@ -252,7 +286,9 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
 
   useEffect(() => {
     const runBatch = async () => {
-      const service = new ParallelCodexService(urls);
+      const service: IParallelGradingAgentService = agentType === "claude-agent"
+        ? new ParallelClaudeAgentService(urls, model)
+        : new ParallelCodexService(urls, model);
       serviceRef.current = service;
 
       const cloneResults = await service.cloneRepositories(
@@ -364,28 +400,31 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
                       return {
                         ...repo,
                         status: "initializing",
-                        currentActivity: " Initializing Codex...",
+                        currentActivity: agentType === "claude-agent" ? " Initializing Claude Agent..." : " Initializing Codex...",
                         itemCount: 0,
                       };
-                    case "item_updated":
-                      if (event.data && event.data.type === "agent_message") {
+                    case "item_updated": {
+                      const updatedData = event.data as { type?: string; text?: string } | undefined;
+                      if (updatedData && updatedData.type === "agent_message") {
                         return {
                           ...repo,
                           status: "streaming",
-                          streamingMessage: event.data.text || "",
+                          streamingMessage: updatedData.text || "",
                           currentActivity: "💬 Streaming response...",
                         };
                       }
                       return repo;
-                    case "item_completed":
-                      if (event.data) {
-                        if (event.data.type === "reasoning") {
+                    }
+                    case "item_completed": {
+                      const completedData = event.data as ThreadItem | undefined;
+                      if (completedData) {
+                        if (completedData.type === "reasoning") {
                           return {
                             ...repo,
                             itemCount: (repo.itemCount || 0) + 1,
                           };
                         }
-                        const activityMessage = getActivityMessage(event.data);
+                        const activityMessage = getActivityMessage(completedData);
                         return {
                           ...repo,
                           status: "analyzing",
@@ -395,19 +434,46 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
                         };
                       }
                       return repo;
+                    }
                     case "turn_completed":
                       return repo;
-                    case "error":
-                      const repoKey = `${repo.owner}/${repo.repo}`;
-                      const wasSkipped =
-                        cancellingRepos.get(repoKey) === "skip";
-                      const wasStopped =
-                        cancellingRepos.get(repoKey) === "stop";
-                      const errorMessage = wasSkipped
-                        ? "Skipped by user"
-                        : wasStopped
+                    case "tool_start": {
+                      const toolData = event.data as { toolName: string; toolInput: unknown } | undefined;
+                      if (toolData) {
+                        const activityMessage = getToolStartMessage(toolData.toolName);
+                        return {
+                          ...repo,
+                          status: "analyzing",
+                          currentActivity: activityMessage,
+                          itemCount: (repo.itemCount || 0) + 1,
+                        };
+                      }
+                      return repo;
+                    }
+                    case "tool_complete": {
+                      return {
+                        ...repo,
+                        itemCount: (repo.itemCount || 0) + 1,
+                      };
+                    }
+                    case "message": {
+                      const messageText = event.data as string | undefined;
+                      if (messageText) {
+                        return {
+                          ...repo,
+                          status: "streaming",
+                          streamingMessage: messageText,
+                          currentActivity: "Generating response...",
+                        };
+                      }
+                      return repo;
+                    }
+                    case "error": {
+                      const errorRepoKey = `${repo.owner}/${repo.repo}`;
+                      const wasStopped = cancellingRepos.get(errorRepoKey);
+                      const errorMessage = wasStopped
                         ? "Stopped by user"
-                        : event.data;
+                        : (event.data as string) || "Unknown error";
                       return {
                         ...repo,
                         status: "error",
@@ -416,6 +482,7 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
                         currentActivity: undefined,
                         streamingMessage: undefined,
                       };
+                    }
                     default:
                       return repo;
                   }
@@ -441,28 +508,11 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
             }
           }
 
-          // Convert Codex results to GradingResult format for save options
-          const computedGradingResults: GradingResult[] = batchResults.results
-            .filter((r) => r.success && r.structuredData)
-            .map((r) => {
-              const gradingData = {
-                repo_explained: r.structuredData!.repo_explained,
-                developer_feedback: r.structuredData!.developer_feedback,
-              };
-
-              const normalizedRepoUrl = r.repoInfo.url
-                .replace(/\.git$/, "")
-                .replace(/\/$/, "");
-              const pageId = urlToPageId.get(normalizedRepoUrl);
-
-              return {
-                repositoryName: `${r.repoInfo.owner}/${r.repoInfo.repo}`,
-                githubUrl: r.repoInfo.url,
-                gradingData,
-                usage: r.tokensUsed,
-                pageId,
-              };
-            });
+          // Convert parallel grading results to GradingResult format using shared utility
+          const computedGradingResults = convertParallelResultsToGradingResults(
+            batchResults.results,
+            urlToPageId
+          );
 
           setGradingResultsForSave(computedGradingResults);
           setPhase("save-options");
@@ -492,7 +542,7 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
     };
 
     runBatch();
-  }, [urls, instanceCount]);
+  }, [urls, instanceCount, agentType, model]);
 
   // Handle save option selection
   const handleSaveOptionSelected = (option: SaveOption, databaseId?: string) => {
@@ -684,20 +734,66 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
         <Text></Text>
         <Text>
           <Text color="green">{created} created</Text>
-          {skipped > 0 && <Text color="yellow">, {skipped} skipped (no access)</Text>}
+          {skipped > 0 && <Text color="yellow">, {skipped} skipped</Text>}
           {failed > 0 && <Text color="red">, {failed} failed</Text>}
         </Text>
         <Text></Text>
-        {issueCreationResult?.created.slice(0, 5).map((item) => (
-          <Text key={item.repoName} dimColor>
-            {item.repoName}: {item.issueUrl}
-          </Text>
-        ))}
-        {(issueCreationResult?.created.length || 0) > 5 && (
-          <Text dimColor>...and {(issueCreationResult?.created.length || 0) - 5} more</Text>
+        {failed > 0 && (
+          <>
+            <Text color="red">Failed:</Text>
+            {issueCreationResult?.failed.slice(0, 5).map((item) => (
+              <Text key={item.repoName} color="red" dimColor>
+                {"  "}{item.repoName}: {item.error}
+              </Text>
+            ))}
+            {(issueCreationResult?.failed.length || 0) > 5 && (
+              <Text color="red" dimColor>  ...and {(issueCreationResult?.failed.length || 0) - 5} more</Text>
+            )}
+            <Text></Text>
+          </>
         )}
+        {skipped > 0 && (
+          <>
+            <Text color="yellow">Skipped:</Text>
+            {issueCreationResult?.skipped.slice(0, 5).map((item) => (
+              <Text key={item.repoName} color="yellow" dimColor>
+                {"  "}{item.repoName}: {item.reason}
+              </Text>
+            ))}
+            {(issueCreationResult?.skipped.length || 0) > 5 && (
+              <Text color="yellow" dimColor>  ...and {(issueCreationResult?.skipped.length || 0) - 5} more</Text>
+            )}
+            <Text></Text>
+          </>
+        )}
+        {created > 0 && (
+          <>
+            <Text color="green">Created:</Text>
+            {issueCreationResult?.created.slice(0, 5).map((item) => (
+              <Text key={item.repoName} dimColor>
+                {"  "}{item.repoName}: {item.issueUrl}
+              </Text>
+            ))}
+            {(issueCreationResult?.created.length || 0) > 5 && (
+              <Text dimColor>  ...and {(issueCreationResult?.created.length || 0) - 5} more</Text>
+            )}
+            <Text></Text>
+          </>
+        )}
+        <Text
+          color={completedNavOption === 0 ? "cyan" : "white"}
+          bold={completedNavOption === 0}
+        >
+          Grade more repositories
+        </Text>
+        <Text
+          color={completedNavOption === 1 ? "cyan" : "white"}
+          bold={completedNavOption === 1}
+        >
+          Exit
+        </Text>
         <Text></Text>
-        <Text dimColor>Press Ctrl+C to exit, or go back to save options</Text>
+        <Text dimColor>↑/↓ navigate  Enter select</Text>
       </Box>
     );
   }
@@ -726,10 +822,12 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
     );
   }
 
+  const agentName = agentType === "claude-agent" ? "Claude Agent" : "Codex";
+
   return (
     <Box flexDirection="column">
       <Text color="blue" bold>
-        Parallel Codex Batch Grading
+        Parallel {agentName} Batch Grading
       </Text>
       <Text></Text>
 
@@ -851,13 +949,6 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
                 </Box>
                 {isSelected && isRowActive(repo) && (
                   <Box marginLeft={1}>
-                    <Text
-                      color={selectedButton === "skip" ? "black" : "gray"}
-                      backgroundColor={selectedButton === "skip" ? "yellow" : undefined}
-                    >
-                      {" "}Skip{" "}
-                    </Text>
-                    <Text> </Text>
                     <Text
                       color={selectedButton === "stop" ? "black" : "gray"}
                       backgroundColor={selectedButton === "stop" ? "red" : undefined}
@@ -1049,7 +1140,25 @@ export const ParallelCodexBatch: React.FC<ParallelCodexBatchProps> = ({
             </Text>
           </Box>
         )}
-        {(phase !== "grading" || isAborting) && (
+        {phase === "completed" && (
+          <Box flexDirection="column">
+            <Text
+              color={completedNavOption === 0 ? "cyan" : "white"}
+              bold={completedNavOption === 0}
+            >
+              Grade more repositories
+            </Text>
+            <Text
+              color={completedNavOption === 1 ? "cyan" : "white"}
+              bold={completedNavOption === 1}
+            >
+              Exit
+            </Text>
+            <Text></Text>
+            <Text dimColor>↑/↓ navigate  Enter select</Text>
+          </Box>
+        )}
+        {phase !== "grading" && phase !== "completed" && (
           <Text dimColor>Press Ctrl+C to exit</Text>
         )}
       </Box>

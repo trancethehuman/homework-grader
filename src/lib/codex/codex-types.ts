@@ -7,10 +7,17 @@ import type {
   Usage,
 } from "@openai/codex-sdk";
 import type { CodexGradingStructuredOutput } from "./structured-output-schema.js";
+import type {
+  AgentConfig,
+  GradingResult,
+  ClonedRepo,
+  CloneFailure as BaseCloneFailure,
+  CloneResults as BaseCloneResults,
+  ParallelGradingResult as BaseParallelGradingResult,
+  ParallelGradingResults,
+} from "../agents/types.js";
 
-export interface CodexConfig {
-  repoPath: string;
-  skipGitRepoCheck?: boolean;
+export interface CodexConfig extends AgentConfig {
   codexOptions?: CodexOptions;
 }
 
@@ -20,18 +27,8 @@ export interface CodexThreadConfig {
   model?: string;
 }
 
-export interface CodexGradingResult {
-  success: boolean;
-  feedback?: string;
-  structuredData?: CodexGradingStructuredOutput; // Structured output for Notion compatibility
-  grade?: number;
-  error?: string;
-  tokensUsed?: {
-    input: number;
-    cached: number;
-    output: number;
-    total: number;
-  };
+export interface CodexGradingResult extends GradingResult {
+  structuredData?: CodexGradingStructuredOutput;
 }
 
 export interface CodexEventHandler {
@@ -41,40 +38,16 @@ export interface CodexEventHandler {
   onError?: (error: Error) => void;
 }
 
-export interface ClonedTestRepo {
-  url: string;
-  owner: string;
-  repo: string;
-  localPath: string;
+export type ClonedTestRepo = ClonedRepo;
+export type CloneFailure = BaseCloneFailure;
+export type CloneResults = BaseCloneResults;
+
+export interface ParallelGradingResult extends BaseParallelGradingResult {
+  structuredData?: CodexGradingStructuredOutput;
 }
 
-export interface CloneFailure {
-  url: string;
-  owner: string;
-  repo: string;
-  error: string;
-}
-
-export interface CloneResults {
-  successful: ClonedTestRepo[];
-  failed: CloneFailure[];
-}
-
-export interface ParallelGradingResult extends CodexGradingResult {
-  repoInfo: {
-    url: string;
-    owner: string;
-    repo: string;
-  };
-  duration?: number;
-}
-
-export interface ParallelTestResults {
+export interface ParallelTestResults extends ParallelGradingResults {
   results: ParallelGradingResult[];
-  cloneFailures: CloneFailure[];
-  totalDuration: number;
-  successCount: number;
-  failureCount: number;
 }
 
 export { ThreadEvent, ThreadItem, AgentMessageItem, CodexOptions, ThreadOptions, Usage };

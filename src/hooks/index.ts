@@ -26,3 +26,6 @@ export type {
   RegionState,
   UseFocusNavigationResult,
 } from "./useFocusNavigation.js";
+
+export { useCountdown } from "./useCountdown.js";
+export type { UseCountdownOptions, UseCountdownResult } from "./useCountdown.js";
